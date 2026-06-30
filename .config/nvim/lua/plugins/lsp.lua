@@ -65,6 +65,7 @@ return {
           end
           local builtin = require("telescope.builtin")
           map("gd", builtin.lsp_definitions, "Go to definition")
+          map("gi", builtin.lsp_implementations, "Go to implementation")
           map("gr", builtin.lsp_references, "Go to references")
           map("K", vim.lsp.buf.hover, "Hover docs")
           map("<leader>ca", vim.lsp.buf.code_action, "Code action")
