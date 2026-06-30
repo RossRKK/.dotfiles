@@ -73,6 +73,11 @@ return {
           map("<leader>d", vim.diagnostic.open_float, "Show diagnostic")
           map("[d", vim.diagnostic.goto_prev, "Prev diagnostic")
           map("]d", vim.diagnostic.goto_next, "Next diagnostic")
+
+          local client = vim.lsp.get_client_by_id(ev.data.client_id)
+          if client and client.supports_method("textDocument/inlayHint") then
+            vim.lsp.inlay_hint.enable(true, { bufnr = ev.buf })
+          end
         end,
       })
     end,

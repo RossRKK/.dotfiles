@@ -1,5 +1,107 @@
 # Cheatsheet
 
+## Neovim
+
+### Modes
+| Key | Action |
+|-----|--------|
+| `i` | Insert before cursor |
+| `a` | Insert after cursor |
+| `o` / `O` | New line below / above |
+| `jk` | Exit insert mode |
+| `v` | Visual mode |
+| `V` | Visual line mode |
+
+### Movement
+| Key | Action |
+|-----|--------|
+| `h j k l` | Left / down / up / right |
+| `w` / `b` | Next / prev word |
+| `0` / `$` | Start / end of line |
+| `gg` / `G` | Top / bottom of file |
+| `Ctrl+U` / `Ctrl+D` | Scroll half page up / down |
+| `Ctrl+O` / `Ctrl+I` | Jump back / forward |
+
+### Editing
+| Key | Action |
+|-----|--------|
+| `ciw` | Change word |
+| `ci(` `ci"` `ci{` | Change inside parens / quotes / braces |
+| `dd` / `yy` | Delete / yank (copy) line |
+| `p` / `P` | Paste below / above |
+| `u` / `Ctrl+R` | Undo / redo |
+| `Ctrl+S` | Save |
+| `.` | Repeat last change |
+
+### Search
+| Key | Action |
+|-----|--------|
+| `/` | Search forward |
+| `n` / `N` | Next / prev match |
+| `Esc` | Clear search highlight |
+
+### Splits
+| Key | Action |
+|-----|--------|
+| `:vsp` | Vertical split |
+| `:sp` | Horizontal split |
+| `Ctrl+H/L/J/K` | Move between splits |
+
+### g — Go somewhere
+| Key | Action |
+|-----|--------|
+| `gd` | Go to definition |
+| `gi` | Go to implementation |
+| `gr` | Go to references |
+| `K` | Hover docs |
+
+### ] / [ — Next / prev
+| Key | Action |
+|-----|--------|
+| `]d` / `[d` | Next / prev diagnostic |
+
+### Space+f — Find
+| Key | Action |
+|-----|--------|
+| `Ctrl+P` | Find files |
+| `Space+fg` | Live grep across project |
+| `Space+fb` | Find open buffers |
+| `Space+fh` | Help tags |
+
+### Space+c — Code
+| Key | Action |
+|-----|--------|
+| `Space+ca` | Code action |
+
+### Space+r — Rename
+| Key | Action |
+|-----|--------|
+| `Space+rn` | Rename symbol |
+
+### Space+d — Diagnostics
+| Key | Action |
+|-----|--------|
+| `Space+d` | Show diagnostic popup |
+
+### Space+e/g — Explorer & Git
+| Key | Action |
+|-----|--------|
+| `Space+e` | Toggle file explorer |
+| `Space+gg` | Open lazygit |
+
+### File explorer (nvim-tree)
+| Key | Action |
+|-----|--------|
+| `Enter` | Open file / expand folder |
+| `y` | Copy filename |
+| `Y` | Copy relative path |
+| `gy` | Copy absolute path |
+| `a` | Create file |
+| `d` | Delete file |
+| `r` | Rename file |
+
+---
+
 ## tmux (prefix = `Ctrl+B`)
 
 ### Windows
@@ -32,68 +134,6 @@
 |-----|--------|
 | `Ctrl+B [` | Enter scroll mode |
 | `q` | Exit scroll mode |
-
----
-
-## Neovim
-
-### My keymaps
-| Key | Action |
-|-----|--------|
-| `Ctrl+S` | Save |
-| `Ctrl+P` | Fuzzy file find |
-| `Space+e` | Toggle file explorer |
-| `Space+g` | Git status in explorer |
-| `Ctrl+T` | Toggle terminal |
-| `Ctrl+H/J/K/L` | Move between splits |
-| `jk` | Exit insert mode |
-
-### LSP
-| Key | Action |
-|-----|--------|
-| `gd` | Go to definition |
-| `gr` | Go to references |
-| `K` | Hover docs |
-| `Space+ca` | Code action |
-| `Space+rn` | Rename symbol |
-| `Space+d` | Show diagnostic |
-| `[d` / `]d` | Prev / next diagnostic |
-
-### Movement
-| Key | Action |
-|-----|--------|
-| `w` / `b` | Next / prev word |
-| `0` / `$` | Start / end of line |
-| `gg` / `G` | Top / bottom of file |
-| `Ctrl+U` / `Ctrl+D` | Scroll half page up / down |
-| `Ctrl+O` / `Ctrl+I` | Jump back / forward |
-
-### Editing
-| Key | Action |
-|-----|--------|
-| `i` / `a` | Insert before / after cursor |
-| `o` / `O` | New line below / above |
-| `ciw` | Change word |
-| `ci(` `ci"` | Change inside parens / quotes |
-| `dd` / `yy` | Delete / yank (copy) line |
-| `p` / `P` | Paste below / above |
-| `u` / `Ctrl+R` | Undo / redo |
-| `gcc` | Toggle comment (line) |
-
-### Search
-| Key | Action |
-|-----|--------|
-| `/` | Search forward |
-| `n` / `N` | Next / prev match |
-| `Esc` | Clear search highlight |
-| `Space+fg` | Live grep across project |
-
-### Buffers
-| Key | Action |
-|-----|--------|
-| `Space+fb` | Find open buffers |
-| `Ctrl+^` | Toggle last buffer |
-| `:bd` | Close buffer |
 
 ---
 
