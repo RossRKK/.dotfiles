@@ -3,6 +3,7 @@
 ## Dependencies
 
 - [Nerd Fonts](https://www.nerdfonts.com/font-downloads) — install **0xProto Nerd Font Propo**
+- [Starship](https://starship.rs/) — prompt; `curl -sS https://starship.rs/install.sh | sh`
 
 ## Setup on a new machine
 
@@ -16,7 +17,7 @@ git clone --bare git@github.com:RossRKK/.dotfiles.git ~/.dotfiles
 
 **fish** (`~/.config/fish/config.fish`):
 ```fish
-abbr --add dotfiles 'git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
+alias dotfiles='git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 ```
 
 **bash** (`~/.bashrc`):

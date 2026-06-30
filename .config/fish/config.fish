@@ -1,4 +1,6 @@
-abbr --add dotfiles 'git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
+alias dotfiles='git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
+
+set --export EDITOR nvim
 
 if status is-interactive
     starship init fish | source

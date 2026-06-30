@@ -1,0 +1,10 @@
+# Explicit format: only directory + git, no language/runtime modules.
+# Prompt character on its own line so typing starts at column 0.
+format = "$directory$git_branch$git_state$git_status$line_break$character"
+
+[directory]
+truncation_length = 3
+truncate_to_repo = true
+
+[git_branch]
+truncation_length = 32
