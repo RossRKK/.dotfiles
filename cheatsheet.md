@@ -46,6 +46,7 @@
 | `:vsp` | Vertical split |
 | `:sp` | Horizontal split |
 | `Ctrl+H/L/J/K` | Move between splits |
+| `:vert res 80` | Resize vertical split to 80 columns |
 
 ### g — Go somewhere
 | Key | Action |
