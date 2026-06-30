@@ -22,3 +22,8 @@ map("n", "<Esc>", "<cmd>nohlsearch<cr>")
 
 -- Save
 map({ "n", "i" }, "<C-s>", "<cmd>w<cr>", { desc = "Save file" })
+
+-- Buffer tabs
+map("n", "<S-l>", "<cmd>BufferLineCycleNext<cr>", { desc = "Next buffer" })
+map("n", "<S-h>", "<cmd>BufferLineCyclePrev<cr>", { desc = "Prev buffer" })
+map("n", "<leader>x", "<cmd>bp|bdelete #<cr>", { desc = "Close buffer" })

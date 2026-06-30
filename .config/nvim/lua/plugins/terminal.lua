@@ -45,18 +45,6 @@ return {
         lazygit:toggle()
       end, { desc = "Open lazygit" })
 
-      local current = 1
-      local max_terms = 5
-
-      vim.keymap.set({ "n", "t" }, "<C-PageDown>", function()
-        current = (current % max_terms) + 1
-        require("toggleterm").toggle(current, nil, nil, "vertical")
-      end, { desc = "Next terminal" })
-
-      vim.keymap.set({ "n", "t" }, "<C-PageUp>", function()
-        current = ((current - 2) % max_terms) + 1
-        require("toggleterm").toggle(current, nil, nil, "vertical")
-      end, { desc = "Prev terminal" })
     end,
   },
 }

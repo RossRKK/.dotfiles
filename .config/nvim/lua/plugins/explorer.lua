@@ -24,6 +24,8 @@ return {
           api.config.mappings.default_on_attach(bufnr)
           -- single click to open files and folders
           vim.keymap.set("n", "<LeftRelease>", api.node.open.edit, { buffer = bufnr, noremap = true })
+          -- remove Ctrl+T binding so it reaches toggleterm
+          vim.keymap.del("n", "<C-t>", { buffer = bufnr })
         end,
         actions = {
           open_file = {
