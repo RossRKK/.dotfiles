@@ -1,5 +1,9 @@
 # dotfiles
 
+## Dependencies
+
+- [Nerd Fonts](https://www.nerdfonts.com/font-downloads) — install **0xProto Nerd Font Propo**
+
 ## Setup on a new machine
 
 ### 1. Clone the repo
