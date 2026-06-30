@@ -5,7 +5,7 @@
 ### 1. Clone the repo
 
 ```bash
-git clone --bare https://github.com/rosskelso/dotfiles.git ~/.dotfiles
+git clone --bare git@github.com:RossRKK/.dotfiles.git ~/.dotfiles
 ```
 
 ### 2. Add the alias
