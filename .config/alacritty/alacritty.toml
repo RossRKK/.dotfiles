@@ -29,8 +29,16 @@ cyan    = "#7dcfff"
 white   = "#c0caf5"
 
 [window]
-padding = { x = 8, y = 8 }
+padding = { x = 0, y = 0 }
 decorations = "full"
 
 [scrolling]
 history = 10000
+
+[terminal]
+shell = "/usr/bin/fish"
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Shift"
+chars = "\u001B\r"

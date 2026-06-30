@@ -27,6 +27,24 @@ return {
         end,
       })
 
+      -- Lazygit in a floating window
+      local Terminal = require("toggleterm.terminal").Terminal
+      local lazygit = Terminal:new({
+        cmd = "lazygit",
+        direction = "float",
+        float_opts = {
+          border = "curved",
+          width = math.floor(vim.o.columns * 0.9),
+          height = math.floor(vim.o.lines * 0.9),
+        },
+        on_close = function()
+          vim.cmd("checktime") -- reload files changed by lazygit
+        end,
+      })
+      vim.keymap.set("n", "<leader>gg", function()
+        lazygit:toggle()
+      end, { desc = "Open lazygit" })
+
       local current = 1
       local max_terms = 5
 
