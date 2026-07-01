@@ -88,6 +88,7 @@
 | Key | Action |
 |-----|--------|
 | `Space+e` | Toggle file explorer |
+| `Space+g` | Reveal current file in explorer |
 | `Space+gg` | Open lazygit |
 
 ### File explorer (nvim-tree)

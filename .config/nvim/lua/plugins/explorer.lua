@@ -30,6 +30,16 @@ return {
         actions = {
           open_file = {
             quit_on_open = false,
+            -- Never open files into the terminal window (which forces a split under it,
+            -- inheriting the terminal's width). Excluding it sends files to a real editor
+            -- window, or the picker if several are open.
+            window_picker = {
+              enable = true,
+              exclude = {
+                filetype = { "toggleterm" },
+                buftype = { "terminal" },
+              },
+            },
           },
         },
       })
