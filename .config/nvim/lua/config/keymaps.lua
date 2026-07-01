@@ -1,9 +1,5 @@
 local map = vim.keymap.set
 
--- Explorer
-map("n", "<leader>e", "<cmd>Neotree toggle<cr>", { desc = "Toggle explorer" })
-map("n", "<leader>g", "<cmd>Neotree git_status<cr>", { desc = "Git status" })
-
 -- Window navigation (normal and terminal mode)
 map("n", "<C-h>", "<C-w>h", { desc = "Move to left window" })
 map("n", "<C-l>", "<C-w>l", { desc = "Move to right window" })
@@ -27,8 +23,8 @@ map("n", "<Esc>", "<cmd>nohlsearch<cr>")
 map({ "n", "i" }, "<C-s>", "<cmd>w<cr>", { desc = "Save file" })
 
 -- Buffer tabs
-map("n", "<S-l>", "<cmd>BufferLineCycleNext<cr>", { desc = "Next buffer" })
-map("n", "<S-h>", "<cmd>BufferLineCyclePrev<cr>", { desc = "Prev buffer" })
+map("n", "<S-l>", "<cmd>bnext<cr>", { desc = "Next buffer" })
+map("n", "<S-h>", "<cmd>bprevious<cr>", { desc = "Prev buffer" })
 map("n", "<leader>x", "<cmd>bp|bdelete #<cr>", { desc = "Close buffer" })
 
 -- Jump to a `path:line:col` reference under the cursor (e.g. printed in the
