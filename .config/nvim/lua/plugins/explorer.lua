@@ -60,6 +60,20 @@ return {
 
       vim.keymap.set("n", "<leader>e", "<cmd>NvimTreeToggle<cr>", { desc = "Toggle explorer" })
       vim.keymap.set("n", "<leader>g", "<cmd>NvimTreeFindFile<cr>", { desc = "Reveal file in explorer" })
+
+      -- Link git status groups to semantic highlight groups so colours follow any theme.
+      local function set_git_highlights()
+        vim.api.nvim_set_hl(0, "NvimTreeGitDirtyIcon", { link = "DiagnosticWarn" })
+        vim.api.nvim_set_hl(0, "NvimTreeGitNewIcon", { link = "Added" })
+        vim.api.nvim_set_hl(0, "NvimTreeGitDeletedIcon", { link = "Removed" })
+        vim.api.nvim_set_hl(0, "NvimTreeGitMergeIcon", { link = "DiagnosticError" })
+        -- Colour only the glyph on folders, not the folder name.
+        for _, kind in ipairs({ "Dirty", "Staged", "Deleted", "Ignored", "Merge", "New", "Renamed" }) do
+          vim.api.nvim_set_hl(0, "NvimTreeGitFolder" .. kind .. "HL", { link = "NvimTreeFolderName" })
+        end
+      end
+      vim.api.nvim_create_autocmd("ColorScheme", { callback = set_git_highlights })
+      set_git_highlights()
     end,
   },
 }
