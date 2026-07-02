@@ -116,6 +116,17 @@
 | `d` | Delete file |
 | `r` | Rename file |
 
+### Explorer git status glyphs
+| Glyph | Meaning |
+|-------|---------|
+| `M` | Modified (unstaged) |
+| `✓` | Staged |
+| `?` | Untracked |
+| `D` | Deleted |
+| `R` | Renamed |
+| `U` | Unmerged (conflict) |
+| `◌` | Ignored |
+
 ---
 
 ## tmux (prefix = `Ctrl+B`)
