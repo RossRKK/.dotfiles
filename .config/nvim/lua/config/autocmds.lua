@@ -16,3 +16,18 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.opt_local.colorcolumn = colorcolumn_by_filetype[vim.bo[args.buf].filetype]
   end,
 })
+
+-- autoread only reloads when nudged; check on focus/idle/buffer-switch.
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI", "TermClose", "TermLeave" }, {
+  callback = function()
+    if vim.fn.mode() ~= "c" and vim.fn.getcmdwintype() == "" then
+      vim.cmd("checktime")
+    end
+  end,
+})
+
+vim.api.nvim_create_autocmd("FileChangedShellPost", {
+  callback = function()
+    vim.notify("File changed on disk — buffer reloaded", vim.log.levels.WARN)
+  end,
+})

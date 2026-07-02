@@ -31,6 +31,7 @@
 | `p` / `P` | Paste below / above |
 | `u` / `Ctrl+R` | Undo / redo |
 | `Ctrl+S` | Save |
+| `Space+rf` | Reload file from disk |
 | `.` | Repeat last change |
 
 ### Search
@@ -60,6 +61,7 @@
 | Key | Action |
 |-----|--------|
 | `]d` / `[d` | Next / prev diagnostic |
+| `]h` / `[h` | Next / prev git hunk |
 
 ### Space+f — Find
 | Key | Action |
@@ -90,6 +92,18 @@
 | `Space+e` | Toggle file explorer |
 | `Space+g` | Reveal current file in explorer |
 | `Space+gg` | Open lazygit |
+| `Space+gd` | Diffview: uncommitted changes |
+| `Space+gb` | Diffview: whole-branch diff (vs default branch) |
+| `Space+gh` | Diffview: current file history |
+
+### Space+h — Git hunks (gitsigns)
+| Key | Action |
+|-----|--------|
+| `Space+hd` | Diff current file vs HEAD |
+| `Space+hp` | Preview hunk |
+| `Space+hs` | Stage hunk |
+| `Space+hr` | Reset hunk |
+| `Space+hb` | Blame current line |
 
 ### File explorer (nvim-tree)
 | Key | Action |
