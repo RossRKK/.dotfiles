@@ -10,6 +10,20 @@ return {
         },
         renderer = {
           group_empty = true,
+          highlight_git = "all", -- colour both the git icon and the filename
+          icons = {
+            glyphs = {
+              git = {
+                untracked = "?",
+                staged = "✓",
+                unstaged = "M",
+                unmerged = "U",
+                renamed = "R",
+                deleted = "D",
+                ignored = "◌",
+              },
+            },
+          },
         },
         filters = {
           dotfiles = false,
