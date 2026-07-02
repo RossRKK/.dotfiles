@@ -32,6 +32,8 @@ opt.swapfile = false
 
 opt.autoread = true
 
+opt.clipboard = "unnamedplus"
+
 opt.updatetime = 250
 opt.timeoutlen = 300
 opt.showmode = false
