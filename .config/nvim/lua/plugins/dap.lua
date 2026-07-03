@@ -17,6 +17,28 @@ return {
         handlers = {},
       })
 
+      -- Python: debug with the uv .venv interpreter so project packages
+      -- (hwdescription, system modules) import under the debugger.
+      local venv_python = require("util.venv").python
+      dap.adapters.python = {
+        type = "executable",
+        command = venv_python() or "python",
+        args = { "-m", "debugpy.adapter" },
+      }
+      dap.configurations.python = {
+        {
+          type = "python",
+          request = "launch",
+          name = "Launch file (venv)",
+          program = "${file}",
+          pythonPath = function()
+            return venv_python() or "python"
+          end,
+          console = "integratedTerminal",
+          cwd = "${workspaceFolder}",
+        },
+      }
+
       dapui.setup({
         layouts = {
           {
