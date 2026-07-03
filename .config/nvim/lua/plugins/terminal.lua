@@ -27,10 +27,16 @@ return {
         end,
       })
 
-      -- Lazygit in a floating window
       local Terminal = require("toggleterm.terminal").Terminal
+
+      -- Reserve #1 for the side terminal at startup so an auto-numbered terminal
+      -- (e.g. lazygit) can't claim it. <C-t> toggles #1; N<C-t> toggles #N.
+      Terminal:new({ count = 1, direction = "vertical" })
+
+      -- Lazygit in a floating window on a dedicated id.
       local lazygit = Terminal:new({
         cmd = "lazygit",
+        count = 99,
         direction = "float",
         float_opts = {
           border = "curved",
