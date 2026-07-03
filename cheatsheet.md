@@ -91,7 +91,7 @@
 | Key | Action |
 |-----|--------|
 | `Space+e` | Toggle file explorer |
-| `Space+g` | Reveal current file in explorer |
+| `Space+v` | Reveal current file in explorer |
 
 ### Space+g — Git
 | Key | Action |
