@@ -85,7 +85,9 @@ return {
           vim.cmd("checktime") -- reload files changed by lazygit
         end,
       })
-      vim.keymap.set("n", "<leader>gg", function()
+      -- <C-g> works from normal and terminal mode (pairs with the <C-t>
+      -- side-terminal toggle) so lazygit is reachable wherever the cursor is.
+      vim.keymap.set({ "n", "t" }, "<C-g>", function()
         lazygit:toggle()
       end, { desc = "Open lazygit" })
 
