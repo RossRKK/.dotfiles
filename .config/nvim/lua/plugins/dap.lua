@@ -82,7 +82,15 @@ return {
 
       -- Keymaps
       local map = vim.keymap.set
-      map("n", "<F5>",       dap.continue,          { desc = "Debug: continue" })
+      map("n", "<F5>", function()
+        if dap.session() then
+          dap.continue() -- resume a running session
+        elseif vim.bo.filetype == "rust" then
+          vim.cmd("RustLsp debuggables") -- rustaceanvim resolves the executable
+        else
+          dap.continue() -- start via the filetype's launch config
+        end
+      end, { desc = "Debug: start / continue" })
       map("n", "<F10>",      dap.step_over,         { desc = "Debug: step over" })
       map("n", "<F11>",      dap.step_into,         { desc = "Debug: step into" })
       map("n", "<F12>",      dap.step_out,          { desc = "Debug: step out" })
