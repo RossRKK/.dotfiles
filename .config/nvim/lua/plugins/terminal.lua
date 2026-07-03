@@ -20,7 +20,21 @@ return {
         on_open = function(term)
           if term.direction == "vertical" then
             vim.wo[term.window].winfixwidth = true -- keep the side terminal fixed at 80
+            -- The side terminal is full-height (nothing above it), so <C-k> nav
+            -- is useless here; pass it through to the running app (e.g. Claude Code).
+            vim.keymap.set("t", "<C-k>", "<C-k>", { buffer = term.bufnr })
           end
+        end,
+      })
+
+      -- Open the vertical side terminal automatically on startup, then hand
+      -- focus back to the editor window so we land on the file/tree, not the term.
+      vim.api.nvim_create_autocmd("VimEnter", {
+        callback = function()
+          vim.schedule(function()
+            require("toggleterm").toggle(1, 80, nil, "vertical")
+            vim.cmd("wincmd p")
+          end)
         end,
       })
 
