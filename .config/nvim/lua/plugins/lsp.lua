@@ -31,25 +31,10 @@ return {
     config = function()
       local capabilities = require("cmp_nvim_lsp").default_capabilities()
 
-      -- Find the uv .venv interpreter by walking up from the cwd. Absolute path
-      -- is required: pyright roots at each sub-package's pyproject.toml (e.g.
-      -- systems/<name>), so a relative ".venv/bin/python" resolves to a venv
+      -- Absolute path required: pyright roots at each sub-package's pyproject.toml
+      -- (e.g. systems/<name>), so a relative ".venv/bin/python" resolves to a venv
       -- that doesn't exist there and pyright falls back to system Python.
-      local function venv_python()
-        local venv = vim.fs.find(".venv", {
-          upward = true,
-          path = vim.fn.getcwd(),
-          type = "directory",
-          limit = 1,
-        })[1]
-        if venv then
-          local py = venv .. "/bin/python"
-          if vim.fn.executable(py) == 1 then
-            return py
-          end
-        end
-        return nil
-      end
+      local venv_python = require("util.venv").python
 
       -- Configure each server using the new vim.lsp.config API
       local servers = {
