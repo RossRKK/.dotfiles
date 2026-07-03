@@ -62,16 +62,23 @@ return {
         },
       })
 
-      -- Auto open/close dapui with debug session
+      -- Run the debugger in its own tab so it never disturbs the editing layout
+      -- (tree / editor / terminal). The tab closes when the session ends.
+      local debug_tab
       dap.listeners.after.event_initialized["dapui_config"] = function()
+        vim.cmd("tabnew")
+        debug_tab = vim.api.nvim_get_current_tabpage()
         dapui.open()
       end
-      dap.listeners.before.event_terminated["dapui_config"] = function()
+      local function close_debug_view()
         dapui.close()
+        if debug_tab and vim.api.nvim_tabpage_is_valid(debug_tab) then
+          pcall(vim.cmd, vim.api.nvim_tabpage_get_number(debug_tab) .. "tabclose")
+        end
+        debug_tab = nil
       end
-      dap.listeners.before.event_exited["dapui_config"] = function()
-        dapui.close()
-      end
+      dap.listeners.before.event_terminated["dapui_config"] = close_debug_view
+      dap.listeners.before.event_exited["dapui_config"] = close_debug_view
 
       -- Keymaps
       local map = vim.keymap.set
