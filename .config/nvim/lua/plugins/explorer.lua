@@ -59,7 +59,7 @@ return {
       })
 
       vim.keymap.set("n", "<leader>e", "<cmd>NvimTreeToggle<cr>", { desc = "Toggle explorer" })
-      vim.keymap.set("n", "<leader>g", "<cmd>NvimTreeFindFile<cr>", { desc = "Reveal file in explorer" })
+      vim.keymap.set("n", "<leader>v", "<cmd>NvimTreeFindFile<cr>", { desc = "Reveal file in explorer" })
 
       -- Link git status groups to semantic highlight groups so colours follow any theme.
       local function set_git_highlights()
