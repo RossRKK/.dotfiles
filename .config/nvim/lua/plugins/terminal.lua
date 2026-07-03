@@ -15,6 +15,13 @@ return {
         shade_terminals = false,
         start_in_insert = true,
         shell = "tmux new-session -A -s neovim",
+        -- Applies to whichever terminal actually opens (incl. the <C-t> side
+        -- terminal, which is created fresh from this global config).
+        on_open = function(term)
+          if term.direction == "vertical" then
+            vim.wo[term.window].winfixwidth = true -- keep the side terminal fixed at 80
+          end
+        end,
       })
 
       -- Auto enter insert mode when focusing a terminal buffer
@@ -27,13 +34,30 @@ return {
         end,
       })
 
+      -- Keep the vertical side terminal fixed at 80. winfixwidth only blocks
+      -- automatic equalization, not the explicit resizes nvim-tree does on open,
+      -- so re-assert the width whenever the layout changes.
+      local enforcing_term_width = false
+      vim.api.nvim_create_autocmd("WinResized", {
+        callback = function()
+          if enforcing_term_width then
+            return
+          end
+          enforcing_term_width = true
+          for _, win in ipairs(vim.api.nvim_list_wins()) do
+            local buf = vim.api.nvim_win_get_buf(win)
+            local floating = vim.api.nvim_win_get_config(win).relative ~= ""
+            if vim.bo[buf].filetype == "toggleterm" and not floating and vim.api.nvim_win_get_width(win) ~= 80 then
+              vim.api.nvim_win_set_width(win, 80)
+            end
+          end
+          enforcing_term_width = false
+        end,
+      })
+
       local Terminal = require("toggleterm.terminal").Terminal
 
-      -- Reserve #1 for the side terminal at startup so an auto-numbered terminal
-      -- (e.g. lazygit) can't claim it. <C-t> toggles #1; N<C-t> toggles #N.
-      Terminal:new({ count = 1, direction = "vertical" })
-
-      -- Lazygit in a floating window on a dedicated id.
+      -- Lazygit on a dedicated id so <C-t> (terminal #1) never toggles it.
       local lazygit = Terminal:new({
         cmd = "lazygit",
         count = 99,
