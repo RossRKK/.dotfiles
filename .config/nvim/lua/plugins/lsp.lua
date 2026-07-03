@@ -10,7 +10,6 @@ return {
       ensure_installed = {
         "pyright",
         "ts_ls",
-        "rust_analyzer",
         "svelte",
         "lua_ls",
         "yamlls",
@@ -46,7 +45,7 @@ return {
           },
         },
         ts_ls = {},
-        rust_analyzer = {},
+        -- rust_analyzer is owned by rustaceanvim (see rust.lua), not started here.
         svelte = {},
         yamlls = {},
         jsonls = {},
