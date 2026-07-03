@@ -34,6 +34,7 @@ return {
           vim.schedule(function()
             require("toggleterm").toggle(1, 80, nil, "vertical")
             vim.cmd("wincmd p")
+            vim.cmd("stopinsert")
           end)
         end,
       })
