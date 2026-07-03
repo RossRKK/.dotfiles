@@ -32,6 +32,9 @@ return {
           enable = true,
           ignore = true,
         },
+        -- Don't let the tree take over the window when opening a directory; the
+        -- VimEnter handler below places it as a side panel beside an editor window.
+        hijack_directories = { enable = false },
         on_attach = function(bufnr)
           local api = require("nvim-tree.api")
           -- default mappings
@@ -74,6 +77,28 @@ return {
       end
       vim.api.nvim_create_autocmd("ColorScheme", { callback = set_git_highlights })
       set_git_highlights()
+
+      -- `nvim <dir>` (e.g. `nvim .`): open the tree as a side panel beside a real
+      -- editor window, so there's always somewhere for files to open.
+      vim.api.nvim_create_autocmd("VimEnter", {
+        nested = true,
+        callback = function(data)
+          if vim.fn.argc() ~= 1 or vim.fn.isdirectory(data.file) ~= 1 then
+            return
+          end
+          vim.cmd.cd(vim.fn.fnameescape(data.file))
+          vim.cmd.enew() -- empty editor window
+          local editor = vim.api.nvim_get_current_buf()
+          pcall(vim.api.nvim_buf_delete, data.buf, { force = true }) -- drop the dir buffer
+          require("nvim-tree.api").tree.open()
+          for _, win in ipairs(vim.api.nvim_list_wins()) do
+            if vim.api.nvim_win_get_buf(win) == editor then
+              vim.api.nvim_set_current_win(win) -- leave focus in the editor
+              break
+            end
+          end
+        end,
+      })
     end,
   },
 }
