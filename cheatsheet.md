@@ -55,6 +55,7 @@
 | `gd` | Go to definition |
 | `gi` | Go to implementation |
 | `gr` | Go to references |
+| `gf` | Open file / `path:line:col` under cursor |
 | `K` | Hover docs |
 
 ### ] / [ — Next / prev
@@ -86,11 +87,15 @@
 |-----|--------|
 | `Space+d` | Show diagnostic popup |
 
-### Space+e/g — Explorer & Git
+### Explorer
 | Key | Action |
 |-----|--------|
 | `Space+e` | Toggle file explorer |
 | `Space+g` | Reveal current file in explorer |
+
+### Space+g — Git
+| Key | Action |
+|-----|--------|
 | `Space+gg` | Open lazygit |
 | `Space+gd` | Diffview: uncommitted changes |
 | `Space+gb` | Diffview: whole-branch diff (vs default branch) |
