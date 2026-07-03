@@ -88,15 +88,11 @@ return {
           end
           vim.cmd.cd(vim.fn.fnameescape(data.file))
           vim.cmd.enew() -- empty editor window
-          local editor = vim.api.nvim_get_current_buf()
           pcall(vim.api.nvim_buf_delete, data.buf, { force = true }) -- drop the dir buffer
+          pcall(require("persistence").load) -- reopen this dir's files (no-op if none saved)
+          local editor = vim.api.nvim_get_current_win()
           require("nvim-tree.api").tree.open()
-          for _, win in ipairs(vim.api.nvim_list_wins()) do
-            if vim.api.nvim_win_get_buf(win) == editor then
-              vim.api.nvim_set_current_win(win) -- leave focus in the editor
-              break
-            end
-          end
+          vim.api.nvim_set_current_win(editor) -- leave focus in the editor
         end,
       })
     end,
