@@ -5,6 +5,12 @@ return {
     opts = {
       on_attach = function(bufnr)
         local gs = require("gitsigns")
+        -- Review mode rebases the sign column onto the branch merge-base; make
+        -- sure buffers that attach after that base was chosen inherit it.
+        local base = require("review.gitsigns").current
+        if base then
+          pcall(gs.change_base, base, true)
+        end
         local function map(l, r, desc)
           vim.keymap.set("n", l, r, { buffer = bufnr, desc = desc })
         end
