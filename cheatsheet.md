@@ -111,6 +111,23 @@
 | `Space+hr` | Reset hunk |
 | `Space+hb` | Blame current line |
 
+### Space+r — Branch review mode
+Highlights what merging this branch into the default branch would actually
+change (the merge-result diff): gitsigns marks changed lines in the sign column,
+and the explorer flags changed files. Changes the default branch already has —
+even if the branch made them independently — don't show. On all the time; mark
+files/folders reviewed as you go.
+| Key | Action |
+|-----|--------|
+| `Space+rr` | Mark file / folder (recursive) reviewed |
+| `Space+ru` | Mark file / folder not reviewed |
+| `Space+rt` | Toggle review mode on / off |
+| `Space+rR` | Refresh review status |
+
+`Space+rr` / `Space+ru` act on the node under the cursor in the explorer,
+otherwise the current buffer. A reviewed file flips back to "changed" if it's
+edited again.
+
 ### File explorer (nvim-tree)
 | Key | Action |
 |-----|--------|
@@ -132,6 +149,12 @@
 | `R` | Renamed |
 | `U` | Unmerged (conflict) |
 | `◌` | Ignored |
+
+### Explorer review indicators
+| Glyph | Meaning |
+|-------|---------|
+| `●` | Changed on this branch, not yet reviewed (folders: some child unreviewed) |
+| `✓` | Reviewed and unchanged since (folders: all changed children reviewed) |
 
 ### Terminal
 | Key | Action |

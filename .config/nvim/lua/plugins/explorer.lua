@@ -11,6 +11,19 @@ return {
         renderer = {
           group_empty = true,
           highlight_git = "all", -- colour both the git icon and the filename
+          -- Append the branch-review decorator after the builtins so its
+          -- ●/✓ indicators sit at the end of the row.
+          decorators = {
+            "Git",
+            "Open",
+            "Hidden",
+            "Modified",
+            "Bookmark",
+            "Diagnostics",
+            "Copied",
+            require("review.decorator"),
+            "Cut",
+          },
           icons = {
             glyphs = {
               git = {
@@ -95,6 +108,9 @@ return {
           vim.api.nvim_set_current_win(editor) -- leave focus in the editor
         end,
       })
+
+      -- Branch review mode: commands, keymaps, gitsigns base, explorer colours.
+      require("review").setup()
     end,
   },
 }
