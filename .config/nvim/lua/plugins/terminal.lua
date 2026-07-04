@@ -29,6 +29,13 @@ return {
             -- The side terminal is full-height (nothing above it), so <C-k> nav
             -- is useless here; pass it through to the running app (e.g. Claude Code).
             vim.keymap.set("t", "<C-k>", "<C-k>", { buffer = term.bufnr })
+            -- In normal mode <C-b> would otherwise be a no-op nvim key. Send the
+            -- tmux prefix (0x02) straight to the job and resume terminal mode, so
+            -- tmux shortcuts work without first pressing i to re-enter the terminal.
+            vim.keymap.set("n", "<C-b>", function()
+              vim.api.nvim_chan_send(vim.b.terminal_job_id, "\2")
+              vim.cmd("startinsert")
+            end, { buffer = term.bufnr, desc = "Send tmux prefix and resume terminal" })
           end
         end,
       })
