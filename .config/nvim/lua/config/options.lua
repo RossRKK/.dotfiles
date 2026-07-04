@@ -15,7 +15,11 @@ opt.shiftwidth = 4
 opt.expandtab = true
 opt.smartindent = true
 
-opt.wrap = false
+opt.wrap = true
+opt.linebreak = true -- break wrapped lines at word boundaries, not mid-word
+opt.breakindent = true -- wrapped continuation lines keep the line's indent
+opt.showbreak = "↪ " -- marker at the start of each wrapped continuation line
+opt.breakindentopt = "sbr" -- draw showbreak after the indent (dimmed via NonText)
 opt.scrolloff = 8
 
 opt.splitright = true
