@@ -41,13 +41,15 @@
 | `n` / `N` | Next / prev match |
 | `Esc` | Clear search highlight |
 
-### Splits
+### Splits & Buffers
 | Key | Action |
 |-----|--------|
 | `:vsp` | Vertical split |
 | `:sp` | Horizontal split |
-| `Ctrl+H/L/J/K` | Move between splits |
+| `Ctrl+H/L/J/K` | Move between splits (works in terminal too) |
 | `:vert res 80` | Resize vertical split to 80 columns |
+| `Shift+L` / `Shift+H` | Next / prev buffer |
+| `Space+x` | Close buffer |
 
 ### g — Go somewhere
 | Key | Action |
@@ -96,7 +98,6 @@
 ### Space+g — Git
 | Key | Action |
 |-----|--------|
-| `Space+gg` | Open lazygit |
 | `Space+gd` | Diffview: uncommitted changes |
 | `Space+gb` | Diffview: whole-branch diff (vs default branch) |
 | `Space+gh` | Diffview: current file history |
@@ -131,6 +132,25 @@
 | `R` | Renamed |
 | `U` | Unmerged (conflict) |
 | `◌` | Ignored |
+
+### Terminal
+| Key | Action |
+|-----|--------|
+| `Ctrl+T` | Toggle the side terminal |
+| `Ctrl+G` | Toggle lazygit (works in normal & terminal mode) |
+| `Ctrl+N` (in terminal) | Enter terminal-normal mode (then `gf` jumps to a ref) |
+| `Ctrl+B` (terminal, normal mode) | Send the tmux prefix and drop back into the terminal |
+
+### Debug (nvim-dap)
+| Key | Action |
+|-----|--------|
+| `F5` | Start / continue |
+| `F10` | Step over |
+| `F11` | Step into |
+| `F12` | Step out |
+| `Space+b` | Toggle breakpoint |
+| `Space+B` | Conditional breakpoint |
+| `Space+du` | Toggle debug UI |
 
 ---
 
