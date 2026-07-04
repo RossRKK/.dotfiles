@@ -14,7 +14,7 @@ local ReviewDecorator = require("nvim-tree.api").Decorator:extend()
 function ReviewDecorator:new()
   self.enabled = true
   self.highlight_range = "none" -- colour the glyph only, never the node name
-  self.icon_placement = "after"
+  self.icon_placement = "before" -- glyph sits just before the file name
 
   self.icon_changed = { str = "●", hl = { "ReviewChanged" } }
   self.icon_reviewed = { str = "✓", hl = { "ReviewReviewed" } }

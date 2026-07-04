@@ -35,28 +35,42 @@ M.enabled = true
 
 local uv = vim.uv or vim.loop
 
---- Run git in `root` and return stdout lines (empty table on failure).
+--- Run a command asynchronously, yielding the current coroutine until it exits.
+--- MUST be called from within a coroutine (refresh/mark drive one). Returns the
+--- stdout lines and the exit code; stdout is returned even on a non-zero exit so
+--- callers like merged_tree can read a conflicted merge's tree oid.
+---@param cmd string[]
+---@return string[] lines, integer code
+local function sh(cmd)
+  local co = assert(coroutine.running(), "review: git must run inside a coroutine")
+  vim.system(cmd, { text = true }, function(obj)
+    vim.schedule(function()
+      local lines = {}
+      for line in (obj.stdout or ""):gmatch("[^\r\n]+") do
+        lines[#lines + 1] = line
+      end
+      coroutine.resume(co, lines, obj.code)
+    end)
+  end)
+  return coroutine.yield()
+end
+
+--- Run git in `root` (async).
 ---@param root string
 ---@param args string[]
 ---@return string[]
 local function git(root, args)
   local cmd = { "git", "-C", root }
   vim.list_extend(cmd, args)
-  local out = vim.fn.systemlist(cmd)
-  if vim.v.shell_error ~= 0 then
-    return {}
-  end
-  return out
+  return (sh(cmd))
 end
 
---- Toplevel of the repo containing cwd, or nil if not in a work tree.
+--- Toplevel of the repo containing cwd, or nil if not in a work tree (async).
 ---@return string?
 local function repo_root()
-  local out = vim.fn.systemlist({ "git", "rev-parse", "--show-toplevel" })
-  if vim.v.shell_error ~= 0 or not out[1] or out[1] == "" then
-    return nil
-  end
-  return out[1]
+  local out = sh({ "git", "rev-parse", "--show-toplevel" })
+  local root = out[1]
+  return (root and root ~= "") and root or nil
 end
 
 --- Best guess at the branch we're reviewing against.
@@ -90,9 +104,9 @@ end
 ---@return string?
 local function merged_tree(root, branch)
   -- `--write-tree` writes the merged tree and prints its oid on the first line.
-  -- On a conflicted merge git exits non-zero but still prints the tree oid first,
-  -- so read output directly rather than going through git() (which drops it).
-  local out = vim.fn.systemlist({ "git", "-C", root, "merge-tree", "--write-tree", branch, "HEAD" })
+  -- On a conflicted merge git exits non-zero but still prints the tree oid first;
+  -- sh() keeps stdout regardless of exit code, so git() is fine here.
+  local out = git(root, { "merge-tree", "--write-tree", branch, "HEAD" })
   local tree = out[1]
   if not tree or not tree:match("^%x%x%x%x%x%x%x") then
     return nil
@@ -207,25 +221,38 @@ end
 
 -- ---------------------------------------------------------------------------
 
---- Rebuild status_by_path from git and reapply the gitsigns base.
---- The expensive merge step is cached on commit shas (see committed_changed),
---- so the common focus/save path is just a couple of cheap diffs.
-function M.refresh()
+-- Bumped on every refresh; an in-flight async run whose generation is stale
+-- (a newer refresh started) discards its results instead of clobbering state.
+local refresh_gen = 0
+
+--- Clear all review state and reset gitsigns; used by the inactive paths.
+local function deactivate()
   M.status_by_path = {}
   M.folder_status = {}
   M.active = false
+  require("review.gitsigns").set_base(nil)
+  M.redraw_tree()
+end
+
+--- The async body of a refresh. Runs inside a coroutine; every git() call yields
+--- without blocking the UI. Builds new state in locals and only commits it at the
+--- end, so a partial run never leaves half-updated tables on screen.
+---@param mygen integer generation this run belongs to
+local function do_refresh(mygen)
+  local function stale()
+    return mygen ~= refresh_gen
+  end
 
   if not M.enabled then
-    require("review.gitsigns").set_base(nil)
-    M.redraw_tree()
-    return
+    return deactivate()
   end
 
   local root = repo_root()
-  if not root then
-    require("review.gitsigns").set_base(nil)
-    M.redraw_tree()
+  if stale() then
     return
+  end
+  if not root then
+    return deactivate()
   end
 
   local branch = default_branch(root)
@@ -233,21 +260,16 @@ function M.refresh()
   local head_sha = rev(root, "HEAD")
   -- Files the merge would actually change vs the default branch. This is the
   -- merge-result diff, so files the branch changed to content the default branch
-  -- already has don't appear. Cached on the two shas, so it's free when neither
-  -- HEAD nor the base has moved since the last refresh.
+  -- already has don't appear. Cached on the two shas, so it's free (no git) when
+  -- neither HEAD nor the base has moved since the last refresh.
   local committed = branch and base_sha and head_sha
     and committed_changed(root, branch, base_sha, head_sha)
-  if not branch or not committed then
-    require("review.gitsigns").set_base(nil)
-    M.redraw_tree()
+  if stale() then
     return
   end
-
-  M.active = true
-  -- Per-line signs: diff the buffer against the default-branch tip, so a line
-  -- that matches what's already on the branch shows no sign — consistent with
-  -- the merge-result file list below.
-  require("review.gitsigns").set_base(branch)
+  if not branch or not committed then
+    return deactivate()
+  end
 
   local changed = {} -- rel path -> true (dedup)
   for rel in pairs(committed) do
@@ -262,35 +284,38 @@ function M.refresh()
   for _, rel in ipairs(git(root, { "ls-files", "--others", "--exclude-standard" })) do
     changed[rel] = true
   end
+  if stale() then
+    return
+  end
 
   local reviewed = load_reviewed(root)
+  local status_by_path = {}
   local still_changed = {} -- prune reviewed entries no longer in the diff
 
   for rel in pairs(changed) do
     local abs = vim.fs.normalize(root .. "/" .. rel)
     local recorded = reviewed[rel]
     if recorded and recorded == blob_hash(root, rel) then
-      M.status_by_path[abs] = "reviewed"
+      status_by_path[abs] = "reviewed"
       still_changed[rel] = recorded
     else
       -- New change, or a reviewed file that was edited again: needs review.
-      M.status_by_path[abs] = "changed"
+      status_by_path[abs] = "changed"
     end
   end
-
-  -- Drop reviewed records for files that no longer differ (e.g. after a rebase).
-  if next(reviewed) then
-    save_reviewed(root, still_changed)
+  if stale() then
+    return
   end
 
   -- Roll each file's status up to its ancestor directories. "changed" dominates:
   -- a folder is only "reviewed" once every changed descendant is reviewed.
+  local folder_status = {}
   local nroot = vim.fs.normalize(root)
-  for abs, st in pairs(M.status_by_path) do
+  for abs, st in pairs(status_by_path) do
     local dir = vim.fs.dirname(abs)
     while dir and #dir >= #nroot and (dir == nroot or dir:sub(1, #nroot + 1) == nroot .. "/") do
-      if M.folder_status[dir] ~= "changed" then
-        M.folder_status[dir] = (st == "changed") and "changed" or "reviewed"
+      if folder_status[dir] ~= "changed" then
+        folder_status[dir] = (st == "changed") and "changed" or "reviewed"
       end
       if dir == nroot then
         break
@@ -299,7 +324,32 @@ function M.refresh()
     end
   end
 
+  -- Commit the freshly built state atomically.
+  M.status_by_path = status_by_path
+  M.folder_status = folder_status
+  M.active = true
+  -- Drop reviewed records for files that no longer differ (e.g. after a rebase).
+  if next(reviewed) then
+    save_reviewed(root, still_changed)
+  end
+  -- Per-line signs: diff the buffer against the default-branch tip, so a line
+  -- that matches what's already on the branch shows no sign — consistent with
+  -- the merge-result file list above.
+  require("review.gitsigns").set_base(branch)
   M.redraw_tree()
+end
+
+--- Recompute review status without blocking the UI. Returns immediately; the
+--- work runs on an async coroutine and applies its results when done.
+function M.refresh()
+  refresh_gen = refresh_gen + 1
+  local mygen = refresh_gen
+  coroutine.wrap(function()
+    local ok, err = pcall(do_refresh, mygen)
+    if not ok then
+      vim.notify("review: refresh failed: " .. tostring(err), vim.log.levels.ERROR)
+    end
+  end)()
 end
 
 --- Status for an absolute path: "changed" | "reviewed" | nil.
@@ -345,53 +395,63 @@ end
 ---@param reviewed boolean true = mark reviewed, false = mark not reviewed
 ---@param abs string? target path
 function M.mark(reviewed, abs)
+  -- Resolve the target from cursor/buffer state up front (sync), before the
+  -- async git work below can move the cursor or change the current window.
   abs = abs or target_path()
   if not abs or abs == "" then
     return
   end
   abs = vim.fs.normalize(abs)
+  local is_dir = vim.fn.isdirectory(abs) == 1
 
-  local root = repo_root()
-  if not root then
-    vim.notify("review: not in a git repo", vim.log.levels.WARN)
-    return
-  end
-  local nroot = vim.fs.normalize(root)
-
-  -- Collect the changed files this action covers. For a directory, that's every
-  -- changed descendant; for a file, just itself (if it's actually changed).
-  local targets = {}
-  if vim.fn.isdirectory(abs) == 1 then
-    for path in pairs(M.status_by_path) do
-      if path == abs or path:sub(1, #abs + 1) == abs .. "/" then
-        table.insert(targets, path)
+  coroutine.wrap(function()
+    local ok, err = pcall(function()
+      local root = repo_root()
+      if not root then
+        vim.notify("review: not in a git repo", vim.log.levels.WARN)
+        return
       end
-    end
-  elseif M.status_by_path[abs] then
-    table.insert(targets, abs)
-  end
+      local nroot = vim.fs.normalize(root)
 
-  if #targets == 0 then
-    vim.notify("review: nothing changed here to mark", vim.log.levels.INFO)
-    return
-  end
-
-  local reviewed_map = load_reviewed(root)
-  for _, path in ipairs(targets) do
-    local rel = path:sub(#nroot + 2)
-    if reviewed then
-      local hash = blob_hash(root, rel)
-      if hash then
-        reviewed_map[rel] = hash
+      -- Collect the changed files this action covers. For a directory, that's
+      -- every changed descendant; for a file, just itself (if it's changed).
+      local targets = {}
+      if is_dir then
+        for path in pairs(M.status_by_path) do
+          if path == abs or path:sub(1, #abs + 1) == abs .. "/" then
+            table.insert(targets, path)
+          end
+        end
+      elseif M.status_by_path[abs] then
+        table.insert(targets, abs)
       end
-    else
-      reviewed_map[rel] = nil
-    end
-  end
-  save_reviewed(root, reviewed_map)
 
-  vim.notify(("review: marked %d file(s) %s"):format(#targets, reviewed and "reviewed" or "not reviewed"))
-  M.refresh()
+      if #targets == 0 then
+        vim.notify("review: nothing changed here to mark", vim.log.levels.INFO)
+        return
+      end
+
+      local reviewed_map = load_reviewed(root)
+      for _, path in ipairs(targets) do
+        local rel = path:sub(#nroot + 2)
+        if reviewed then
+          local hash = blob_hash(root, rel)
+          if hash then
+            reviewed_map[rel] = hash
+          end
+        else
+          reviewed_map[rel] = nil
+        end
+      end
+      save_reviewed(root, reviewed_map)
+
+      vim.notify(("review: marked %d file(s) %s"):format(#targets, reviewed and "reviewed" or "not reviewed"))
+      M.refresh()
+    end)
+    if not ok then
+      vim.notify("review: mark failed: " .. tostring(err), vim.log.levels.ERROR)
+    end
+  end)()
 end
 
 --- Turn review mode on/off (gitsigns base + explorer colours).
