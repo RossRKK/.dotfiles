@@ -1,7 +1,11 @@
 return {
   {
     "nvim-telescope/telescope.nvim",
-    branch = "0.1.x",
+    -- master, not the 0.1.x tag line: 0.1.x predates telescope's move to native
+    -- vim.treesitter in the previewer and still calls nvim-treesitter master-only
+    -- functions (ft_to_lang/get_parser), which error now that we're on the
+    -- nvim-treesitter main branch -- breaking (not just unhighlighting) previews.
+    branch = "master",
     dependencies = {
       "nvim-lua/plenary.nvim",
       {
