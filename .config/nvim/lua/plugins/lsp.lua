@@ -27,7 +27,15 @@ return {
     "WhoIsSethDaniel/mason-tool-installer.nvim",
     dependencies = { "williamboman/mason.nvim" },
     opts = {
-      ensure_installed = { "tree-sitter-cli" },
+      ensure_installed = {
+        "tree-sitter-cli",
+        -- Formatters used by conform.lua. rustfmt (rust toolchain) and terraform
+        -- (terraform CLI) aren't mason packages, so they're expected on PATH.
+        "stylua", -- lua
+        "prettierd", -- js/ts/svelte/json/yaml/css/html/markdown
+        "ruff", -- python (format + import sort)
+        "shfmt", -- sh/bash
+      },
     },
   },
   {
