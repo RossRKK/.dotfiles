@@ -1,0 +1,8 @@
+# Send Shift+Enter as ESC+CR so Claude Code (and other apps) insert a
+# newline. This plain two-byte sequence survives tmux + nvim's terminal
+# buffer, unlike the Kitty-protocol CSI 13;2u encoding tmux strips.
+keybind = shift+enter=text:\x1b\r
+
+# Slow down mouse-wheel scrolling (default is 3 = fast). Lower = slower;
+# try 0.5 if 1 is still too quick.
+mouse-scroll-multiplier = 0.5
