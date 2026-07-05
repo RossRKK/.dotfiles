@@ -3,7 +3,7 @@ return {
     "3rd/image.nvim",
     -- Render images (visual-regression PNGs, inline markdown) directly in editor
     -- buffers via the kitty graphics protocol. Only enabled where that protocol
-    -- works (Ghostty); elsewhere open-external.lua sends images to the OS viewer.
+    -- works (Ghostty/WezTerm); elsewhere open-external.lua opens the OS viewer.
     cond = require("config.term_caps").inline_images_supported,
     opts = {
       backend = "kitty",
