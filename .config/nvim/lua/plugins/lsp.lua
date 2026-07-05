@@ -21,6 +21,16 @@ return {
     },
   },
   {
+    -- Auto-install CLI tools (not LSP servers) into mason's bin, which mason puts
+    -- on nvim's PATH. Here: the tree-sitter CLI that nvim-treesitter's main branch
+    -- shells out to for building parsers, so a fresh machine bootstraps itself.
+    "WhoIsSethDaniel/mason-tool-installer.nvim",
+    dependencies = { "williamboman/mason.nvim" },
+    opts = {
+      ensure_installed = { "tree-sitter-cli" },
+    },
+  },
+  {
     "neovim/nvim-lspconfig",
     dependencies = {
       "williamboman/mason.nvim",
