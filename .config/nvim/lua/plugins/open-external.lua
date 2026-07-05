@@ -2,7 +2,8 @@
 -- loading their bytes into a buffer, matched by an explicit extension list.
 -- Transparent and predictable: if a format opens as garbage, add its extension
 -- here. Images are handled here only where inline rendering isn't supported;
--- in Ghostty image.nvim renders them inline instead (see term_caps.lua).
+-- in a kitty-graphics terminal (Ghostty/WezTerm) image.nvim renders them inline
+-- instead (see term_caps.lua).
 --
 -- vim.ui.open (Neovim 0.10+) picks the opener per platform: xdg-open (Linux),
 -- open (macOS), explorer.exe / wslview (WSL), start (native Windows).
@@ -22,8 +23,8 @@ local extensions = {
   "zip", "7z", "rar",
 }
 
--- Where image.nvim can't render inline (non-Ghostty terminals), open images in
--- the OS viewer too rather than loading raw bytes or leaving a stranded sixel.
+-- Where image.nvim can't render inline (no kitty-graphics terminal), open images
+-- in the OS viewer too rather than loading raw bytes or leaving a stranded sixel.
 if not require("config.term_caps").inline_images_supported() then
   vim.list_extend(extensions, { "png", "jpg", "jpeg", "gif", "webp", "avif", "bmp" })
 end

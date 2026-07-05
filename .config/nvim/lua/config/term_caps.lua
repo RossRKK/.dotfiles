@@ -1,9 +1,13 @@
 -- Terminal graphics capability, used to decide inline vs external image opening.
 --
 -- Inline rendering (the kitty graphics protocol via image.nvim) is reliable in
--- Ghostty. Windows Terminal only speaks sixel, which can't reflow or clip when
--- our tree/side-terminal layout shifts around it, so there we open images in the
--- OS viewer instead (see open-external.lua).
+-- Ghostty, so that's the only terminal we enable it for. Everything else opens
+-- images in the OS viewer instead (see open-external.lua):
+--   * Windows Terminal only speaks sixel, which can't reflow/clip through our
+--     tree+terminal layout.
+--   * WezTerm (over WSL) speaks the kitty protocol but its implementation is
+--     partial: it can't read the Linux temp-file path image.nvim transmits, and
+--     base64/unicode-placeholder fallbacks render broken. Not worth the hacks.
 
 local M = {}
 
