@@ -1,7 +1,8 @@
 -- Open opaque, non-text file types in the OS default application instead of
 -- loading their bytes into a buffer, matched by an explicit extension list.
 -- Transparent and predictable: if a format opens as garbage, add its extension
--- here. Images are intentionally absent -- image.nvim renders those inline.
+-- here. Images are handled here only where inline rendering isn't supported;
+-- in Ghostty image.nvim renders them inline instead (see term_caps.lua).
 --
 -- vim.ui.open (Neovim 0.10+) picks the opener per platform: xdg-open (Linux),
 -- open (macOS), explorer.exe / wslview (WSL), start (native Windows).
@@ -21,8 +22,21 @@ local extensions = {
   "zip", "7z", "rar",
 }
 
+-- Where image.nvim can't render inline (non-Ghostty terminals), open images in
+-- the OS viewer too rather than loading raw bytes or leaving a stranded sixel.
+if not require("config.term_caps").inline_images_supported() then
+  vim.list_extend(extensions, { "png", "jpg", "jpeg", "gif", "webp", "avif", "bmp" })
+end
+
 -- Hand a path to the OS default app and report failures.
 local function open_external(path)
+  -- On WSL, go straight to the Windows default app via wslview. vim.ui.open
+  -- would route through xdg-open, which (now that ImageMagick is installed)
+  -- resolves image/* to its X11 `display` GUI rather than the Windows viewer.
+  if vim.fn.executable("wslview") == 1 then
+    vim.system({ "wslview", path })
+    return
+  end
   local _, err = vim.ui.open(path)
   if err then
     vim.notify(("open-external: %s"):format(err), vim.log.levels.ERROR)

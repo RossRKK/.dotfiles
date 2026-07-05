@@ -1,13 +1,12 @@
 return {
   {
     "3rd/image.nvim",
-    -- Render images (visual-regression PNGs, inline markdown) directly in
-    -- editor buffers. Uses whatever protocol the current terminal speaks:
-    -- Kitty under Ghostty on Linux, Sixel under Windows Terminal (WSL).
-    -- Detection: Windows Terminal exports WT_SESSION; everything else is
-    -- assumed Kitty-capable (Ghostty / WezTerm / kitty).
+    -- Render images (visual-regression PNGs, inline markdown) directly in editor
+    -- buffers via the kitty graphics protocol. Only enabled where that protocol
+    -- works (Ghostty); elsewhere open-external.lua sends images to the OS viewer.
+    cond = require("config.term_caps").inline_images_supported,
     opts = {
-      backend = vim.env.WT_SESSION and "sixel" or "kitty",
+      backend = "kitty",
       -- magick_cli shells out to the ImageMagick CLI (already installed),
       -- so no `magick` luarock / luarocks build is required.
       processor = "magick_cli",
