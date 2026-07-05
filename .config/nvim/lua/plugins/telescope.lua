@@ -1,10 +1,11 @@
 return {
   {
     "nvim-telescope/telescope.nvim",
-    -- master, not the 0.1.x tag line: 0.1.x predates telescope's move to native
-    -- vim.treesitter in the previewer and still calls nvim-treesitter master-only
-    -- functions (ft_to_lang/get_parser), which error now that we're on the
-    -- nvim-treesitter main branch -- breaking (not just unhighlighting) previews.
+    -- Both 0.1.x and master still call nvim-treesitter master-only functions
+    -- (parsers.ft_to_lang/get_parser) in the previewer, which don't exist on the
+    -- nvim-treesitter main branch we run -- so preview highlighting is broken on
+    -- either. We patch ts_highlighter to native vim.treesitter in config() below,
+    -- which fixes both; master is kept simply for its newer features/fixes.
     branch = "master",
     dependencies = {
       "nvim-lua/plenary.nvim",
@@ -23,6 +24,22 @@ return {
         },
       })
       telescope.load_extension("fzf")
+
+      -- Telescope's previewer highlighter (both 0.1.x and master) still calls the
+      -- nvim-treesitter *master* API (parsers.ft_to_lang/get_parser), which no
+      -- longer exists now that nvim-treesitter is on the `main`-branch rewrite --
+      -- so previews get no treesitter highlighting (e.g. <leader>fg). Replace
+      -- telescope's ts_highlighter with native vim.treesitter, matching how
+      -- treesitter.lua highlights ordinary buffers. Returns true so the caller
+      -- doesn't fall back to regex; false (unknown/uninstalled lang) lets it.
+      local putils = require("telescope.previewers.utils")
+      putils.ts_highlighter = function(bufnr, ft)
+        local lang = vim.treesitter.language.get_lang(ft or "")
+        if not lang then
+          return false
+        end
+        return pcall(vim.treesitter.start, bufnr, lang)
+      end
 
       local builtin = require("telescope.builtin")
       vim.keymap.set("n", "<C-p>", builtin.find_files, { desc = "Find files" })
