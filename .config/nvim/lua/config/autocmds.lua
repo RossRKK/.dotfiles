@@ -8,6 +8,7 @@ local colorcolumn_by_filetype = {
   javascript = "80",
   javascriptreact = "80",
   svelte = "80",
+  markdown = "80",
 }
 
 vim.api.nvim_create_autocmd("FileType", {
@@ -19,22 +20,35 @@ vim.api.nvim_create_autocmd("FileType", {
 
 -- Prose: `gq`/`gqip` reflows to this width (0 would fall back to 79).
 local prose_filetypes = { "markdown", "text", "gitcommit", "rst", "tex", "typst" }
+
+-- Markdown routes `gq`/`gw` through conform (prettierd): it reflows prose to
+-- printWidth AND keeps tables aligned, unlike the built-in reflow which wraps
+-- table rows and shreds them. Other prose filetypes have no conform formatter,
+-- so they keep the built-in paragraph reflow (formatexpr = "").
+local function set_prose_formatexpr(buf)
+  if vim.bo[buf].filetype == "markdown" then
+    vim.bo[buf].formatexpr = "v:lua.require'conform'.formatexpr()"
+  else
+    vim.bo[buf].formatexpr = ""
+  end
+end
+
 vim.api.nvim_create_autocmd("FileType", {
   pattern = prose_filetypes,
-  callback = function()
+  callback = function(args)
     vim.opt_local.textwidth = 80
+    set_prose_formatexpr(args.buf)
   end,
 })
 
 -- A language server (e.g. marksman on markdown) points `formatexpr` at the LSP
--- formatter on attach, which makes `gq` delegate to it — and since marksman
--- doesn't reflow paragraphs, `gq` appears to do nothing. Clear it in prose
--- buffers so `gq` uses Neovim's built-in paragraph reflow. Runs on LspAttach so
--- it wins over the default handler (which set it during attach).
+-- formatter on attach, clobbering the above — and marksman doesn't reflow, so
+-- `gq` would appear to do nothing. Re-assert our formatexpr on LspAttach so it
+-- wins over the default handler (which set it during attach).
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(args)
     if vim.tbl_contains(prose_filetypes, vim.bo[args.buf].filetype) then
-      vim.bo[args.buf].formatexpr = ""
+      set_prose_formatexpr(args.buf)
     end
   end,
 })
