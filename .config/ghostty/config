@@ -1,6 +1,11 @@
 # Send Shift+Enter as ESC+CR so Claude Code (and other apps) insert a
 # newline. This plain two-byte sequence survives tmux + nvim's terminal
 # buffer, unlike the Kitty-protocol CSI 13;2u encoding tmux strips.
+# Launch fish explicitly. The graphical session exports a stale SHELL=/bin/bash
+# (from before `chsh` to fish), which Ghostty would otherwise inherit. Pinning
+# the command here makes it independent of $SHELL.
+command = /usr/bin/fish -l
+
 keybind = shift+enter=text:\x1b\r
 
 # Slow down mouse-wheel scrolling (default is 3 = fast). Lower = slower;
