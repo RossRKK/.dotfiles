@@ -8,7 +8,7 @@ return {
     dependencies = { "williamboman/mason.nvim" },
     opts = {
       ensure_installed = {
-        "pyright",
+        "basedpyright",
         "ts_ls",
         "svelte",
         "lua_ls",
@@ -55,8 +55,16 @@ return {
 
       -- Configure each server using the new vim.lsp.config API
       local servers = {
-        pyright = {
+        -- basedpyright, not pyright: it's a drop-in fork that additionally serves
+        -- inlay hints (return/variable types, call-arg names), which the
+        -- LspAttach handler below enables. typeCheckingMode "standard" matches
+        -- pyright's default rather than basedpyright's stricter "recommended", so
+        -- the switch adds hints without a wall of new diagnostics.
+        basedpyright = {
           settings = {
+            basedpyright = {
+              analysis = { typeCheckingMode = "standard" },
+            },
             python = {
               pythonPath = venv_python(),
             },
