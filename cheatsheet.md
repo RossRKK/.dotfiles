@@ -135,7 +135,11 @@ Folds follow the code structure; files open fully expanded.
 | `Space+hp` | Preview hunk              |
 | `Space+hs` | Stage hunk                |
 | `Space+hr` | Reset hunk                |
-| `Space+hb` | Blame current line        |
+| `Space+hb` | Blame current line (popup) |
+| `Space+hB` | Toggle inline blame       |
+
+Inline blame (dimmed, at end of the current line) is on by default; `Space+hB`
+toggles it off/on.
 
 ### Space+r — Branch review mode
 
