@@ -45,6 +45,18 @@
 | `n` / `N` | Next / prev match      |
 | `Esc`     | Clear search highlight |
 
+### Folding (treesitter)
+
+Folds follow the code structure; files open fully expanded.
+
+| Key         | Action                                       |
+| ----------- | -------------------------------------------- |
+| `zM` / `zR` | Collapse to definitions / expand everything  |
+| `zm` / `zr` | Fold / unfold one more level                 |
+| `za`        | Toggle fold under cursor                     |
+| `zc` / `zo` | Close / open fold under cursor               |
+| `zj` / `zk` | Jump to next / prev fold                     |
+
 ### Splits & Buffers
 
 | Key                   | Action                                      |

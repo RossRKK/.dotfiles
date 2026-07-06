@@ -43,3 +43,10 @@ opt.timeoutlen = 300
 opt.showmode = false
 opt.cmdheight = 0
 
+-- Treesitter-based folding: fold by syntax structure so zM collapses a file to
+-- its definitions (functions/classes) and zR expands it again. foldlevelstart
+-- 99 opens every file fully unfolded, so folding only happens when you ask.
+opt.foldmethod = "expr"
+opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+opt.foldlevelstart = 99
+
