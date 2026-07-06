@@ -76,6 +76,8 @@ Folds follow the code structure; files open fully expanded.
 | `gi` | Go to implementation                     |
 | `gr` | Go to references                         |
 | `gf` | Open file under cursor (`path:line:col`; fuzzy-finder fallback) |
+| `Space+yp` | Yank current file path (reverse of `gf`) |
+| `Space+yl` | Yank current file `path:line:col` at cursor |
 | `K`  | Hover docs                               |
 
 ### ] / [ — Next / prev

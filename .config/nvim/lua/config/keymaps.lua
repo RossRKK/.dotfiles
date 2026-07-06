@@ -131,3 +131,23 @@ local function goto_file_ref()
 end
 
 map("n", "gf", goto_file_ref, { desc = "Goto file under cursor (fuzzy fallback)" })
+
+-- Yank the current file's path to the clipboard (the reverse of gf), without a
+-- trip to the explorer. <leader>yp: path relative to cwd. <leader>yl: with the
+-- cursor as path:line:col, so it round-trips straight back through gf.
+local function yank_file_path(with_position)
+  local path = vim.fn.expand("%:.")
+  if path == "" then
+    vim.notify("no file in this buffer", vim.log.levels.WARN)
+    return
+  end
+  if with_position then
+    local pos = vim.api.nvim_win_get_cursor(0)
+    path = ("%s:%d:%d"):format(path, pos[1], pos[2] + 1)
+  end
+  vim.fn.setreg("+", path)
+  vim.notify("yanked: " .. path)
+end
+
+map("n", "<leader>yp", function() yank_file_path(false) end, { desc = "Yank file path" })
+map("n", "<leader>yl", function() yank_file_path(true) end, { desc = "Yank file path:line:col" })
