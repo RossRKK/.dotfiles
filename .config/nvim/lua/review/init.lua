@@ -12,18 +12,19 @@
 -- The file list combines the merge-result diff (committed branch work) with your
 -- uncommitted changes and untracked files, so you can review before committing.
 --
--- Files can be marked "reviewed", which records the file's current blob hash.
--- A reviewed file flips back to "changed" automatically if it's edited again
--- (its hash no longer matches), so you re-review real changes.
+-- Files can be triaged: marked "approved" (looked at, fine) or "rejected"
+-- (flagged to come back to). Either records the file's current blob hash. An
+-- approved file that's edited again flips back to "changed" (re-review it fresh);
+-- a rejected file that's edited becomes "revised" — the flag was acted on, so
+-- re-review the fix — keeping the fact you'd flagged it rather than losing it.
 
 local M = {}
 
--- Absolute path -> "changed" | "reviewed", rebuilt on every refresh().
+-- Absolute path -> "changed"|"approved"|"rejected"|"revised", rebuilt on refresh.
 M.status_by_path = {}
 
--- Directory absolute path -> rolled-up status of its descendants:
---   "changed"  at least one descendant is changed-and-unreviewed
---   "reviewed" descendants are all reviewed (and there's at least one)
+-- Directory absolute path -> rolled-up status of its descendants (the highest-
+-- priority child status; see do_refresh for the ordering).
 M.folder_status = {}
 
 -- Whether review mode is currently active (a git repo with a usable merge-base).
@@ -115,9 +116,18 @@ local function merged_tree(root, branch)
 end
 
 -- ---------------------------------------------------------------------------
--- Reviewed-set persistence (per repo, under stdpath("state")/review/).
--- File format: one "<blob-hash> <relative/path>" per line.
+-- Decision persistence (per repo, under stdpath("state")/review/).
+-- A decision records that a changed file was triaged: marked "approved" (looked
+-- at, fine) or "rejected" (looked at, flagged to come back to), together with
+-- the blob hash it had at the time so the decision self-invalidates on re-edit.
+-- File format: one "<status> <blob-hash> <relative/path>" per line. Legacy files
+-- (just "<blob-hash> <relative/path>") are read as approved decisions.
 -- ---------------------------------------------------------------------------
+
+---@alias ReviewStatus "approved"|"rejected"
+---@class Decision
+---@field status ReviewStatus
+---@field hash string blob hash recorded when the decision was made
 
 local function state_dir()
   local dir = vim.fn.stdpath("state") .. "/review"
@@ -127,39 +137,50 @@ end
 
 ---@param root string
 ---@return string
-local function reviewed_file(root)
+local function decisions_file(root)
   -- Sanitise the repo path into a single filename component.
   local key = root:gsub("[/\\:]", "%%")
   return state_dir() .. "/" .. key
 end
 
---- Load reviewed set: relative path -> blob hash recorded at review time.
+--- Load decisions: relative path -> Decision.
 ---@param root string
----@return table<string, string>
-local function load_reviewed(root)
-  local reviewed = {}
-  local path = reviewed_file(root)
+---@return table<string, Decision>
+local function load_decisions(root)
+  local decisions = {}
+  local path = decisions_file(root)
   if vim.fn.filereadable(path) == 0 then
-    return reviewed
+    return decisions
   end
   for _, line in ipairs(vim.fn.readfile(path)) do
-    local hash, rel = line:match("^(%S+)%s+(.+)$")
-    if hash and rel then
-      reviewed[rel] = hash
+    -- Blob hashes are hex, so a leading "approved"/"rejected" word is
+    -- unambiguously the status field and not a legacy hash. ("reviewed" is
+    -- accepted as an alias for approved, the status's former name.)
+    local status, rest = line:match("^(%a+)%s+(.+)$")
+    if status == "approved" or status == "reviewed" or status == "rejected" then
+      local hash, rel = rest:match("^(%S+)%s+(.+)$")
+      if hash and rel then
+        decisions[rel] = { status = status == "rejected" and "rejected" or "approved", hash = hash }
+      end
+    else
+      local hash, rel = line:match("^(%S+)%s+(.+)$")
+      if hash and rel then
+        decisions[rel] = { status = "approved", hash = hash }
+      end
     end
   end
-  return reviewed
+  return decisions
 end
 
 ---@param root string
----@param reviewed table<string, string>
-local function save_reviewed(root, reviewed)
+---@param decisions table<string, Decision>
+local function save_decisions(root, decisions)
   local lines = {}
-  for rel, hash in pairs(reviewed) do
-    table.insert(lines, hash .. " " .. rel)
+  for rel, decision in pairs(decisions) do
+    table.insert(lines, decision.status .. " " .. decision.hash .. " " .. rel)
   end
   table.sort(lines)
-  vim.fn.writefile(lines, reviewed_file(root))
+  vim.fn.writefile(lines, decisions_file(root))
 end
 
 --- Current blob hash of a working-tree file, or nil.
@@ -288,34 +309,54 @@ local function do_refresh(mygen)
     return
   end
 
-  local reviewed = load_reviewed(root)
+  local decisions = load_decisions(root)
   local status_by_path = {}
-  local still_changed = {} -- prune reviewed entries no longer in the diff
+  local still = {} -- prune decisions for files no longer in the diff
 
   for rel in pairs(changed) do
     local abs = vim.fs.normalize(root .. "/" .. rel)
-    local recorded = reviewed[rel]
-    if recorded and recorded == blob_hash(root, rel) then
-      status_by_path[abs] = "reviewed"
-      still_changed[rel] = recorded
-    else
-      -- New change, or a reviewed file that was edited again: needs review.
+    local decision = decisions[rel]
+    if not decision then
       status_by_path[abs] = "changed"
+    else
+      local matches = decision.hash == blob_hash(root, rel)
+      if decision.status == "rejected" then
+        -- Keep the rejection on record either way: an edited-since rejected file
+        -- becomes "revised" (the flag was acted on — re-review the fix), not a
+        -- plain "changed" that would lose the fact you'd flagged it.
+        status_by_path[abs] = matches and "rejected" or "revised"
+        still[rel] = decision
+      elseif matches then
+        status_by_path[abs] = "approved"
+        still[rel] = decision
+      else
+        -- Approved file edited again: just needs a fresh look; drop the record.
+        status_by_path[abs] = "changed"
+      end
     end
   end
   if stale() then
     return
   end
 
-  -- Roll each file's status up to its ancestor directories. "changed" dominates:
-  -- a folder is only "reviewed" once every changed descendant is reviewed.
+  -- Roll each file's status up to its ancestor directories, taking the highest-
+  -- priority descendant status, ordered by what needs the reviewer's attention:
+  --   revised > changed > rejected > approved
+  -- revised (a fix awaiting re-review) and changed (untriaged) are the reviewer's
+  -- queue, so a folder surfaces those first — collapsing it must not read as done
+  -- while work remains inside. rejected is waiting on the author, not the
+  -- reviewer, but still outranks approved so an open flag never hides under a
+  -- folder that reads as done; a folder only goes approved once every changed
+  -- descendant is approved.
+  local priority = { approved = 1, rejected = 2, changed = 3, revised = 4 }
   local folder_status = {}
   local nroot = vim.fs.normalize(root)
   for abs, st in pairs(status_by_path) do
     local dir = vim.fs.dirname(abs)
     while dir and #dir >= #nroot and (dir == nroot or dir:sub(1, #nroot + 1) == nroot .. "/") do
-      if folder_status[dir] ~= "changed" then
-        folder_status[dir] = (st == "changed") and "changed" or "reviewed"
+      local current = folder_status[dir]
+      if not current or priority[st] > priority[current] then
+        folder_status[dir] = st
       end
       if dir == nroot then
         break
@@ -328,9 +369,9 @@ local function do_refresh(mygen)
   M.status_by_path = status_by_path
   M.folder_status = folder_status
   M.active = true
-  -- Drop reviewed records for files that no longer differ (e.g. after a rebase).
-  if next(reviewed) then
-    save_reviewed(root, still_changed)
+  -- Drop decisions for files that no longer differ (e.g. after a rebase).
+  if next(decisions) then
+    save_decisions(root, still)
   end
   -- Per-line signs: diff the buffer against the default-branch tip, so a line
   -- that matches what's already on the branch shows no sign — consistent with
@@ -352,7 +393,7 @@ function M.refresh()
   end)()
 end
 
---- Status for an absolute path: "changed" | "reviewed" | nil.
+--- Status for an absolute path: "changed"|"approved"|"rejected"|"revised"|nil.
 ---@param abs string?
 ---@return string?
 function M.status(abs)
@@ -362,7 +403,7 @@ function M.status(abs)
   return M.status_by_path[vim.fs.normalize(abs)]
 end
 
---- Rolled-up status for a directory: "changed" | "reviewed" | nil.
+--- Rolled-up status for a directory (same set as M.status), or nil.
 ---@param abs string?
 ---@return string?
 function M.folder(abs)
@@ -390,11 +431,11 @@ local function target_path()
   return name ~= "" and name or nil
 end
 
---- Set the reviewed state of a file or directory (recursively).
+--- Set the triage decision of a file or directory (recursively).
 --- Defaults to the explorer node under the cursor / current buffer.
----@param reviewed boolean true = mark reviewed, false = mark not reviewed
+---@param status ReviewStatus|nil "approved"/"rejected", or nil to clear (untriage)
 ---@param abs string? target path
-function M.mark(reviewed, abs)
+function M.mark(status, abs)
   -- Resolve the target from cursor/buffer state up front (sync), before the
   -- async git work below can move the cursor or change the current window.
   abs = abs or target_path()
@@ -431,21 +472,21 @@ function M.mark(reviewed, abs)
         return
       end
 
-      local reviewed_map = load_reviewed(root)
+      local decisions = load_decisions(root)
       for _, path in ipairs(targets) do
         local rel = path:sub(#nroot + 2)
-        if reviewed then
+        if status then
           local hash = blob_hash(root, rel)
           if hash then
-            reviewed_map[rel] = hash
+            decisions[rel] = { status = status, hash = hash }
           end
         else
-          reviewed_map[rel] = nil
+          decisions[rel] = nil
         end
       end
-      save_reviewed(root, reviewed_map)
+      save_decisions(root, decisions)
 
-      vim.notify(("review: marked %d file(s) %s"):format(#targets, reviewed and "reviewed" or "not reviewed"))
+      vim.notify(("review: marked %d file(s) %s"):format(#targets, status or "untriaged"))
       M.refresh()
     end)
     if not ok then
@@ -536,7 +577,11 @@ function M.setup()
   -- Themeable highlight groups for the explorer indicators.
   local function set_hl()
     vim.api.nvim_set_hl(0, "ReviewChanged", { link = "DiagnosticWarn", default = true })
-    vim.api.nvim_set_hl(0, "ReviewReviewed", { link = "DiagnosticOk", default = true })
+    vim.api.nvim_set_hl(0, "ReviewApproved", { link = "DiagnosticOk", default = true })
+    vim.api.nvim_set_hl(0, "ReviewRejected", { link = "DiagnosticError", default = true })
+    -- Revised = a rejection that's since been edited; blue reads as "action
+    -- pending, re-review" and stays distinct from the red/green/yellow trio.
+    vim.api.nvim_set_hl(0, "ReviewRevised", { link = "DiagnosticInfo", default = true })
     -- Inline diff (M.toggle_diff) word-level highlight. gitsigns defaults these
     -- to TermCursor (a loud, wrong-hued cyan in most themes). Give each its own
     -- diff hue — the sign colour (green add / blue change / red delete) tinted
@@ -565,18 +610,24 @@ function M.setup()
   vim.api.nvim_create_user_command("ReviewToggle", M.toggle, { desc = "Toggle branch review mode" })
   vim.api.nvim_create_user_command("ReviewDiff", M.toggle_diff, { desc = "Toggle inline diff vs review base" })
   vim.api.nvim_create_user_command("ReviewMark", function()
-    M.mark(true)
-  end, { desc = "Mark file/folder under cursor reviewed" })
+    M.mark("approved")
+  end, { desc = "Mark file/folder under cursor approved" })
+  vim.api.nvim_create_user_command("ReviewReject", function()
+    M.mark("rejected")
+  end, { desc = "Mark file/folder under cursor rejected" })
   vim.api.nvim_create_user_command("ReviewUnmark", function()
-    M.mark(false)
-  end, { desc = "Mark file/folder under cursor not reviewed" })
+    M.mark(nil)
+  end, { desc = "Clear review decision on file/folder under cursor" })
 
   vim.keymap.set("n", "<leader>rr", function()
-    M.mark(true)
-  end, { desc = "Review: mark reviewed" })
+    M.mark("approved")
+  end, { desc = "Review: mark approved" })
+  vim.keymap.set("n", "<leader>rj", function()
+    M.mark("rejected")
+  end, { desc = "Review: mark rejected" })
   vim.keymap.set("n", "<leader>ru", function()
-    M.mark(false)
-  end, { desc = "Review: mark not reviewed (unreview)" })
+    M.mark(nil)
+  end, { desc = "Review: clear decision (untriage)" })
   vim.keymap.set("n", "<leader>rt", M.toggle, { desc = "Review: toggle review mode" })
   vim.keymap.set("n", "<leader>rd", M.toggle_diff, { desc = "Review: toggle inline diff view" })
   vim.keymap.set("n", "<leader>rR", M.refresh, { desc = "Review: refresh status" })
