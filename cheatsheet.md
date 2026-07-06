@@ -63,7 +63,7 @@
 | `gd` | Go to definition                         |
 | `gi` | Go to implementation                     |
 | `gr` | Go to references                         |
-| `gf` | Open file / `path:line:col` under cursor |
+| `gf` | Open file under cursor (`path:line:col`; fuzzy-finder fallback) |
 | `K`  | Hover docs                               |
 
 ### ] / [ — Next / prev
