@@ -130,19 +130,26 @@
 Highlights what merging this branch into the default branch would actually
 change (the merge-result diff): gitsigns marks changed lines in the sign column,
 and the explorer flags changed files. Changes the default branch already has —
-even if the branch made them independently — don't show. On all the time; mark
-files/folders reviewed as you go.
+even if the branch made them independently — don't show. Off by default; turn it
+on per-branch with `Space+rt` and mark files/folders reviewed as you go.
 
-| Key        | Action                                  |
-| ---------- | --------------------------------------- |
-| `Space+rr` | Mark file / folder (recursive) reviewed |
-| `Space+ru` | Mark file / folder not reviewed         |
-| `Space+rt` | Toggle review mode on / off             |
-| `Space+rR` | Refresh review status                   |
+| Key        | Action                                          |
+| ---------- | ----------------------------------------------- |
+| `Space+rr` | Mark file / folder (recursive) reviewed         |
+| `Space+ru` | Mark file / folder not reviewed                 |
+| `Space+rt` | Toggle review mode on / off                     |
+| `Space+rd` | Toggle inline diff of current file vs base      |
+| `Space+rR` | Refresh review status                           |
 
 `Space+rr` / `Space+ru` act on the node under the cursor in the explorer,
 otherwise the current buffer. A reviewed file flips back to "changed" if it's
 edited again.
+
+`Space+rd` overlays a combined inline diff on the file itself — deleted lines
+shown inline, added / changed lines highlighted — against the review base
+(default branch tip), instead of a side-by-side split. Works whether or not
+review mode is on; it's a global mode, so it applies to all buffers until
+toggled off.
 
 ### File explorer (nvim-tree)
 

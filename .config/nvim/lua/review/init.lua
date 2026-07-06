@@ -30,8 +30,8 @@ M.folder_status = {}
 M.active = false
 
 -- Toggle: when false, gitsigns stays on its normal HEAD base and the explorer
--- decorator is dormant. Defaults on ("review mode all the time").
-M.enabled = true
+-- decorator is dormant. Defaults off; turn on per-branch with <leader>rt.
+M.enabled = false
 
 local uv = vim.uv or vim.loop
 
@@ -461,6 +461,49 @@ function M.toggle()
   M.refresh()
 end
 
+--- Ref the diff view compares against: the review base if review mode set one,
+--- else the default branch tip — so the diff still shows branch-level changes
+--- when the sign-column review mode is off (mirrors the fallback in git.lua).
+---@return string
+local function diff_base()
+  local base = require("review.gitsigns").current
+  if base then
+    return base
+  end
+  local default = vim.fn.systemlist({ "git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD" })[1]
+  return (default and default ~= "") and default or "origin/main"
+end
+
+-- Combined inline diff: deleted lines rendered inline as virtual text and
+-- changed lines (word-level) highlighted on the file buffer itself, against the
+-- review base — rather than a side-by-side split. Global gitsigns state, so it's
+-- a mode across all buffers, not per-window.
+M.inline_diff = false
+
+--- Toggle the combined inline diff. While on, point gitsigns at the review base
+--- (even if the sign-column review mode is off); restore the prior base when off.
+function M.toggle_diff()
+  local ok, gs = pcall(require, "gitsigns")
+  if not ok then
+    vim.notify("review: gitsigns not available", vim.log.levels.WARN)
+    return
+  end
+  M.inline_diff = not M.inline_diff
+  local gsbase = require("review.gitsigns")
+  gs.toggle_deleted(M.inline_diff)
+  gs.toggle_linehl(M.inline_diff)
+  gs.toggle_word_diff(M.inline_diff)
+  -- set_base refreshes gitsigns, which is what renders the toggles above; do it
+  -- last so enabling and disabling both repaint in one pass.
+  if M.inline_diff then
+    M._diff_prev_base = gsbase.current
+    gsbase.set_base(diff_base())
+  else
+    gsbase.set_base(M._diff_prev_base)
+    M._diff_prev_base = nil
+  end
+end
+
 --- Re-render the explorer so the decorator picks up new status.
 function M.redraw_tree()
   local ok, api = pcall(require, "nvim-tree.api")
@@ -470,16 +513,57 @@ function M.redraw_tree()
 end
 
 function M.setup()
+  -- Resolved attribute (e.g. "fg"/"bg") of a highlight group, chasing links.
+  ---@return integer? 24-bit colour, or nil if unset
+  local function hl_attr(name, attr)
+    return vim.api.nvim_get_hl(0, { name = name, link = false })[attr]
+  end
+
+  --- Blend two 24-bit colours: `weight` of `over` on top of `under`.
+  ---@return string "#rrggbb"
+  local function blend(over, under, weight)
+    local function channels(colour)
+      return math.floor(colour / 65536) % 256, math.floor(colour / 256) % 256, colour % 256
+    end
+    local o_r, o_g, o_b = channels(over)
+    local u_r, u_g, u_b = channels(under)
+    local function mix(o, u)
+      return math.floor(o * weight + u * (1 - weight) + 0.5)
+    end
+    return string.format("#%02x%02x%02x", mix(o_r, u_r), mix(o_g, u_g), mix(o_b, u_b))
+  end
+
   -- Themeable highlight groups for the explorer indicators.
   local function set_hl()
     vim.api.nvim_set_hl(0, "ReviewChanged", { link = "DiagnosticWarn", default = true })
     vim.api.nvim_set_hl(0, "ReviewReviewed", { link = "DiagnosticOk", default = true })
+    -- Inline diff (M.toggle_diff) word-level highlight. gitsigns defaults these
+    -- to TermCursor (a loud, wrong-hued cyan in most themes). Give each its own
+    -- diff hue — the sign colour (green add / blue change / red delete) tinted
+    -- 40% over the line background — so the within-line marks pop in the right
+    -- colour instead of blue-on-red. Force (no default) to beat gitsigns' link;
+    -- falls back to DiffText if the theme leaves a group's colours unset.
+    local inline = {
+      GitSignsAddInline = { sign = "GitSignsAdd", line = "DiffAdd" },
+      GitSignsChangeInline = { sign = "GitSignsChange", line = "DiffChange" },
+      GitSignsDeleteInline = { sign = "GitSignsDelete", line = "DiffDelete" },
+    }
+    for group, ref in pairs(inline) do
+      local hue = hl_attr(ref.sign, "fg")
+      local line_bg = hl_attr(ref.line, "bg")
+      if hue and line_bg then
+        vim.api.nvim_set_hl(0, group, { bg = blend(hue, line_bg, 0.4) })
+      else
+        vim.api.nvim_set_hl(0, group, { link = "DiffText" })
+      end
+    end
   end
   vim.api.nvim_create_autocmd("ColorScheme", { callback = set_hl })
   set_hl()
 
   vim.api.nvim_create_user_command("ReviewRefresh", M.refresh, { desc = "Recompute branch review status" })
   vim.api.nvim_create_user_command("ReviewToggle", M.toggle, { desc = "Toggle branch review mode" })
+  vim.api.nvim_create_user_command("ReviewDiff", M.toggle_diff, { desc = "Toggle inline diff vs review base" })
   vim.api.nvim_create_user_command("ReviewMark", function()
     M.mark(true)
   end, { desc = "Mark file/folder under cursor reviewed" })
@@ -494,6 +578,7 @@ function M.setup()
     M.mark(false)
   end, { desc = "Review: mark not reviewed (unreview)" })
   vim.keymap.set("n", "<leader>rt", M.toggle, { desc = "Review: toggle review mode" })
+  vim.keymap.set("n", "<leader>rd", M.toggle_diff, { desc = "Review: toggle inline diff view" })
   vim.keymap.set("n", "<leader>rR", M.refresh, { desc = "Review: refresh status" })
 
   -- Keep status fresh without being expensive: on save, on regaining focus
