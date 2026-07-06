@@ -43,10 +43,13 @@ opt.timeoutlen = 300
 opt.showmode = false
 opt.cmdheight = 0
 
--- Treesitter-based folding: fold by syntax structure so zM collapses a file to
--- its definitions (functions/classes) and zR expands it again. foldlevelstart
--- 99 opens every file fully unfolded, so folding only happens when you ask.
-opt.foldmethod = "expr"
-opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
-opt.foldlevelstart = 99
+-- Fixed RPC socket for external tooling (an MCP server that reads buffers /
+-- diagnostics / review state), stable across restarts — unlike the per-instance
+-- $NVIM path, which tmux keeps stale after an nvim restart. We run one nvim, so
+-- reclaim a socket left by a previous run before binding.
+local rpc_socket = vim.fs.joinpath(vim.env.XDG_RUNTIME_DIR or "/tmp", "nvim.sock")
+if vim.uv.fs_stat(rpc_socket) then
+  os.remove(rpc_socket)
+end
+pcall(vim.fn.serverstart, rpc_socket)
 
