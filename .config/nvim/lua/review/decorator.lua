@@ -1,10 +1,14 @@
 -- nvim-tree decorator: flags files (and their ancestor folders) under review.
 --
---   ● (ReviewChanged)  changed since the merge-base, not yet reviewed
---   ✓ (ReviewReviewed) reviewed and unchanged since
+--   ● (ReviewChanged)  changed on the branch, not yet triaged
+--   ✓ (ReviewApproved) approved and unchanged since
+--   ✗ (ReviewRejected) flagged; unchanged since it was rejected
+--   ↻ (ReviewRevised)  was rejected, then edited — re-review the fix
 --
--- A folder shows ● while any changed descendant is still unreviewed, and ✓ once
--- they're all reviewed. Only the glyph is coloured; the filename is left alone.
+-- A folder shows the highest-priority descendant status (revised > changed >
+-- rejected > approved), so what needs the reviewer's attention surfaces and the
+-- folder only goes ✓ once every changed descendant is approved. Only the glyph
+-- is coloured; the filename is left alone.
 --
 -- Registered in the renderer.decorators list; see lua/plugins/explorer.lua.
 
@@ -16,12 +20,17 @@ function ReviewDecorator:new()
   self.highlight_range = "none" -- colour the glyph only, never the node name
   self.icon_placement = "before" -- glyph sits just before the file name
 
-  self.icon_changed = { str = "●", hl = { "ReviewChanged" } }
-  self.icon_reviewed = { str = "✓", hl = { "ReviewReviewed" } }
+  -- Keyed by status; not named `icons` to avoid shadowing the :icons() method.
+  self.icon_by_status = {
+    changed = { str = "●", hl = { "ReviewChanged" } },
+    approved = { str = "✓", hl = { "ReviewApproved" } },
+    rejected = { str = "✗", hl = { "ReviewRejected" } },
+    revised = { str = "↻", hl = { "ReviewRevised" } },
+  }
 end
 
 ---@param node nvim_tree.api.Node
----@return string? "changed" | "reviewed" | nil
+---@return string? "changed" | "approved" | "rejected" | "revised" | nil
 local function status(node)
   local review = require("review")
   if node.type == "directory" then
@@ -35,13 +44,8 @@ end
 ---@param node nvim_tree.api.Node
 ---@return nvim_tree.api.highlighted_string[]?
 function ReviewDecorator:icons(node)
-  local s = status(node)
-  if s == "reviewed" then
-    return { self.icon_reviewed }
-  elseif s == "changed" then
-    return { self.icon_changed }
-  end
-  return nil
+  local icon = self.icon_by_status[status(node) or ""]
+  return icon and { icon } or nil
 end
 
 return ReviewDecorator

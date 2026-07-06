@@ -131,19 +131,21 @@ Highlights what merging this branch into the default branch would actually
 change (the merge-result diff): gitsigns marks changed lines in the sign column,
 and the explorer flags changed files. Changes the default branch already has —
 even if the branch made them independently — don't show. Off by default; turn it
-on per-branch with `Space+rt` and mark files/folders reviewed as you go.
+on per-branch with `Space+rt` and approve / reject files as you go.
 
-| Key        | Action                                          |
-| ---------- | ----------------------------------------------- |
-| `Space+rr` | Mark file / folder (recursive) reviewed         |
-| `Space+ru` | Mark file / folder not reviewed                 |
-| `Space+rt` | Toggle review mode on / off                     |
-| `Space+rd` | Toggle inline diff of current file vs base      |
-| `Space+rR` | Refresh review status                           |
+| Key        | Action                                     |
+| ---------- | ------------------------------------------ |
+| `Space+rr` | Mark file / folder (recursive) approved    |
+| `Space+rj` | Mark file / folder rejected (flag)         |
+| `Space+ru` | Clear decision (untriage)                  |
+| `Space+rt` | Toggle review mode on / off                |
+| `Space+rd` | Toggle inline diff of current file vs base |
+| `Space+rR` | Refresh review status                      |
 
-`Space+rr` / `Space+ru` act on the node under the cursor in the explorer,
-otherwise the current buffer. A reviewed file flips back to "changed" if it's
-edited again.
+`Space+rr` / `Space+rj` / `Space+ru` act on the node under the cursor in the
+explorer, otherwise the current buffer. An approved file flips back to "changed"
+if it's edited again; a rejected file becomes "revised" when edited (the flag
+was acted on — re-review the fix) rather than losing the flag.
 
 `Space+rd` overlays a combined inline diff on the file itself — deleted lines
 shown inline, added / changed lines highlighted — against the review base
@@ -179,8 +181,16 @@ toggled off.
 
 | Glyph | Meaning                                                                   |
 | ----- | ------------------------------------------------------------------------- |
-| `●`   | Changed on this branch, not yet reviewed (folders: some child unreviewed) |
-| `✓`   | Reviewed and unchanged since (folders: all changed children reviewed)     |
+| `●`   | Changed on this branch, not yet triaged                                   |
+| `✓`   | Approved and unchanged since                                              |
+| `✗`   | Rejected / flagged, unchanged since                                       |
+| `↻`   | Was rejected, then edited — re-review the fix                             |
+
+Folders show the highest-priority child status, ordered by what needs *your*
+attention: revised > changed > rejected > approved. So a folder surfaces work
+still to do (won't read as done while it holds changed/revised files), an open
+flag (rejected) outranks a clean `✓`, and it only shows `✓` once every changed
+file under it is approved.
 
 ### Terminal
 
