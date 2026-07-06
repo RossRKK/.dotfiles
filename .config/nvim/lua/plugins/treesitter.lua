@@ -40,7 +40,19 @@ return {
       -- Neovim's legacy regex syntax highlighting instead of erroring.
       vim.api.nvim_create_autocmd("FileType", {
         callback = function(ev)
-          pcall(vim.treesitter.start, ev.buf)
+          if not pcall(vim.treesitter.start, ev.buf) then
+            return
+          end
+          -- Drive folds from treesitter for buffers that have a parser. The
+          -- global defaults (config/options.lua) are evaluated before start()
+          -- runs on this branch, so the first foldexpr pass sees no tree and
+          -- caches "no folds"; re-assert them window-local here, now the parser
+          -- is live, to force folds to compute. Guarded to the window actually
+          -- showing this buffer (FileType can fire for background loads).
+          if vim.api.nvim_get_current_buf() == ev.buf then
+            vim.wo.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+            vim.wo.foldmethod = "expr"
+          end
         end,
       })
     end,
