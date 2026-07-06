@@ -114,6 +114,15 @@ return {
           if client and client.supports_method("textDocument/inlayHint") then
             vim.lsp.inlay_hint.enable(true, { bufnr = ev.buf })
           end
+
+          -- terraformls emits a very large semantic-token batch for files with
+          -- deeply nested heredoc/yamlencode blocks (e.g. argocd-bootstrap's
+          -- main.tf). Neovim's tokens_to_ranges resolves each token's UTF-16
+          -- column with str_utfindex and spins hard enough to freeze the editor
+          -- on open. Treesitter already highlights HCL, so drop the capability.
+          if client and client.name == "terraformls" then
+            client.server_capabilities.semanticTokensProvider = nil
+          end
         end,
       })
     end,
