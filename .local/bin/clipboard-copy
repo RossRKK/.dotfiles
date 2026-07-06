@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+# Copy stdin to every clipboard backend available on this host, so one yank lands
+# in both the Windows (WSL: clip.exe) and Linux (Wayland/X11) clipboards. Used by
+# tmux copy-mode (see ~/.tmux.conf) and works unchanged on WSL and Fedora.
+#
+# Each writer is timeout-guarded: an unreachable display (e.g. a stale $DISPLAY
+# pointing at an X server that isn't running) must not hang the caller.
+
+data=$(cat)
+put() { printf '%s' "$data" | timeout 3 "$@" >/dev/null 2>&1 || true; }
+
+# Windows clipboard (WSL).
+command -v clip.exe >/dev/null 2>&1 && put clip.exe
+
+# Wayland (modern Fedora default).
+[ -n "$WAYLAND_DISPLAY" ] && command -v wl-copy >/dev/null 2>&1 && put wl-copy
+
+# X11 (WSL with an X server, or Fedora on Xorg/Xwayland).
+if [ -n "$DISPLAY" ]; then
+  command -v xclip >/dev/null 2>&1 && put xclip -selection clipboard
+  command -v xsel >/dev/null 2>&1 && put xsel --clipboard --input
+fi
+
+true
