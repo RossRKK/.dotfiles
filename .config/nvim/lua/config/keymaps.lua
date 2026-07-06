@@ -30,43 +30,104 @@ map("n", "<S-l>", "<cmd>bnext<cr>", { desc = "Next buffer" })
 map("n", "<S-h>", "<cmd>bprevious<cr>", { desc = "Prev buffer" })
 map("n", "<leader>x", "<cmd>bp|bdelete #<cr>", { desc = "Close buffer" })
 
--- Jump to a `path:line:col` reference under the cursor (e.g. printed in the
--- terminal). From a terminal buffer, use Ctrl-\ Ctrl-n first, then gf on the ref.
+-- A window is a "main" editor window if it holds an ordinary file buffer — not
+-- the terminal, the nvim-tree explorer, or another special/scratch buffer.
+local function is_editor_window(win)
+  local buf = vim.api.nvim_win_get_buf(win)
+  return vim.bo[buf].buftype == "" and vim.bo[buf].filetype ~= "NvimTree"
+end
+
+-- Ensure the current window is a main editor window before opening a file, so a
+-- file never opens over the terminal or the explorer. Reuses an existing editor
+-- window if there is one; otherwise splits off the current window to make one.
+local function goto_main_window()
+  if is_editor_window(vim.api.nvim_get_current_win()) then
+    return
+  end
+  vim.cmd("stopinsert") -- no-op unless we're in terminal insert mode
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if is_editor_window(win) then
+      vim.api.nvim_set_current_win(win)
+      return
+    end
+  end
+  vim.cmd("vsplit")
+end
+
+-- Jump to a `path[:line[:col]]` reference under the cursor (e.g. printed in the
+-- terminal, or a path in a diff/log). From a terminal buffer, use Ctrl-\ Ctrl-n
+-- first, then gf on the ref. Resolution is best-effort and, when it can't pin an
+-- exact file, hands the path to the fuzzy finder rather than giving up — so
+-- partial paths, paths relative to some other folder, and bare basenames all
+-- still land somewhere.
 local function goto_file_ref()
   -- Strip surrounding brackets/quotes/backticks and trailing punctuation.
   local ref = vim.fn.expand("<cWORD>")
   ref = ref:gsub("^[%(%[`'\"]+", ""):gsub("[%)%]`'\",.]+$", "")
 
-  local file, line, col = ref:match("^(.-):(%d+):(%d+)")
-  if not file then
-    file, line = ref:match("^(.-):(%d+)")
+  -- Pull an optional :line:col (or :line) suffix off the end.
+  local rest, line, col = ref:match("^(.-):(%d+):(%d+)$")
+  if not rest then
+    rest, line = ref:match("^(.-):(%d+)$")
   end
-  file = file or ref
+  local token = rest or ref
 
-  -- Resolve against cwd; fall back to the literal string if that exists.
-  local path = vim.fn.fnamemodify(file, ":p")
-  if vim.fn.filereadable(path) == 0 and vim.fn.filereadable(file) == 1 then
-    path = file
-  end
-  if vim.fn.filereadable(path) == 0 then
-    vim.notify("goto-file: no such file: " .. file, vim.log.levels.WARN)
-    return
+  -- Candidate spellings: as-is, and a "bare" form with the wrappers that tools
+  -- put around paths peeled off, so those resolve too:
+  --   * a name(...) wrapper, e.g. Claude Code's Update(<path>) / Read(<path>)
+  --   * a git-diff a/ or b/ prefix (diffs render paths as a/<path> and b/<path>)
+  --   * a leading ./ and any leftover trailing bracket
+  local bare = token
+    :gsub("^%w+%(", "")
+    :gsub("[%)%]]+$", "")
+    :gsub("^[ab]/", "")
+    :gsub("^%./", "")
+  local spellings = { token }
+  if bare ~= token then
+    table.insert(spellings, bare)
   end
 
-  -- From the terminal, move to a real editor window before opening.
-  if vim.bo.buftype == "terminal" then
-    vim.cmd("stopinsert")
-    local from = vim.api.nvim_get_current_win()
-    vim.cmd("wincmd p")
-    if vim.api.nvim_get_current_win() == from then
-      vim.cmd("vsplit")
+  -- Roots to resolve a relative path against: cwd, the current file's directory,
+  -- and the enclosing git/project root.
+  local ok_root, git_root = pcall(vim.fs.root, 0, ".git")
+  local roots = { vim.fn.getcwd(), vim.fn.expand("%:p:h"), ok_root and git_root or nil }
+
+  local function resolve(p)
+    if p:sub(1, 1) == "/" then
+      return vim.fn.filereadable(p) == 1 and p or nil
+    end
+    for _, root in ipairs(roots) do
+      local full = vim.fs.normalize(root .. "/" .. p)
+      if vim.fn.filereadable(full) == 1 then
+        return full
+      end
+    end
+    return vim.fn.filereadable(p) == 1 and p or nil
+  end
+
+  local path
+  for _, spelling in ipairs(spellings) do
+    path = resolve(spelling)
+    if path then
+      break
     end
   end
 
-  vim.cmd("edit " .. vim.fn.fnameescape(path))
-  if line then
-    vim.api.nvim_win_set_cursor(0, { tonumber(line), (tonumber(col) or 1) - 1 })
+  goto_main_window()
+  if path then
+    vim.cmd("edit " .. vim.fn.fnameescape(path))
+    if line then
+      vim.api.nvim_win_set_cursor(0, { tonumber(line), (tonumber(col) or 1) - 1 })
+    end
+    return
   end
+
+  -- No exact hit: seed the fuzzy finder with the path so a partial or
+  -- wrong-folder-relative reference still resolves with a keystroke or two. An
+  -- absolute miss can't match the finder's relative results, so seed its
+  -- basename instead. (Line/col can't ride through the picker, so drop those.)
+  local query = bare:sub(1, 1) == "/" and vim.fn.fnamemodify(bare, ":t") or bare
+  require("telescope.builtin").find_files({ default_text = query })
 end
 
-map("n", "gf", goto_file_ref, { desc = "Goto file:line:col under cursor" })
+map("n", "gf", goto_file_ref, { desc = "Goto file under cursor (fuzzy fallback)" })
