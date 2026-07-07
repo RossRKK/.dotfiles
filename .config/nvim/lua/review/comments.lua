@@ -36,6 +36,9 @@ M.root = nil
 M.pr_choice = nil
 -- The authenticated GitHub login, cached; used to find your own comments to edit.
 M.viewer = nil
+-- login -> resolved display name, cached in-memory. "" means "resolved, but no
+-- display name set" (fall back to @login); nil means "not looked up yet".
+M.names = {}
 -- Whether inline comments are currently drawn (driven by review mode).
 M.shown = false
 -- Absolute paths of files with comments or drafts, plus their ancestor dirs, for
@@ -73,6 +76,29 @@ local function gh_json(args, cwd)
     return nil, "could not parse gh JSON"
   end
   return decoded
+end
+
+--- A short, single-line summary of a failed gh call, safe to notify without
+--- tripping the "Press ENTER to continue" prompt. Prefers the API error's
+--- "message" field when the body is JSON; otherwise collapses stderr/stdout to
+--- one line and truncates.
+---@param obj table vim.system result ({ code, stdout, stderr })
+---@return string
+local function gh_error(obj)
+  for _, s in ipairs({ obj.stderr, obj.stdout }) do
+    if s and s ~= "" then
+      local ok, decoded = pcall(vim.json.decode, s)
+      if ok and type(decoded) == "table" and type(decoded.message) == "string" then
+        return decoded.message
+      end
+    end
+  end
+  local msg = (obj.stderr and obj.stderr ~= "" and obj.stderr) or obj.stdout or ""
+  msg = vim.trim(msg:gsub("%s+", " "))
+  if msg == "" then
+    msg = "gh error"
+  end
+  return (#msg > 200) and (msg:sub(1, 200) .. "…") or msg
 end
 
 --- Drive an async body on a coroutine, surfacing errors as a notification.
@@ -282,6 +308,35 @@ local function resolve_viewer(root)
   return M.viewer
 end
 
+--- Fill M.names for any of `logins` not yet looked up (one gh call each, but
+--- only once per login per session). Runs in a coroutine like the other gh work.
+---@param root string
+---@param logins table<string, boolean> set of login -> true
+local function resolve_names(root, logins)
+  for login in pairs(logins) do
+    if M.names[login] == nil then
+      -- `.name // ""` yields "" (not null) when the user has no display name.
+      local obj = sh({ "gh", "api", "users/" .. login, "--jq", '.name // ""' }, root)
+      M.names[login] = (obj.code == 0) and vim.trim(obj.stdout) or ""
+    end
+  end
+end
+
+--- Header chunks for a comment author: "Display Name - @login" (the handle in a
+--- quieter hue) when a display name is known, else just "@login".
+---@param login string
+---@return table[] virt_text chunks
+local function author_chunks(login)
+  local name = M.names[login]
+  if name and name ~= "" then
+    return {
+      { name, "ReviewCommentAuthor" },
+      { " - @" .. login, "ReviewComment" },
+    }
+  end
+  return { { "@" .. login, "ReviewCommentAuthor" } }
+end
+
 --- The cached comments anchored at the current cursor line (a thread), with the
 --- context needed to act on them. Returns (thread, rel, root) or nil.
 ---@return table[]?, string?, string?
@@ -331,6 +386,12 @@ local function open_input(title, initial, on_submit, allow_empty)
     title = (" %s  ·  <C-s> send  ·  q cancel "):format(title),
     style = "minimal",
   })
+  -- Match the compose area to the normal editor background (rather than the
+  -- theme's NormalFloat, which is often a different, jarring shade), and wrap
+  -- for comfortable prose.
+  vim.wo[win].winhighlight = "NormalFloat:Normal,FloatBorder:Comment,FloatTitle:Title"
+  vim.wo[win].wrap = true
+  vim.wo[win].linebreak = true
 
   local function close()
     if vim.api.nvim_win_is_valid(win) then
@@ -404,7 +465,8 @@ local function render_buf(buf)
           end
         else
           local c = entry.c
-          local header = { { "▌ ", "ReviewCommentSign" }, { "@" .. c.user.login, "ReviewCommentAuthor" } }
+          local header = { { "▌ ", "ReviewCommentSign" } }
+          vim.list_extend(header, author_chunks(c.user.login))
           if c.side == "LEFT" then
             header[#header + 1] = { "  (old side)", "ReviewComment" }
           end
@@ -462,6 +524,18 @@ local function fetch_render()
     else
       M.by_path = {} -- no PR for this branch: only drafts show
     end
+
+    -- Resolve display names for every commenter (cached per session), so the
+    -- inline headers read "Name - @login" rather than a bare handle.
+    local logins = {}
+    for _, list in pairs(M.by_path) do
+      for _, c in ipairs(list) do
+        if c.user and c.user.login then
+          logins[c.user.login] = true
+        end
+      end
+    end
+    resolve_names(root, logins)
 
     rebuild_marked(root)
     render_all()
@@ -589,7 +663,7 @@ function M.reply()
         vim.notify("review: reply posted")
         fetch_render()
       else
-        vim.notify("review: reply failed: " .. (obj.stderr ~= "" and obj.stderr or "gh error"), vim.log.levels.ERROR)
+        vim.notify("review: reply failed: " .. gh_error(obj), vim.log.levels.ERROR)
       end
     end)
   end)
@@ -640,7 +714,7 @@ function M.edit()
           vim.notify("review: comment updated")
           fetch_render()
         else
-          vim.notify("review: edit failed: " .. (obj.stderr ~= "" and obj.stderr or "gh error"), vim.log.levels.ERROR)
+          vim.notify("review: edit failed: " .. gh_error(obj), vim.log.levels.ERROR)
         end
       end)
     end)
@@ -759,7 +833,7 @@ function M.submit()
           fetch_render()
         else
           -- Keep the float open so the typed summary isn't lost on a failure.
-          vim.notify("review: submit failed: " .. (obj.stderr ~= "" and obj.stderr or "gh error"), vim.log.levels.ERROR)
+          vim.notify("review: submit failed: " .. gh_error(obj), vim.log.levels.ERROR)
         end
       end)
     end, true) -- allow an empty summary to submit
