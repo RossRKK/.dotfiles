@@ -413,6 +413,35 @@ function M.folder(abs)
   return M.folder_status[vim.fs.normalize(abs)]
 end
 
+--- The review verdict implied by the current triage state, as a GitHub review
+--- event. This is the same rollup the tree uses, taken all the way to the repo
+--- root: the highest-priority status across every changed file wins, in the same
+--- attention order (revised > changed > rejected > approved). Read as a verdict
+--- that means: while any file is still untriaged ("changed") or awaiting a
+--- re-review ("revised"), you're mid-review, so it's COMMENT — a batch of notes
+--- with no standing verdict; only once nothing's pending does a live rejection
+--- surface as REQUEST_CHANGES, or an all-approved tree as APPROVE. So an early,
+--- partial submit never renders a premature verdict. nil when nothing's changed.
+---@return "APPROVE"|"REQUEST_CHANGES"|"COMMENT"|nil
+function M.verdict()
+  local priority = { approved = 1, rejected = 2, changed = 3, revised = 4 }
+  local worst
+  for _, st in pairs(M.status_by_path) do
+    if not worst or priority[st] > priority[worst] then
+      worst = st
+    end
+  end
+  if not worst then
+    return nil
+  elseif worst == "approved" then
+    return "APPROVE"
+  elseif worst == "rejected" then
+    return "REQUEST_CHANGES"
+  else
+    return "COMMENT" -- changed or revised: still mid-review
+  end
+end
+
 --- The path the review action should act on: the node under the cursor when in
 --- the explorer, otherwise the current buffer's file. nil if neither applies.
 ---@return string?

@@ -2,8 +2,21 @@
 --
 -- The companion to lua/review/init.lua's triage: while reviewing a file you've
 -- actually got open, drop a comment on the line under the cursor (or a visual
--- range) and it posts to the branch's open PR via the `gh` CLI. Everyone's line
--- comments render inline as virtual text, shown/hidden with review mode.
+-- range). Comments queue as *local drafts* rather than posting one-by-one, so a
+-- whole pass goes out as a single GitHub review instead of spraying a
+-- notification per line. Submit (<leader>rS) sends every draft in one review;
+-- the verdict (approve / request-changes / comment) is inferred from the triage
+-- state (see review.verdict), not prompted for. Submitting is cheap and
+-- repeatable — an early, partial submit goes out as a plain COMMENT batch, since
+-- the tree still reads as mid-review until everything's triaged.
+--
+-- Replies and edits to *live* (already-posted) comments still go out
+-- immediately — they're rare and not the source of spam. Edit is draft-aware:
+-- on a line carrying a draft it edits the draft locally; on your own live
+-- comment it PATCHes GitHub; if both are present it asks which.
+--
+-- Everyone's line comments render inline as virtual text, shown/hidden with
+-- review mode; your unsent drafts render alongside them in a dimmer hue.
 --
 -- The PR is found from the active branch: none -> stay quiet; one -> use it;
 -- several -> ask once (remembered per branch). Rendering reads a cache, so only
@@ -13,6 +26,10 @@ local M = {}
 
 -- rel path -> list of raw review-comment objects from the GitHub API.
 M.by_path = {}
+-- rel path -> list of unsent draft comments { line, side, start_line?, body }.
+-- Loaded from disk per repo; M.drafts_root records which repo they're for.
+M.drafts = {}
+M.drafts_root = nil
 -- Repo toplevel, set whenever we resolve one.
 M.root = nil
 -- Remembers a manual PR choice for a branch so we don't re-prompt: {branch, number}.
@@ -21,19 +38,21 @@ M.pr_choice = nil
 M.viewer = nil
 -- Whether inline comments are currently drawn (driven by review mode).
 M.shown = false
--- Absolute paths of files with comments, plus their ancestor dirs, for the tree
--- decorator. Rebuilt on each fetch; empty while comments are hidden.
+-- Absolute paths of files with comments or drafts, plus their ancestor dirs, for
+-- the tree decorator. Rebuilt on each fetch; empty while comments are hidden.
 M.marked = {}
 
 local ns = vim.api.nvim_create_namespace("review_comments")
 
 --- Run a command async, yielding until it exits. Returns the vim.system result
---- object ({ code, stdout, stderr }). MUST run inside a coroutine.
+--- object ({ code, stdout, stderr }). MUST run inside a coroutine. `stdin`, when
+--- given, is fed to the process's stdin (used to POST a review payload as JSON).
 ---@param cmd string[]
 ---@param cwd string?
-local function sh(cmd, cwd)
+---@param stdin string?
+local function sh(cmd, cwd, stdin)
   local co = assert(coroutine.running(), "review.comments: must run inside a coroutine")
-  vim.system(cmd, { text = true, cwd = cwd }, function(obj)
+  vim.system(cmd, { text = true, cwd = cwd, stdin = stdin }, function(obj)
     vim.schedule(function()
       coroutine.resume(co, obj)
     end)
@@ -112,6 +131,102 @@ local function rel_of(buf, root)
   end
   return name:sub(#root + 2)
 end
+
+-- ---------------------------------------------------------------------------
+-- Draft persistence (per repo, under stdpath("state")/review/<key>.drafts).
+-- Drafts hold multi-line bodies, so unlike the triage ledger they're stored as
+-- JSON: an object of rel-path -> array of { line, side, start_line?, body }.
+-- ---------------------------------------------------------------------------
+
+local function state_dir()
+  local dir = vim.fn.stdpath("state") .. "/review"
+  vim.fn.mkdir(dir, "p")
+  return dir
+end
+
+---@param root string
+---@return string
+local function drafts_file(root)
+  local key = root:gsub("[/\\:]", "%%")
+  return state_dir() .. "/" .. key .. ".drafts"
+end
+
+---@param root string
+---@return table<string, table[]>
+local function load_drafts(root)
+  local path = drafts_file(root)
+  if vim.fn.filereadable(path) == 0 then
+    return {}
+  end
+  local ok, data = pcall(vim.json.decode, table.concat(vim.fn.readfile(path), "\n"))
+  if not ok or type(data) ~= "table" then
+    return {}
+  end
+  return data
+end
+
+---@param root string
+local function save_drafts(root)
+  local path = drafts_file(root)
+  if not next(M.drafts) then
+    -- Nothing left: drop the file rather than leave an empty object behind.
+    if vim.fn.filereadable(path) == 1 then
+      vim.fn.delete(path)
+    end
+    return
+  end
+  vim.fn.writefile({ vim.json.encode(M.drafts) }, path)
+end
+
+--- Ensure M.drafts is the on-disk draft set for `root` (reloads on repo change).
+---@param root string
+local function ensure_drafts(root)
+  if M.drafts_root == root then
+    return
+  end
+  M.drafts = load_drafts(root)
+  M.drafts_root = root
+end
+
+--- Add `abs` and every ancestor dir up to the repo root into `marked`.
+---@param marked table<string, boolean>
+---@param nroot string normalized repo root
+---@param rel string
+local function mark_with_ancestors(marked, nroot, rel)
+  local abs = vim.fs.normalize(nroot .. "/" .. rel)
+  marked[abs] = true
+  local dir = vim.fs.dirname(abs)
+  while dir and #dir >= #nroot do
+    marked[dir] = true
+    if dir == nroot then
+      break
+    end
+    dir = vim.fs.dirname(dir)
+  end
+end
+
+--- Rebuild M.marked (tree decorator set) from live comments and drafts.
+---@param root string
+local function rebuild_marked(root)
+  local marked = {}
+  local nroot = vim.fs.normalize(root)
+  for rel in pairs(M.by_path) do
+    mark_with_ancestors(marked, nroot, rel)
+  end
+  for rel, list in pairs(M.drafts) do
+    if #list > 0 then
+      mark_with_ancestors(marked, nroot, rel)
+    end
+  end
+  M.marked = marked
+end
+
+local function persist_drafts(root)
+  save_drafts(root)
+  rebuild_marked(root)
+end
+
+-- ---------------------------------------------------------------------------
 
 --- The open PR for the branch checked out in `root`. Returns {number, head} or
 --- nil (no PR, or the user dismissed the picker). Prompts once when a branch has
@@ -233,8 +348,8 @@ local function open_input(title, initial, on_submit)
   end
 end
 
---- Draw the cached comments for one buffer (no network). Clears first, so it's
---- safe to call on any redraw. A no-op while comments are hidden.
+--- Draw the cached comments and drafts for one buffer (no network). Clears
+--- first, so it's safe to call on any redraw. A no-op while comments are hidden.
 ---@param buf integer
 local function render_buf(buf)
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
@@ -242,35 +357,57 @@ local function render_buf(buf)
     return
   end
   local rel = rel_of(buf, M.root)
-  local list = rel and M.by_path[rel]
-  if not list then
+  if not rel then
+    return
+  end
+  local live = M.by_path[rel]
+  local drafts = M.drafts_root == M.root and M.drafts[rel] or nil
+  if not live and not drafts then
     return
   end
 
-  -- Group a line's comments into one stacked thread. `line` is the comment's
-  -- position in the file at the PR's latest commit; original_line is the
-  -- fallback when GitHub marks it outdated (line == nil).
+  -- Group a line's comments into one stacked thread. For live comments, `line`
+  -- is the position at the PR's latest commit; original_line is the fallback
+  -- when GitHub marks it outdated (line == nil). Drafts anchor on their own end
+  -- line. Each entry carries its kind so it renders in the right hue.
   local by_line = {}
-  for _, c in ipairs(list) do
-    local anchor = c.line or c.original_line
-    if anchor then
-      by_line[anchor] = by_line[anchor] or {}
-      table.insert(by_line[anchor], c)
+  local function add(anchor, entry)
+    if not anchor then
+      return
     end
+    by_line[anchor] = by_line[anchor] or {}
+    table.insert(by_line[anchor], entry)
+  end
+  for _, c in ipairs(live or {}) do
+    add(c.line or c.original_line, { kind = "live", c = c })
+  end
+  for _, d in ipairs(drafts or {}) do
+    add(d.line, { kind = "draft", d = d })
   end
 
   local last = vim.api.nvim_buf_line_count(buf)
   for anchor, thread in pairs(by_line) do
     if anchor >= 1 and anchor <= last then
       local virt = {}
-      for _, c in ipairs(thread) do
-        local header = { { "▌ ", "ReviewCommentSign" }, { "@" .. c.user.login, "ReviewCommentAuthor" } }
-        if c.side == "LEFT" then
-          header[#header + 1] = { "  (old side)", "ReviewComment" }
-        end
-        table.insert(virt, header)
-        for _, line in ipairs(vim.split((c.body or ""):gsub("\r", ""), "\n", { plain = true })) do
-          table.insert(virt, { { "▌ ", "ReviewCommentSign" }, { line, "ReviewComment" } })
+      for _, entry in ipairs(thread) do
+        if entry.kind == "draft" then
+          table.insert(virt, {
+            { "▌ ", "ReviewCommentDraftSign" },
+            { "@you (draft, unsent)", "ReviewCommentDraft" },
+          })
+          for _, line in ipairs(vim.split((entry.d.body or ""):gsub("\r", ""), "\n", { plain = true })) do
+            table.insert(virt, { { "▌ ", "ReviewCommentDraftSign" }, { line, "ReviewCommentDraft" } })
+          end
+        else
+          local c = entry.c
+          local header = { { "▌ ", "ReviewCommentSign" }, { "@" .. c.user.login, "ReviewCommentAuthor" } }
+          if c.side == "LEFT" then
+            header[#header + 1] = { "  (old side)", "ReviewComment" }
+          end
+          table.insert(virt, header)
+          for _, line in ipairs(vim.split((c.body or ""):gsub("\r", ""), "\n", { plain = true })) do
+            table.insert(virt, { { "▌ ", "ReviewCommentSign" }, { line, "ReviewComment" } })
+          end
         end
       end
       pcall(vim.api.nvim_buf_set_extmark, buf, ns, anchor - 1, 0, { virt_lines = virt })
@@ -278,65 +415,57 @@ local function render_buf(buf)
   end
 end
 
---- Fetch the branch PR's line comments and (re)draw every loaded buffer.
+--- Redraw every loaded buffer and the explorer from the caches (no network).
+local function render_all()
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) then
+      render_buf(buf)
+    end
+  end
+  require("review").redraw_tree()
+end
+
+--- Fetch the branch PR's line comments and (re)draw every loaded buffer. Drafts
+--- are local, so they load and render even when the branch has no PR yet.
 local function fetch_render()
   run(function()
     local root = current_root()
     if not root then
       return
     end
+    ensure_drafts(root)
     local pr = resolve_pr(root)
-    if not pr then
-      return -- no PR for this branch: stay quiet
-    end
-    -- 100 covers all but the busiest PRs; page beyond that only if it bites.
-    local endpoint = ("repos/:owner/:repo/pulls/%d/comments?per_page=100"):format(pr.number)
-    local comments, err = gh_json({ "api", endpoint }, root)
-    if not comments then
-      vim.notify("review: couldn't fetch comments: " .. tostring(err), vim.log.levels.WARN)
-      return
-    end
-
-    local by_path = {}
-    for _, c in ipairs(comments) do
-      if c.path then
-        by_path[c.path] = by_path[c.path] or {}
-        table.insert(by_path[c.path], c)
-      end
-    end
-    M.by_path = by_path
-    if #comments >= 100 then
-      vim.notify("review: showing the first 100 PR comments", vim.log.levels.WARN)
-    end
-
-    -- Mark commented files and every ancestor dir, for the tree decorator.
-    local marked = {}
-    local nroot = vim.fs.normalize(root)
-    for rel in pairs(by_path) do
-      local abs = vim.fs.normalize(root .. "/" .. rel)
-      marked[abs] = true
-      local dir = vim.fs.dirname(abs)
-      while dir and #dir >= #nroot do
-        marked[dir] = true
-        if dir == nroot then
-          break
+    if pr then
+      -- 100 covers all but the busiest PRs; page beyond that only if it bites.
+      local endpoint = ("repos/:owner/:repo/pulls/%d/comments?per_page=100"):format(pr.number)
+      local comments, err = gh_json({ "api", endpoint }, root)
+      if not comments then
+        vim.notify("review: couldn't fetch comments: " .. tostring(err), vim.log.levels.WARN)
+        M.by_path = {}
+      else
+        local by_path = {}
+        for _, c in ipairs(comments) do
+          if c.path then
+            by_path[c.path] = by_path[c.path] or {}
+            table.insert(by_path[c.path], c)
+          end
         end
-        dir = vim.fs.dirname(dir)
+        M.by_path = by_path
+        if #comments >= 100 then
+          vim.notify("review: showing the first 100 PR comments", vim.log.levels.WARN)
+        end
       end
+    else
+      M.by_path = {} -- no PR for this branch: only drafts show
     end
-    M.marked = marked
 
-    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-      if vim.api.nvim_buf_is_loaded(buf) then
-        render_buf(buf)
-      end
-    end
-    require("review").redraw_tree()
+    rebuild_marked(root)
+    render_all()
   end)
 end
 
---- Whether a file or folder has PR comments (for the tree decorator). False
---- while comments are hidden.
+--- Whether a file or folder has PR comments or drafts (for the tree decorator).
+--- False while comments are hidden.
 ---@param abs string?
 ---@return boolean
 function M.has_comments(abs)
@@ -346,8 +475,9 @@ function M.has_comments(abs)
   return M.marked[vim.fs.normalize(abs)] == true
 end
 
---- Post a review comment on the current file. `end_line` is the anchor line;
---- `start_line` (or nil) makes it a multi-line comment spanning start..end.
+--- Queue a draft comment on the current file. `end_line` is the anchor line;
+--- `start_line` (or nil) makes it a multi-line comment spanning start..end. The
+--- draft is stored locally and sent later by M.submit — nothing hits GitHub.
 ---@param start_line integer?
 ---@param end_line integer
 function M.comment(start_line, end_line)
@@ -361,42 +491,76 @@ function M.comment(start_line, end_line)
     vim.notify("review: this buffer isn't a file in the repo", vim.log.levels.WARN)
     return
   end
+  ensure_drafts(root)
 
-  local title = ("PR comment on %s:%d"):format(vim.fs.basename(rel), end_line)
+  local title = ("Draft comment on %s:%d"):format(vim.fs.basename(rel), end_line)
   open_input(title, nil, function(body, close)
-    run(function()
-      local pr = resolve_pr(root)
-      if not pr then
-        vim.notify("review: no open PR for this branch", vim.log.levels.INFO)
-        return
-      end
-      local args = {
-        "api", "--method", "POST",
-        ("repos/:owner/:repo/pulls/%d/comments"):format(pr.number),
-        "-f", "body=" .. body,
-        "-f", "commit_id=" .. pr.head,
-        "-f", "path=" .. rel,
-        "-F", "line=" .. end_line,
-        "-f", "side=RIGHT",
-      }
-      if start_line and start_line < end_line then
-        vim.list_extend(args, { "-F", "start_line=" .. start_line, "-f", "start_side=RIGHT" })
-      end
-      local obj = sh(vim.list_extend({ "gh" }, args), root)
-      if obj.code == 0 then
-        close()
-        vim.notify("review: comment posted")
-        fetch_render()
-      else
-        -- Most often: the line isn't part of the PR diff (GitHub 422s). Keep the
-        -- float open so the text isn't lost.
-        vim.notify("review: post failed: " .. (obj.stderr ~= "" and obj.stderr or "gh error"), vim.log.levels.ERROR)
-      end
-    end)
+    M.drafts[rel] = M.drafts[rel] or {}
+    table.insert(M.drafts[rel], {
+      line = end_line,
+      side = "RIGHT",
+      start_line = (start_line and start_line < end_line) and start_line or nil,
+      body = body,
+    })
+    persist_drafts(root)
+    close()
+    vim.notify("review: comment drafted — submit the review with <leader>rS")
+    render_all()
   end)
 end
 
---- Reply to the comment thread anchored at the cursor line.
+--- Discard the draft comment(s) on the cursor line (asks which if several).
+function M.discard_draft()
+  local root = current_root()
+  if not root then
+    return
+  end
+  ensure_drafts(root)
+  local rel = rel_of(vim.api.nvim_get_current_buf(), root)
+  if not rel then
+    return
+  end
+  local line = vim.fn.line(".")
+  local list = M.drafts[rel] or {}
+  local hits = {}
+  for i, d in ipairs(list) do
+    if d.line == line then
+      hits[#hits + 1] = i
+    end
+  end
+  if #hits == 0 then
+    vim.notify("review: no draft on this line", vim.log.levels.INFO)
+    return
+  end
+
+  local function remove(i)
+    table.remove(list, i)
+    if #list == 0 then
+      M.drafts[rel] = nil
+    end
+    persist_drafts(root)
+    render_all()
+    vim.notify("review: draft discarded")
+  end
+
+  if #hits == 1 then
+    remove(hits[1])
+    return
+  end
+  local labels = {}
+  for _, i in ipairs(hits) do
+    labels[#labels + 1] = (list[i].body:gsub("%s+", " ")):sub(1, 50)
+  end
+  run(function()
+    local idx = pick(labels, { prompt = "Discard which draft?" })
+    if idx then
+      remove(hits[idx])
+    end
+  end)
+end
+
+--- Reply to the comment thread anchored at the cursor line. Posts immediately
+--- (replies aren't batched — they're rare and not the spam source).
 function M.reply()
   local thread, _, root = thread_at_cursor()
   if not thread or #thread == 0 then
@@ -427,60 +591,161 @@ function M.reply()
   end)
 end
 
---- Edit one of your own comments in the thread at the cursor line.
+--- Edit the comment on the cursor line. Draft-aware: your unsent drafts and your
+--- own live comments on the line are both editable — one of each acts directly,
+--- several offers a pick. A draft edit mutates local state; a live edit PATCHes.
 function M.edit()
-  local thread, _, root = thread_at_cursor()
-  if not thread or #thread == 0 then
-    vim.notify("review: no PR comment on this line (is review mode on?)", vim.log.levels.INFO)
+  local root = current_root()
+  if not root then
     return
   end
+  ensure_drafts(root)
+  local rel = rel_of(vim.api.nvim_get_current_buf(), root)
+  if not rel then
+    return
+  end
+  local line = vim.fn.line(".")
+
+  local draft_hits = {}
+  for _, d in ipairs(M.drafts[rel] or {}) do
+    if d.line == line then
+      draft_hits[#draft_hits + 1] = d
+    end
+  end
+
+  local function edit_draft(d)
+    open_input("Edit draft", vim.split(d.body:gsub("\r", ""), "\n", { plain = true }), function(body, close)
+      d.body = body
+      persist_drafts(root)
+      close()
+      vim.notify("review: draft updated")
+      render_all()
+    end)
+  end
+
+  local function edit_live(c)
+    open_input("Edit comment", vim.split(c.body:gsub("\r", ""), "\n", { plain = true }), function(body, close)
+      run(function()
+        local obj = sh({
+          "gh", "api", "--method", "PATCH",
+          ("repos/:owner/:repo/pulls/comments/%d"):format(c.id),
+          "-f", "body=" .. body,
+        }, root)
+        if obj.code == 0 then
+          close()
+          vim.notify("review: comment updated")
+          fetch_render()
+        else
+          vim.notify("review: edit failed: " .. (obj.stderr ~= "" and obj.stderr or "gh error"), vim.log.levels.ERROR)
+        end
+      end)
+    end)
+  end
+
   run(function()
+    -- Resolving the viewer needs the network, so build the "mine" set here.
     local login = resolve_viewer(root)
-    local mine = {}
-    for _, c in ipairs(thread) do
-      if login and c.user.login == login then
-        mine[#mine + 1] = c
+    local items = {}
+    for _, d in ipairs(draft_hits) do
+      items[#items + 1] = { kind = "draft", d = d, label = "[draft] " .. (d.body:gsub("%s+", " ")):sub(1, 50) }
+    end
+    for _, c in ipairs(M.by_path[rel] or {}) do
+      if (c.line or c.original_line) == line and login and c.user.login == login then
+        items[#items + 1] = { kind = "live", c = c, label = "@" .. login .. " " .. (c.body:gsub("%s+", " ")):sub(1, 50) }
       end
     end
-    if #mine == 0 then
-      vim.notify("review: no comment of yours on this line", vim.log.levels.INFO)
+
+    if #items == 0 then
+      vim.notify("review: nothing of yours to edit on this line", vim.log.levels.INFO)
       return
     end
-    local target = mine[1]
-    if #mine > 1 then
+    local chosen = items[1]
+    if #items > 1 then
       local labels = {}
-      for _, c in ipairs(mine) do
-        labels[#labels + 1] = (c.body:gsub("%s+", " ")):sub(1, 50)
+      for _, it in ipairs(items) do
+        labels[#labels + 1] = it.label
       end
-      local idx = pick(labels, { prompt = "Edit which of your comments?" })
+      local idx = pick(labels, { prompt = "Edit which?" })
       if not idx then
         return
       end
-      target = mine[idx]
+      chosen = items[idx]
     end
 
     -- Defer: when a picker ran, this coroutine resumes inside vim.ui.select's
     -- teardown, where opening a float races the picker closing its window. A
     -- scheduled tick lets that settle first. (Harmless on the single-match path.)
-    local initial = vim.split(target.body:gsub("\r", ""), "\n", { plain = true })
     vim.schedule(function()
-      open_input("Edit comment", initial, function(body, close)
-        run(function()
-          local obj = sh({
-            "gh", "api", "--method", "PATCH",
-            ("repos/:owner/:repo/pulls/comments/%d"):format(target.id),
-            "-f", "body=" .. body,
-          }, root)
-          if obj.code == 0 then
-            close()
-            vim.notify("review: comment updated")
-            fetch_render()
-          else
-            vim.notify("review: edit failed: " .. (obj.stderr ~= "" and obj.stderr or "gh error"), vim.log.levels.ERROR)
-          end
-        end)
-      end)
+      if chosen.kind == "draft" then
+        edit_draft(chosen.d)
+      else
+        edit_live(chosen.c)
+      end
     end)
+  end)
+end
+
+--- Submit all drafts as one GitHub review. The verdict (approve /
+--- request-changes / comment) is inferred from the triage state, so it's shown
+--- for confirmation rather than chosen. On success every draft is cleared.
+function M.submit()
+  run(function()
+    local root = current_root()
+    if not root then
+      vim.notify("review: not in a git repo", vim.log.levels.WARN)
+      return
+    end
+    ensure_drafts(root)
+    local pr = resolve_pr(root)
+    if not pr then
+      vim.notify("review: no open PR for this branch", vim.log.levels.INFO)
+      return
+    end
+
+    local comments = {}
+    for rel, list in pairs(M.drafts) do
+      for _, d in ipairs(list) do
+        local c = { path = rel, line = d.line, side = d.side or "RIGHT", body = d.body }
+        if d.start_line then
+          c.start_line = d.start_line
+          c.start_side = d.side or "RIGHT"
+        end
+        comments[#comments + 1] = c
+      end
+    end
+
+    local verdict = require("review").verdict()
+    if not verdict and #comments == 0 then
+      vim.notify("review: nothing to submit", vim.log.levels.INFO)
+      return
+    end
+    verdict = verdict or "COMMENT"
+
+    local prompt = ("Submit review as %s with %d comment(s)?"):format(verdict, #comments)
+    if vim.fn.confirm(prompt, "&Yes\n&No", 2) ~= 1 then
+      return
+    end
+
+    local payload = { commit_id = pr.head, event = verdict }
+    if #comments > 0 then
+      payload.comments = comments
+    end
+    local obj = sh({
+      "gh", "api", "--method", "POST",
+      ("repos/:owner/:repo/pulls/%d/reviews"):format(pr.number),
+      "--input", "-",
+    }, root, vim.json.encode(payload))
+
+    if obj.code == 0 then
+      -- One bad anchor line 422s the whole review, so a success means every
+      -- draft landed — safe to clear them all.
+      M.drafts = {}
+      save_drafts(root)
+      vim.notify(("review: submitted %s (%d comment(s))"):format(verdict, #comments))
+      fetch_render()
+    else
+      vim.notify("review: submit failed: " .. (obj.stderr ~= "" and obj.stderr or "gh error"), vim.log.levels.ERROR)
+    end
   end)
 end
 
@@ -513,6 +778,10 @@ function M.setup()
     vim.api.nvim_set_hl(0, "ReviewComment", { link = "Comment", default = true })
     vim.api.nvim_set_hl(0, "ReviewCommentAuthor", { link = "Title", default = true })
     vim.api.nvim_set_hl(0, "ReviewCommentSign", { link = "DiagnosticInfo", default = true })
+    -- Drafts (unsent) read in a quieter hue than live comments, so what's
+    -- already on GitHub and what you've only queued are visually distinct.
+    vim.api.nvim_set_hl(0, "ReviewCommentDraft", { link = "DiagnosticHint", default = true })
+    vim.api.nvim_set_hl(0, "ReviewCommentDraftSign", { link = "DiagnosticHint", default = true })
   end
   vim.api.nvim_create_autocmd("ColorScheme", { callback = set_hl })
   set_hl()
@@ -528,23 +797,27 @@ function M.setup()
 
   vim.keymap.set("n", "<leader>rc", function()
     M.comment(nil, vim.fn.line("."))
-  end, { desc = "Review: comment on line (PR)" })
+  end, { desc = "Review: draft comment on line (PR)" })
   vim.keymap.set("x", "<leader>rc", function()
     local a, b = vim.fn.line("v"), vim.fn.line(".")
     if a > b then
       a, b = b, a
     end
     M.comment(a == b and nil or a, b)
-  end, { desc = "Review: comment on range (PR)" })
+  end, { desc = "Review: draft comment on range (PR)" })
   vim.keymap.set("n", "<leader>ra", M.reply, { desc = "Review: reply to PR comment on line" })
-  vim.keymap.set("n", "<leader>re", M.edit, { desc = "Review: edit your PR comment on line" })
+  vim.keymap.set("n", "<leader>re", M.edit, { desc = "Review: edit PR comment/draft on line" })
+  vim.keymap.set("n", "<leader>rx", M.discard_draft, { desc = "Review: discard draft on line" })
+  vim.keymap.set("n", "<leader>rS", M.submit, { desc = "Review: submit drafted review (batched)" })
   vim.keymap.set("n", "<leader>rC", M.refresh, { desc = "Review: refresh PR comments" })
 
   vim.api.nvim_create_user_command("ReviewComment", function()
     M.comment(nil, vim.fn.line("."))
-  end, { desc = "Comment on the current line in the branch PR" })
+  end, { desc = "Draft a comment on the current line for the branch PR" })
   vim.api.nvim_create_user_command("ReviewReply", M.reply, { desc = "Reply to the PR comment on this line" })
-  vim.api.nvim_create_user_command("ReviewEditComment", M.edit, { desc = "Edit your PR comment on this line" })
+  vim.api.nvim_create_user_command("ReviewEditComment", M.edit, { desc = "Edit your PR comment/draft on this line" })
+  vim.api.nvim_create_user_command("ReviewDiscardDraft", M.discard_draft, { desc = "Discard the draft on this line" })
+  vim.api.nvim_create_user_command("ReviewSubmit", M.submit, { desc = "Submit the drafted review to the PR" })
   vim.api.nvim_create_user_command("ReviewCommentsRefresh", M.refresh, { desc = "Re-fetch PR comments" })
 end
 
