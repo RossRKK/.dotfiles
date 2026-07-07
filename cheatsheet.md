@@ -171,6 +171,33 @@ shown inline, added / changed lines highlighted — against the review base
 review mode is on; it's a global mode, so it applies to all buffers until
 toggled off.
 
+### Space+r — PR comments (batched review)
+
+With review mode on, drop line comments in your normal buffers. New comments
+queue as **local drafts** (rendered inline in a dimmer hue) rather than posting
+one-by-one, so a whole pass goes out as a single GitHub review — no
+notification per line. Everyone's comments render inline; yours-in-waiting sit
+alongside them.
+
+| Key        | Action                                                    |
+| ---------- | --------------------------------------------------------- |
+| `Space+rc` | Draft a comment on the line (or visual range)             |
+| `Space+re` | Edit the comment / draft on the line (asks if several)    |
+| `Space+ra` | Reply to the comment thread on the line (posts now)       |
+| `Space+rx` | Discard the draft on the line                             |
+| `Space+rS` | Submit all drafts as one review                           |
+| `Space+rC` | Refresh PR comments from GitHub                           |
+
+Submit infers the verdict from the triage rollup — no picking: any live
+rejection → **request changes**, all approved → **approve**, anything still
+untriaged → **comment**. So an early submit goes out as a plain comment batch,
+and only firms up to approve/request-changes once nothing's pending. A compose
+float shows the verdict in its title and takes an optional summary (`Ctrl+S`
+sends even when empty, `q` cancels); a bare approval with no summary defaults to
+"LGTM". Drafts clear on a successful submit, so continuing the review starts a
+fresh batch. Replies and edits to already-posted comments still go out
+immediately.
+
 ### File explorer (nvim-tree)
 
 | Key     | Action                    |
@@ -203,6 +230,7 @@ toggled off.
 | `✓`   | Approved and unchanged since                                              |
 | `✗`   | Rejected / flagged, unchanged since                                       |
 | `↻`   | Was rejected, then edited — re-review the fix                             |
+| `✎`   | Has PR comments or unsent drafts (review mode on)                         |
 
 Folders show the highest-priority child status, ordered by what needs *your*
 attention: revised > changed > rejected > approved. So a folder surfaces work
