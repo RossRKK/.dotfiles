@@ -305,11 +305,15 @@ local function thread_at_cursor()
 end
 
 --- A scratch float to compose text. Calls on_submit(body, close) on <C-s>.
---- `initial` prefills it (and skips insert mode, e.g. when editing).
+--- `initial` prefills it (and skips insert mode, e.g. when editing). By default
+--- an empty body cancels (closes without submitting); `allow_empty` lets an
+--- empty body through instead (the review summary is optional, so <C-s> on an
+--- empty float still submits).
 ---@param title string
 ---@param initial string[]?
 ---@param on_submit fun(body: string, close: fun())
-local function open_input(title, initial, on_submit)
+---@param allow_empty boolean?
+local function open_input(title, initial, on_submit, allow_empty)
   local input = vim.api.nvim_create_buf(false, true)
   vim.bo[input].filetype = "markdown"
   vim.bo[input].bufhidden = "wipe"
@@ -335,7 +339,7 @@ local function open_input(title, initial, on_submit)
   end
   local function submit()
     local body = vim.trim(table.concat(vim.api.nvim_buf_get_lines(input, 0, -1, false), "\n"))
-    if body == "" then
+    if body == "" and not allow_empty then
       close()
       return
     end
@@ -686,66 +690,79 @@ function M.edit()
 end
 
 --- Submit all drafts as one GitHub review. The verdict (approve /
---- request-changes / comment) is inferred from the triage state, so it's shown
---- for confirmation rather than chosen. On success every draft is cleared.
+--- request-changes / comment) is inferred from the triage state, not chosen; a
+--- compose float shows it in its title and takes an optional review summary —
+--- <C-s> sends (even empty), q cancels, so the float is the confirmation. On
+--- success every draft is cleared, so continuing the review starts a fresh
+--- batch. Submitting with no drafts sends a bare verdict (e.g. a plain approve).
 function M.submit()
-  run(function()
-    local root = current_root()
-    if not root then
-      vim.notify("review: not in a git repo", vim.log.levels.WARN)
-      return
+  local root = current_root()
+  if not root then
+    vim.notify("review: not in a git repo", vim.log.levels.WARN)
+    return
+  end
+  ensure_drafts(root)
+
+  -- Build the comments array and the verdict up front (both sync).
+  local comments = {}
+  for rel, list in pairs(M.drafts) do
+    for _, d in ipairs(list) do
+      local c = { path = rel, line = d.line, side = d.side or "RIGHT", body = d.body }
+      if d.start_line then
+        c.start_line = d.start_line
+        c.start_side = d.side or "RIGHT"
+      end
+      comments[#comments + 1] = c
     end
-    ensure_drafts(root)
+  end
+  local verdict = require("review").verdict()
+  if not verdict and #comments == 0 then
+    vim.notify("review: nothing to submit", vim.log.levels.INFO)
+    return
+  end
+  verdict = verdict or "COMMENT"
+
+  run(function()
+    -- Resolve the PR before composing, so a missing PR fails fast rather than
+    -- after you've typed a summary.
     local pr = resolve_pr(root)
     if not pr then
       vim.notify("review: no open PR for this branch", vim.log.levels.INFO)
       return
     end
 
-    local comments = {}
-    for rel, list in pairs(M.drafts) do
-      for _, d in ipairs(list) do
-        local c = { path = rel, line = d.line, side = d.side or "RIGHT", body = d.body }
-        if d.start_line then
-          c.start_line = d.start_line
-          c.start_side = d.side or "RIGHT"
+    local title = ("Submit as %s · %d comment(s) · summary optional"):format(verdict, #comments)
+    open_input(title, nil, function(body, close)
+      run(function()
+        local payload = { commit_id = pr.head, event = verdict }
+        if #comments > 0 then
+          payload.comments = comments
         end
-        comments[#comments + 1] = c
-      end
-    end
+        if body ~= "" then
+          payload.body = body
+        elseif verdict == "APPROVE" then
+          payload.body = "LGTM" -- a bare approval shouldn't go out wordless
+        end
+        local obj = sh({
+          "gh", "api", "--method", "POST",
+          ("repos/:owner/:repo/pulls/%d/reviews"):format(pr.number),
+          "--input", "-",
+        }, root, vim.json.encode(payload))
 
-    local verdict = require("review").verdict()
-    if not verdict and #comments == 0 then
-      vim.notify("review: nothing to submit", vim.log.levels.INFO)
-      return
-    end
-    verdict = verdict or "COMMENT"
-
-    local prompt = ("Submit review as %s with %d comment(s)?"):format(verdict, #comments)
-    if vim.fn.confirm(prompt, "&Yes\n&No", 2) ~= 1 then
-      return
-    end
-
-    local payload = { commit_id = pr.head, event = verdict }
-    if #comments > 0 then
-      payload.comments = comments
-    end
-    local obj = sh({
-      "gh", "api", "--method", "POST",
-      ("repos/:owner/:repo/pulls/%d/reviews"):format(pr.number),
-      "--input", "-",
-    }, root, vim.json.encode(payload))
-
-    if obj.code == 0 then
-      -- One bad anchor line 422s the whole review, so a success means every
-      -- draft landed — safe to clear them all.
-      M.drafts = {}
-      save_drafts(root)
-      vim.notify(("review: submitted %s (%d comment(s))"):format(verdict, #comments))
-      fetch_render()
-    else
-      vim.notify("review: submit failed: " .. (obj.stderr ~= "" and obj.stderr or "gh error"), vim.log.levels.ERROR)
-    end
+        if obj.code == 0 then
+          -- One bad anchor line 422s the whole review, so a success means every
+          -- draft landed — safe to clear them all.
+          close()
+          M.drafts = {}
+          save_drafts(root)
+          vim.notify(("review: submitted %s (%d comment(s))"):format(verdict, #comments))
+          fetch_render()
+        else
+          -- Keep the float open so the typed summary isn't lost on a failure.
+          vim.notify("review: submit failed: " .. (obj.stderr ~= "" and obj.stderr or "gh error"), vim.log.levels.ERROR)
+        end
+      end)
+    end, true) -- allow an empty summary to submit
   end)
 end
 
