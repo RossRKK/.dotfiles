@@ -495,10 +495,11 @@ function M.mark(status, abs)
   end)()
 end
 
---- Turn review mode on/off (gitsigns base + explorer colours).
+--- Turn review mode on/off (gitsigns base + explorer colours + inline PR comments).
 function M.toggle()
   M.enabled = not M.enabled
   vim.notify("review mode " .. (M.enabled and "on" or "off"))
+  require("review.comments").set_shown(M.enabled)
   M.refresh()
 end
 
@@ -605,6 +606,8 @@ function M.setup()
   end
   vim.api.nvim_create_autocmd("ColorScheme", { callback = set_hl })
   set_hl()
+
+  require("review.comments").setup()
 
   vim.api.nvim_create_user_command("ReviewRefresh", M.refresh, { desc = "Recompute branch review status" })
   vim.api.nvim_create_user_command("ReviewToggle", M.toggle, { desc = "Toggle branch review mode" })

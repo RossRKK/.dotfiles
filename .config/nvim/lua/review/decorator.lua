@@ -10,6 +10,9 @@
 -- folder only goes ✓ once every changed descendant is approved. Only the glyph
 -- is coloured; the filename is left alone.
 --
+-- When review mode is on, a file (or folder containing one) with PR comments
+-- also gets a ✎ (ReviewCommentSign) marker, from lua/review/comments.lua.
+--
 -- Registered in the renderer.decorators list; see lua/plugins/explorer.lua.
 
 ---@class ReviewDecorator: nvim_tree.api.Decorator
@@ -44,8 +47,15 @@ end
 ---@param node nvim_tree.api.Node
 ---@return nvim_tree.api.highlighted_string[]?
 function ReviewDecorator:icons(node)
+  local icons = {}
   local icon = self.icon_by_status[status(node) or ""]
-  return icon and { icon } or nil
+  if icon then
+    icons[#icons + 1] = icon
+  end
+  if require("review.comments").has_comments(node.absolute_path) then
+    icons[#icons + 1] = { str = "✎", hl = { "ReviewCommentSign" } }
+  end
+  return #icons > 0 and icons or nil
 end
 
 return ReviewDecorator
