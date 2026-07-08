@@ -40,11 +40,9 @@ return {
                 vim.api.nvim_chan_send(vim.b.terminal_job_id, "\2")
                 vim.cmd("startinsert")
               end, { buffer = term.bufnr, desc = "Send tmux prefix and resume terminal" })
-            else
-              -- Native mode: buffer-local tab-switch maps (<C-b>{1-9}/c/r), used
-              -- from terminal-normal mode. See config.terms.
-              require("config.terms").setup_buffer_keymaps(term.bufnr)
             end
+            -- Native mode needs nothing here: tab switching is the global <C-b>
+            -- prefix from config.terms.setup_keymaps.
           end
         end,
       })
@@ -53,6 +51,7 @@ return {
       if not ide.use_tmux() then
         require("config.terms").setup_keymaps()
         require("config.terms").setup_copymode()
+        require("config.terms").setup_exit()
         -- Show the titled tab strip when the side terminal is in play (IDE mode).
         if ide.is_ide_mode() then
           require("config.terms").enable_tabline()
