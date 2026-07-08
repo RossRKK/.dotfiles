@@ -16,6 +16,7 @@ return {
         "jsonls",
         "terraformls",
         "marksman",
+        "helm_ls",
       },
       automatic_installation = true,
     },
@@ -77,6 +78,11 @@ return {
         jsonls = {},
         terraformls = {},
         marksman = {},
+        -- Helm templates get filetype "helm" (via vim-helm, see helm.lua), so
+        -- yamlls skips them and helm_ls handles the Go-template YAML instead.
+        -- helm_ls shells out to yaml-language-server (already installed above)
+        -- for the embedded YAML, finding it on mason's PATH.
+        helm_ls = {},
         lua_ls = {
           settings = {
             Lua = {

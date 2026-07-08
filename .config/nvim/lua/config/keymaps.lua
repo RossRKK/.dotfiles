@@ -54,15 +54,13 @@ local function goto_main_window()
   vim.cmd("vsplit")
 end
 
--- Jump to a `path[:line[:col]]` reference under the cursor (e.g. printed in the
--- terminal, or a path in a diff/log). From a terminal buffer, use Ctrl-\ Ctrl-n
--- first, then gf on the ref. Resolution is best-effort and, when it can't pin an
--- exact file, hands the path to the fuzzy finder rather than giving up — so
--- partial paths, paths relative to some other folder, and bare basenames all
--- still land somewhere.
-local function goto_file_ref()
+-- Jump to a `path[:line[:col]]` reference (e.g. printed in the terminal, or a
+-- path in a diff/log). Resolution is best-effort and, when it can't pin an exact
+-- file, hands the path to the fuzzy finder rather than giving up — so partial
+-- paths, paths relative to some other folder, and bare basenames all still land
+-- somewhere.
+local function goto_ref(ref)
   -- Strip surrounding brackets/quotes/backticks and trailing punctuation.
-  local ref = vim.fn.expand("<cWORD>")
   ref = ref:gsub("^[%(%[`'\"]+", ""):gsub("[%)%]`'\",.]+$", "")
 
   -- Pull an optional :line:col (or :line) suffix off the end.
@@ -130,7 +128,23 @@ local function goto_file_ref()
   require("telescope.builtin").find_files({ default_text = query })
 end
 
-map("n", "gf", goto_file_ref, { desc = "Goto file under cursor (fuzzy fallback)" })
+-- gf: the ref under the cursor. From a terminal buffer, use Ctrl-\ Ctrl-n first,
+-- then gf on the ref.
+map("n", "gf", function()
+  goto_ref(vim.fn.expand("<cWORD>"))
+end, { desc = "Goto file under cursor (fuzzy fallback)" })
+
+-- gy ("goto yanked"): the same, but resolve the ref from the clipboard rather
+-- than the cursor. Trim surrounding whitespace/newlines so a copied path with a
+-- stray trailing newline still resolves.
+map("n", "gy", function()
+  local ref = (vim.fn.getreg("+") or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if ref == "" then
+    vim.notify("clipboard is empty", vim.log.levels.WARN)
+    return
+  end
+  goto_ref(ref)
+end, { desc = "Goto file from clipboard (fuzzy fallback)" })
 
 -- Yank the current file's path to the clipboard (the reverse of gf), without a
 -- trip to the explorer. <leader>yp: path relative to cwd. <leader>yl: with the

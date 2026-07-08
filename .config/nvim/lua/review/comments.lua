@@ -17,6 +17,8 @@
 --
 -- Everyone's line comments render inline as virtual text, shown/hidden with
 -- review mode; your unsent drafts render alongside them in a dimmer hue.
+-- Comments in resolved threads are dropped (see resolved_comment_ids), so the
+-- tree icon and inline text only reflect threads that still want attention.
 --
 -- The PR is found from the active branch: none -> stay quiet; one -> use it;
 -- several -> ask once (remembered per branch). Rendering reads a cache, so only
@@ -294,6 +296,53 @@ local function resolve_pr(root)
   return { number = chosen.number, head = chosen.headRefOid }
 end
 
+--- The set of comment ids (REST id == GraphQL databaseId) belonging to *resolved*
+--- review threads. REST /pulls/{n}/comments has no resolution field, so we join
+--- against GraphQL reviewThreads to drop resolved comments from the display.
+--- Fails open: any error returns {} so a network hiccup shows comments rather
+--- than silently hiding them.
+---@param root string
+---@param number integer
+---@return table<integer, boolean>
+local function resolved_comment_ids(root, number)
+  local repo = gh_json({ "repo", "view", "--json", "owner,name" }, root)
+  local owner = repo and repo.owner and repo.owner.login
+  local name = repo and repo.name
+  if not owner or not name then
+    return {}
+  end
+  local query = [[
+    query($owner:String!,$name:String!,$number:Int!){
+      repository(owner:$owner,name:$name){
+        pullRequest(number:$number){
+          reviewThreads(first:100){
+            nodes{ isResolved comments(first:100){ nodes{ databaseId } } }
+          }
+        }
+      }
+    }
+  ]]
+  local data = gh_json({
+    "api", "graphql",
+    "-f", "query=" .. query,
+    "-f", "owner=" .. owner,
+    "-f", "name=" .. name,
+    "-F", "number=" .. number,
+  }, root)
+  local threads = vim.tbl_get(data or {}, "data", "repository", "pullRequest", "reviewThreads", "nodes")
+  local resolved = {}
+  for _, thread in ipairs(threads or {}) do
+    if thread.isResolved then
+      for _, c in ipairs(thread.comments.nodes) do
+        if c.databaseId then
+          resolved[c.databaseId] = true
+        end
+      end
+    end
+  end
+  return resolved
+end
+
 --- The authenticated GitHub login (cached). Used to find your own comments.
 ---@param root string
 ---@return string?
@@ -509,9 +558,10 @@ local function fetch_render()
         vim.notify("review: couldn't fetch comments: " .. tostring(err), vim.log.levels.WARN)
         M.by_path = {}
       else
+        local resolved = resolved_comment_ids(root, pr.number)
         local by_path = {}
         for _, c in ipairs(comments) do
-          if c.path then
+          if c.path and not resolved[c.id] then
             by_path[c.path] = by_path[c.path] or {}
             table.insert(by_path[c.path], c)
           end
