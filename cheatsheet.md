@@ -240,12 +240,28 @@ file under it is approved.
 
 ### Terminal
 
-| Key                              | Action                                                |
-| -------------------------------- | ----------------------------------------------------- |
-| `Ctrl+T`                         | Toggle the side terminal                              |
-| `Ctrl+G`                         | Toggle lazygit (works in normal & terminal mode)      |
-| `Ctrl+N` (in terminal)           | Enter terminal-normal mode (then `gf` jumps to a ref) |
-| `Ctrl+B` (terminal, normal mode) | Send the tmux prefix and drop back into the terminal  |
+Terminals run natively in nvim buffers (`native` backend) — full vim normal mode
+over real scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI
+munging). Escape hatch: `NVIM_TERM=tmux nvim .` runs the old tmux-in-nvim setup.
+
+| Key                    | Action                                                |
+| ---------------------- | ----------------------------------------------------- |
+| `Ctrl+T`               | Toggle the side terminal                              |
+| `Ctrl+G`               | Toggle lazygit (works in normal & terminal mode)      |
+| `Ctrl+N` (in terminal) | Enter terminal-normal mode (then `gf` jumps to a ref) |
+
+### Terminal tabs (native backend)
+
+tmux-window-style tabs in the side terminal: one fills the slot, others stay
+alive but hidden, listed in a winbar strip up top (auto-named from the running
+process; active tab highlighted). Tabs are clickable.
+
+| Key          | Action                                             |
+| ------------ | -------------------------------------------------- |
+| `Ctrl+B 1-9` | Switch to tab N (creates it on demand)             |
+| `Ctrl+B c`   | New tab in the next free slot                      |
+| `Ctrl+B ,`   | Rename the current tab                             |
+| `Ctrl+B r`   | Repaint the terminal (clears rare hidden-stream tearing) |
 
 ### Debug (nvim-dap)
 
