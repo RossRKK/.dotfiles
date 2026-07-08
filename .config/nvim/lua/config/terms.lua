@@ -18,6 +18,7 @@ local BASE = 1 -- terminal 1 is the primary side terminal (<C-t>)
 local MAX = 9
 
 M.current = BASE -- id of the terminal currently shown
+M.copymode = {} -- id -> true while that terminal is showing a frozen snapshot
 
 local function tterm()
   return require("toggleterm.terminal")
@@ -94,9 +95,144 @@ local function force_repaint(id)
   return true
 end
 
+-- ===================== copy mode (frozen snapshot) =====================
+-- Live terminals yank the cursor to the bottom on every output frame, so you
+-- can't read or scroll while output streams. Instead, whenever a managed
+-- terminal enters terminal-normal mode we replace it in its window with a
+-- frozen snapshot of its contents (an ordinary buffer) where normal/visual/
+-- search/yank all work and nothing moves; entering insert mode in the snapshot
+-- swaps the live terminal back. Driven entirely by ModeChanged (setup_copymode).
+
+local snap_of = {} -- terminal id -> snapshot bufnr
+local id_of_snap = {} -- snapshot bufnr -> terminal id
+
+local function term_by_buf(buf)
+  for _, t in ipairs(managed()) do
+    if t.bufnr == buf then
+      return t
+    end
+  end
+end
+
+local function snapshot_buf(id)
+  local b = snap_of[id]
+  if b and vim.api.nvim_buf_is_valid(b) then
+    return b
+  end
+  b = vim.api.nvim_create_buf(false, true)
+  vim.bo[b].buftype = "nofile"
+  vim.bo[b].bufhidden = "hide"
+  vim.bo[b].swapfile = false
+  -- Same filetype as a toggleterm window so the width-enforcement autocmd and
+  -- the tabline's term_col_width keep treating this window as the terminal slot.
+  vim.bo[b].filetype = "toggleterm"
+  pcall(vim.api.nvim_buf_set_name, b, "[copy " .. id .. "]")
+  M.setup_buffer_keymaps(b) -- <C-b>{1-9}/c/r still switch tabs from the snapshot
+  snap_of[id] = b
+  id_of_snap[b] = id
+  return b
+end
+
+-- Swap the live terminal for its snapshot in its window (enter copy mode).
+function M.enter_copy(term)
+  if M.copymode[term.id] then
+    return
+  end
+  local win = (term.window and vim.api.nvim_win_is_valid(term.window)) and term.window
+    or vim.api.nvim_get_current_win()
+  local lines = vim.api.nvim_buf_get_lines(term.bufnr, 0, -1, false)
+  local snap = snapshot_buf(term.id)
+  vim.api.nvim_buf_set_lines(snap, 0, -1, false, lines)
+  M.copymode[term.id] = true
+  vim.api.nvim_win_set_buf(win, snap)
+  vim.wo[win].number = false
+  vim.wo[win].relativenumber = false
+  vim.wo[win].signcolumn = "no"
+  -- Start at the bottom, where the terminal cursor was, then scroll up freely.
+  pcall(vim.api.nvim_win_set_cursor, win, { vim.api.nvim_buf_line_count(snap), 0 })
+  pcall(vim.cmd, "redrawtabline")
+end
+
+-- Swap the snapshot for its live terminal and resume terminal mode.
+function M.exit_copy(id)
+  if not M.copymode[id] then
+    return
+  end
+  M.copymode[id] = nil
+  local term = tterm().get(id, true)
+  local snap = snap_of[id]
+  local win
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if snap and vim.api.nvim_win_get_buf(w) == snap then
+      win = w
+      break
+    end
+  end
+  win = win or (term and term.window)
+  if term and win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(term.bufnr) then
+    -- Leave the snapshot's insert mode first: swapping buffers mid-insert lands
+    -- in terminal-normal and the startinsert below is a no-op (needing a second
+    -- press). Drop to normal, swap, then enter terminal mode cleanly.
+    vim.cmd("stopinsert")
+    vim.api.nvim_win_set_buf(win, term.bufnr)
+    vim.api.nvim_set_current_win(win)
+    vim.cmd("startinsert")
+  end
+  pcall(vim.cmd, "redrawtabline")
+end
+
+-- Restore any snapshot windows to their live terminals without resuming insert
+-- (used before switching/toggling tabs, so toggleterm sees its windows normally).
+local function restore_all_copy()
+  for id in pairs(M.copymode) do
+    M.copymode[id] = nil
+    local term = tterm().get(id, true)
+    local snap = snap_of[id]
+    if term and snap and vim.api.nvim_buf_is_valid(term.bufnr) then
+      for _, w in ipairs(vim.api.nvim_list_wins()) do
+        if vim.api.nvim_win_get_buf(w) == snap then
+          vim.api.nvim_win_set_buf(w, term.bufnr)
+        end
+      end
+    end
+  end
+end
+
+-- Wire the mode-driven swapping (native only). Called once from terminal.lua.
+-- Window/buffer swaps are deferred with vim.schedule so they don't run inside
+-- the (text-locked) ModeChanged callback.
+function M.setup_copymode()
+  local grp = vim.api.nvim_create_augroup("TermCopyMode", { clear = true })
+  vim.api.nvim_create_autocmd("ModeChanged", {
+    group = grp,
+    pattern = "t:nt",
+    callback = function()
+      local term = term_by_buf(vim.api.nvim_get_current_buf())
+      if term then
+        vim.schedule(function()
+          M.enter_copy(term)
+        end)
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd("ModeChanged", {
+    group = grp,
+    pattern = "*:i",
+    callback = function()
+      local id = id_of_snap[vim.api.nvim_get_current_buf()]
+      if id and M.copymode[id] then
+        vim.schedule(function()
+          M.exit_copy(id)
+        end)
+      end
+    end,
+  })
+end
+
 -- Show terminal `id`, creating it if it doesn't exist yet. Any other managed
 -- terminal occupying the slot is hidden (not killed) so it stays a tab.
 function M.show(id)
+  restore_all_copy()
   id = math.max(BASE, math.min(MAX, id))
   local existing = tterm().get(id, true)
 
@@ -136,6 +272,7 @@ end
 
 -- <C-t>: toggle the side slot — hide it if open, else re-show the current tab.
 function M.toggle()
+  restore_all_copy()
   local open = open_managed()
   if open then
     open:close()
@@ -188,7 +325,8 @@ local function label(id)
       name = comm and (comm:gsub("%s+$", "")) or nil
     end
   end
-  return string.format(" %d:%s ", id, truncate(name or "term", 24))
+  local marker = M.copymode[id] and "⧉ " or ""
+  return string.format(" %d:%s%s ", id, marker, truncate(name or "term", 24))
 end
 
 -- Fit plain text to exactly w display columns (truncate with … or right-pad).

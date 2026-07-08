@@ -52,6 +52,7 @@ return {
       -- Native mode: install the tmux-window-style tab keymaps (<C-b>{1-9}, etc).
       if not ide.use_tmux() then
         require("config.terms").setup_keymaps()
+        require("config.terms").setup_copymode()
         -- Show the titled tab strip when the side terminal is in play (IDE mode).
         if ide.is_ide_mode() then
           require("config.terms").enable_tabline()
