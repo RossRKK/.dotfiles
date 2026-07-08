@@ -12,11 +12,13 @@ return {
             return ide.term_width()
           end
         end,
-        open_mapping = [[<C-t>]],
+        -- Native mode: config.terms owns <C-t> (toggles the current tab). tmux
+        -- mode keeps the plain toggleterm mapping.
+        open_mapping = ide.use_tmux() and [[<C-t>]] or nil,
         hide_numbers = true,
         shade_terminals = false,
         start_in_insert = true,
-        shell = "tmux new-session -A -s neovim",
+        shell = ide.term_shell(),
         -- Applies to whichever terminal actually opens (incl. the <C-t> side
         -- terminal, which is created fresh from this global config).
         on_open = function(term)
@@ -29,16 +31,24 @@ return {
             -- The side terminal is full-height (nothing above it), so <C-k> nav
             -- is useless here; pass it through to the running app (e.g. Claude Code).
             vim.keymap.set("t", "<C-k>", "<C-k>", { buffer = term.bufnr })
-            -- In normal mode <C-b> would otherwise be a no-op nvim key. Send the
-            -- tmux prefix (0x02) straight to the job and resume terminal mode, so
-            -- tmux shortcuts work without first pressing i to re-enter the terminal.
-            vim.keymap.set("n", "<C-b>", function()
-              vim.api.nvim_chan_send(vim.b.terminal_job_id, "\2")
-              vim.cmd("startinsert")
-            end, { buffer = term.bufnr, desc = "Send tmux prefix and resume terminal" })
+            -- tmux backend only: in normal mode <C-b> would otherwise be a no-op
+            -- nvim key. Send the tmux prefix (0x02) straight to the job and resume
+            -- terminal mode, so tmux shortcuts work without first pressing i to
+            -- re-enter the terminal. Useless in native mode (no inner tmux).
+            if ide.use_tmux() then
+              vim.keymap.set("n", "<C-b>", function()
+                vim.api.nvim_chan_send(vim.b.terminal_job_id, "\2")
+                vim.cmd("startinsert")
+              end, { buffer = term.bufnr, desc = "Send tmux prefix and resume terminal" })
+            end
           end
         end,
       })
+
+      -- Native mode: install the tmux-window-style tab keymaps (<C-b>{1-9}, etc).
+      if not ide.use_tmux() then
+        require("config.terms").setup_keymaps()
+      end
 
       -- IDE mode (opened a directory) auto-opens the side terminal, then hands
       -- focus back to the editor window so we land on the file/tree, not the term.
