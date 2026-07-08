@@ -118,6 +118,7 @@ function M.show(id)
 
   M.current = id
   vim.schedule(function()
+    pcall(vim.cmd, "redrawtabline")
     vim.cmd("startinsert")
   end)
 end
@@ -156,6 +157,133 @@ function M.new()
     end
   end
   vim.notify("all " .. MAX .. " terminal slots in use", vim.log.levels.WARN)
+end
+
+local function truncate(s, n)
+  if vim.fn.strchars(s) > n then
+    return vim.fn.strcharpart(s, 0, n - 1) .. "…"
+  end
+  return s
+end
+
+-- A tab's title: the OSC title the running program set (b:term_title — Claude
+-- Code updates this live, including its input-needed marker), falling back to
+-- the foreground process name from /proc, then "term".
+local function label(id)
+  local t = tterm().get(id, true)
+  local name
+  if t and t.bufnr and vim.api.nvim_buf_is_valid(t.bufnr) then
+    local ok, title = pcall(function()
+      return vim.b[t.bufnr].term_title
+    end)
+    if ok and type(title) == "string" and title ~= "" then
+      name = title
+    end
+  end
+  if not name then
+    local pid, tpgid = term_procs(id)
+    if pid then
+      local target = (tpgid and tpgid > 0) and tpgid or pid
+      local comm = read_file("/proc/" .. target .. "/comm")
+      name = comm and (comm:gsub("%s+$", "")) or nil
+    end
+  end
+  return string.format(" %d:%s ", id, truncate(name or "term", 24))
+end
+
+-- Fit plain text to exactly w display columns (truncate with … or right-pad).
+local function fit(s, w)
+  if w <= 0 then
+    return ""
+  end
+  local len = vim.fn.strchars(s)
+  if len > w then
+    return truncate(s, w)
+  end
+  return s .. string.rep(" ", w - len)
+end
+
+-- Live text width of the side terminal window (0 if it's currently hidden).
+local function term_col_width()
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    local b = vim.api.nvim_win_get_buf(w)
+    if vim.bo[b].filetype == "toggleterm" and vim.api.nvim_win_get_config(w).relative == "" then
+      return vim.api.nvim_win_get_width(w)
+    end
+  end
+  return 0
+end
+
+-- Name of the file in the main editor window (relative to cwd).
+local function editor_bufname()
+  local function is_editor(b)
+    return vim.bo[b].buftype == "" and vim.bo[b].filetype ~= "NvimTree"
+  end
+  local function name_of(b)
+    local n = vim.api.nvim_buf_get_name(b)
+    return n == "" and "[No Name]" or vim.fn.fnamemodify(n, ":.")
+  end
+  local cur = vim.api.nvim_get_current_buf()
+  if is_editor(cur) then
+    return name_of(cur)
+  end
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    local b = vim.api.nvim_win_get_buf(w)
+    if is_editor(b) then
+      return name_of(b)
+    end
+  end
+  return ""
+end
+
+-- Top bar aligned to the three windows: cwd over the explorer, the current file
+-- over the editor, and the terminal tab strip over the terminal. Rendered in
+-- nvim's top tabline (see M.enable_tabline) rather than a winbar on the terminal
+-- window, so it doesn't steal a pty row / destabilise the terminal's rendering.
+function M.tabline()
+  local cols = vim.o.columns
+  local tw = ide.tree_width() -- explorer region incl. its separator (0 if closed)
+  local rw = term_col_width() -- terminal text region (0 if hidden)
+  local mw = math.max(0, cols - tw - rw) -- editor region (incl. the term separator)
+
+  local left = tw > 0 and fit(" " .. vim.fn.fnamemodify(vim.fn.getcwd(), ":~"), tw) or ""
+  local mid = fit(" " .. editor_bufname(), mw)
+
+  -- Terminal tabs, left-aligned in the terminal region, active one highlighted.
+  local tabs, used = {}, 0
+  if rw > 0 then
+    for _, t in ipairs(managed()) do
+      local lbl = label(t.id)
+      used = used + vim.fn.strchars(lbl)
+      local hl = (t.id == M.current) and "%#TabLineSel#" or "%#TabLine#"
+      tabs[#tabs + 1] = string.format("%%%d@v:lua.__toggleterm_tab_click@%s%s%%X", t.id, hl, lbl)
+    end
+  end
+  local right = table.concat(tabs)
+  if used < rw then
+    right = right .. "%#TabLineFill#" .. string.rep(" ", rw - used)
+  end
+
+  return "%#TabLine#" .. left .. "%#TabLineFill#" .. mid .. right
+end
+
+_G.__toggleterm_tabline = M.tabline
+_G.__toggleterm_tab_click = function(id)
+  M.show(id)
+end
+
+-- Turn on the top tab strip. term_title changes arrive via TermRequest (and the
+-- constant redraws of a live terminal), so redraw the tabline on those.
+function M.enable_tabline()
+  vim.o.showtabline = 2
+  vim.o.tabline = "%!v:lua.__toggleterm_tabline()"
+  local grp = vim.api.nvim_create_augroup("TermTabline", { clear = true })
+  vim.api.nvim_create_autocmd("TermRequest", {
+    group = grp,
+    callback = function()
+      pcall(vim.cmd, "redrawtabline")
+    end,
+  })
 end
 
 -- Buffer-local tab keymaps for a terminal buffer (native backend). Normal-mode
