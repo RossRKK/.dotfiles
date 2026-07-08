@@ -111,7 +111,7 @@ local function snapshot_buf(id)
 	-- the tabline's term_col_width keep treating this window as the terminal slot.
 	vim.bo[b].filetype = "toggleterm"
 	pcall(vim.api.nvim_buf_set_name, b, "[copy " .. id .. "]")
-	M.setup_buffer_keymaps(b) -- <C-b>{1-9}/c/r still switch tabs from the snapshot
+	-- Tab switching (<C-b>N) works here via the global prefix map (see setup_keymaps).
 	-- Resume the live terminal directly: keys that would start insert (plus q) drop
 	-- copy mode in one press, instead of first entering the snapshot's own insert
 	-- mode and having exit_copy react to it (which needed a second press).
@@ -132,9 +132,11 @@ function M.enter_copy(term)
 	end
 	local win = (term.window and vim.api.nvim_win_is_valid(term.window)) and term.window
 		or vim.api.nvim_get_current_win()
-	-- Remember where the cursor sits in the live terminal so the snapshot opens at
-	-- the same spot rather than jumping to the bottom (the buffers share content).
-	local cursor = vim.api.nvim_win_get_cursor(win)
+	-- Remember the live terminal's full view -- scroll position (topline) as well
+	-- as the cursor -- so the snapshot opens showing exactly the same lines. Setting
+	-- only the cursor makes nvim recenter and the content visibly jumps. The buffers
+	-- share content, so the saved view maps across unchanged.
+	local view = vim.api.nvim_win_call(win, vim.fn.winsaveview)
 	local lines = vim.api.nvim_buf_get_lines(term.bufnr, 0, -1, false)
 	local snap = snapshot_buf(term.id)
 	vim.api.nvim_buf_set_lines(snap, 0, -1, false, lines)
@@ -143,11 +145,9 @@ function M.enter_copy(term)
 	vim.wo[win].number = false
 	vim.wo[win].relativenumber = false
 	vim.wo[win].signcolumn = "no"
-	-- Restore that position, clamped to the snapshot's range.
-	local last = vim.api.nvim_buf_line_count(snap)
-	local row = math.min(cursor[1], last)
-	local line = vim.api.nvim_buf_get_lines(snap, row - 1, row, false)[1] or ""
-	pcall(vim.api.nvim_win_set_cursor, win, { row, math.min(cursor[2], #line) })
+	pcall(vim.api.nvim_win_call, win, function()
+		vim.fn.winrestview(view) -- winrestview clamps lnum to the buffer itself
+	end)
 	pcall(vim.cmd, "redrawtabline")
 end
 
@@ -427,24 +427,60 @@ function M.enable_tabline()
 	})
 end
 
--- Buffer-local tab keymaps for a terminal buffer (native backend). Bound in both
--- terminal mode and terminal-normal mode, so <C-b>N works whether you're typing
--- in the live terminal or paused in the frozen snapshot (tmux-prefix style).
--- Buffer-local so <C-b> keeps its default (page back) in every other buffer.
-function M.setup_buffer_keymaps(bufnr)
-	local map = vim.keymap.set
-	for i = BASE, MAX do
-		map({ "n", "t" }, "<C-b>" .. i, function()
-			M.show(i)
-		end, { buffer = bufnr, desc = "Terminal tab " .. i })
-	end
-	map({ "n", "t" }, "<C-b>c", M.new, { buffer = bufnr, desc = "New terminal tab" })
-end
-
 -- Global toggle so <C-t> summons/hides the side terminal from anywhere.
 -- Called once from terminal.lua.
 function M.setup_keymaps()
 	vim.keymap.set({ "n", "t" }, "<C-t>", M.toggle, { desc = "Toggle side terminal" })
+	-- <C-b> as a single tmux-style prefix, bound globally in normal + terminal
+	-- mode. A single complete mapping fires immediately, then getcharstr() blocks
+	-- for the follow-up key. Separate <C-b>1.. maps instead race the mapping
+	-- timeout in terminal mode -- a digit pressed a beat late leaks to the shell.
+	-- Global so it works from the live terminal, the copy-mode snapshot, and the
+	-- editor (to summon a tab when the panel is closed). Trade-off accepted: <C-b>
+	-- no longer pages back in normal-mode buffers.
+	local function tab_prefix()
+		local ok, key = pcall(vim.fn.getcharstr)
+		if not ok or key == "" then
+			return
+		end
+		if key:match("^[1-9]$") then
+			M.show(tonumber(key))
+		elseif key == "c" then
+			M.new()
+		end
+	end
+	vim.keymap.set({ "n", "t" }, "<C-b>", tab_prefix, { desc = "Terminal tab prefix (<C-b>N / <C-b>c)" })
+end
+
+-- When a managed terminal's shell exits, drop that tab and show another open tab
+-- if one remains; if it was the last, the side panel just closes. Called once
+-- from terminal.lua (native backend).
+function M.setup_exit()
+	vim.api.nvim_create_autocmd("TermClose", {
+		group = vim.api.nvim_create_augroup("TermExit", { clear = true }),
+		callback = function(args)
+			local was_managed = false
+			for _, t in ipairs(managed()) do
+				if t.bufnr == args.buf then
+					was_managed = true
+					break
+				end
+			end
+			if not was_managed then
+				return
+			end
+			-- Deferred: let toggleterm finish closing the exited terminal's window
+			-- before we swap another managed terminal into the side slot.
+			vim.schedule(function()
+				for _, t in ipairs(managed()) do
+					if t.bufnr ~= args.buf and vim.api.nvim_buf_is_valid(t.bufnr) then
+						M.show(t.id)
+						return
+					end
+				end
+			end)
+		end,
+	})
 end
 
 return M
