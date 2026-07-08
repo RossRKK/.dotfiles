@@ -240,12 +240,29 @@ file under it is approved.
 
 ### Terminal
 
-| Key                              | Action                                                |
-| -------------------------------- | ----------------------------------------------------- |
-| `Ctrl+T`                         | Toggle the side terminal                              |
-| `Ctrl+G`                         | Toggle lazygit (works in normal & terminal mode)      |
-| `Ctrl+N` (in terminal)           | Enter terminal-normal mode (then `gf` jumps to a ref) |
-| `Ctrl+B` (terminal, normal mode) | Send the tmux prefix and drop back into the terminal  |
+Terminals run natively in nvim buffers (`native` backend) — full vim normal mode
+over real scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI
+munging). Escape hatch: `NVIM_TERM=tmux nvim .` runs the old tmux-in-nvim setup.
+
+| Key                    | Action                                                |
+| ---------------------- | ----------------------------------------------------- |
+| `Ctrl+T`               | Toggle the side terminal                              |
+| `Ctrl+G`               | Toggle lazygit (works in normal & terminal mode)      |
+| `Ctrl+N` (in terminal) | Enter terminal-normal mode (then `gf` jumps to a ref) |
+
+### Terminal tabs (native backend)
+
+tmux-style tabs in the side terminal: one fills the slot, the others stay alive
+but hidden. Switch from **terminal-normal mode** (enter it with `Ctrl+N`), then
+press the `Ctrl+B` binding. `Ctrl+T` toggles the terminal from anywhere. (No
+visible tab strip yet — a titled display is coming.)
+
+| Key                            | Action                                            |
+| ------------------------------ | ------------------------------------------------- |
+| `Ctrl+B 1-9` (in normal mode)  | Switch to tab N (creates it on demand)            |
+| `Ctrl+B c` (in normal mode)    | New tab in the next free slot                     |
+| `Ctrl+B r` (in normal mode)    | Repaint the terminal (clears rare tearing)        |
+| `Ctrl+T`                       | Toggle the side terminal                          |
 
 ### Debug (nvim-dap)
 

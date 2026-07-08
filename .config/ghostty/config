@@ -8,6 +8,16 @@ command = /usr/bin/fish -l
 
 keybind = shift+enter=text:\x1b\r
 
+# Font. Without this Ghostty falls back to its bundled default (JetBrains Mono),
+# which also renders programming ligatures (>=, ->, != as single glyphs).
+font-family = 0xProto Nerd Font Propo
+
+# Disable ligatures — show >= as two glyphs, not one. calt drives 0xProto's
+# programming ligatures; liga/dlig cover standard/discretionary ones.
+font-feature = -calt
+font-feature = -liga
+font-feature = -dlig
+
 # Slow down mouse-wheel scrolling (default is 3 = fast). Lower = slower;
 # try 0.5 if 1 is still too quick.
 mouse-scroll-multiplier = 0.5
