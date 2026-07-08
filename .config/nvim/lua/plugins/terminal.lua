@@ -86,64 +86,69 @@ return {
         end,
       })
 
-      -- Keep the terminal in terminal-mode through a mouse drag-selection (e.g.
-      -- tmux copy-mode) that strays over the split boundary. Per :help terminal, a
-      -- mouse event over another window drops the terminal from terminal-mode into
-      -- terminal-normal in place (no window switch) and nvim starts its own visual
-      -- selection there, killing the in-flight tmux selection. Two parts:
+      -- tmux backend only. Keep the terminal in terminal-mode through a mouse
+      -- drag-selection (tmux copy-mode) that strays over the split boundary. Per
+      -- :help terminal, a mouse event over another window drops the terminal from
+      -- terminal-mode into terminal-normal in place (no window switch) and nvim
+      -- starts its own visual selection there, killing the in-flight tmux
+      -- selection. Two parts:
       --   1. In the terminal buffer's normal/visual mode, <LeftDrag>/<LeftRelease>
       --      are no-ops, so a stray drag can't begin a visual selection. Terminal-
       --      mode drags are untouched and still forward to tmux.
       --   2. When a mouse (not a keyboard <C-\><C-n>) knocks us out of terminal-
       --      mode, resume it immediately. The <LeftDrag> timestamp tells the two
       --      apart, so keyboard normal-mode for gf/scrollback is preserved.
-      local drag_group = vim.api.nvim_create_augroup("terminal_drag_guard", { clear = true })
-      local last_drag_ms = 0
-      vim.on_key(function(key)
-        if #key >= 3 and vim.fn.keytrans(key) == "<LeftDrag>" then
-          last_drag_ms = vim.uv.now()
-        end
-      end, vim.api.nvim_create_namespace("terminal_drag_guard"))
-
-      local function nop_terminal_drag(buf)
-        for _, lhs in ipairs({ "<LeftDrag>", "<LeftRelease>" }) do
-          pcall(vim.keymap.set, { "n", "x" }, lhs, "<Nop>", { buffer = buf })
-        end
-      end
-      vim.api.nvim_create_autocmd("FileType", {
-        group = drag_group,
-        pattern = "toggleterm",
-        callback = function(args)
-          nop_terminal_drag(args.buf)
-        end,
-      })
-
-      vim.api.nvim_create_autocmd("TermLeave", {
-        group = drag_group,
-        callback = function()
-          local buf = vim.api.nvim_get_current_buf()
-          if vim.bo[buf].filetype ~= "toggleterm" then
-            return
+      -- Off in native mode: config.terms owns copy-mode, and its snapshot buffer is
+      -- also filetype "toggleterm", so this would fight the snapshot's selection.
+      if ide.use_tmux() then
+        local drag_group = vim.api.nvim_create_augroup("terminal_drag_guard", { clear = true })
+        local last_drag_ms = 0
+        vim.on_key(function(key)
+          if #key >= 3 and vim.fn.keytrans(key) == "<LeftDrag>" then
+            last_drag_ms = vim.uv.now()
           end
-          -- A keyboard <C-\><C-n> has no recent drag: leave us in normal mode.
-          if vim.uv.now() - last_drag_ms > 300 then
-            return
+        end, vim.api.nvim_create_namespace("terminal_drag_guard"))
+
+        local function nop_terminal_drag(buf)
+          for _, lhs in ipairs({ "<LeftDrag>", "<LeftRelease>" }) do
+            pcall(vim.keymap.set, { "n", "x" }, lhs, "<Nop>", { buffer = buf })
           end
-          vim.schedule(function()
-            local b = vim.api.nvim_get_current_buf()
-            if vim.bo[b].filetype ~= "toggleterm" then
+        end
+        vim.api.nvim_create_autocmd("FileType", {
+          group = drag_group,
+          pattern = "toggleterm",
+          callback = function(args)
+            nop_terminal_drag(args.buf)
+          end,
+        })
+
+        vim.api.nvim_create_autocmd("TermLeave", {
+          group = drag_group,
+          callback = function()
+            local buf = vim.api.nvim_get_current_buf()
+            if vim.bo[buf].filetype ~= "toggleterm" then
               return
             end
-            local mode = vim.api.nvim_get_mode().mode
-            if mode ~= "t" then
-              if mode:match("[vV\022]") then
-                vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
-              end
-              vim.cmd("startinsert")
+            -- A keyboard <C-\><C-n> has no recent drag: leave us in normal mode.
+            if vim.uv.now() - last_drag_ms > 300 then
+              return
             end
-          end)
-        end,
-      })
+            vim.schedule(function()
+              local b = vim.api.nvim_get_current_buf()
+              if vim.bo[b].filetype ~= "toggleterm" then
+                return
+              end
+              local mode = vim.api.nvim_get_mode().mode
+              if mode ~= "t" then
+                if mode:match("[vV\022]") then
+                  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
+                end
+                vim.cmd("startinsert")
+              end
+            end)
+          end,
+        })
+      end
 
       -- Hold the vertical side terminal at its target width (even split of the
       -- post-explorer region, floored at 80). winfixwidth only blocks automatic
