@@ -12,6 +12,7 @@ return {
         "markdown", "markdown_inline",
         "yaml", "json", "toml",
         "hcl",
+        "helm", -- Go-template YAML; injects yaml + gotmpl highlighting
         "bash",
         "html", "css",
       }

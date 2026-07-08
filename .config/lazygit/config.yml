@@ -1,1 +1,13 @@
 quitOnTopLevelReturn: false
+customCommands:
+  - key: "p"
+    context: "commits"
+    description: "Export selected commit(s) to a single squashed patch"
+    prompts:
+      - type: "input"
+        title: "Output patch file"
+        initialValue: "changes.patch"
+    command: >-
+      git diff {{.SelectedCommitRange.From}}^..{{.SelectedCommitRange.To}} > {{index .PromptResponses 0}}
+    loadingText: "Creating patch..."
+    output: popup
