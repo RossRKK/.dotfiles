@@ -40,6 +40,10 @@ return {
                 vim.api.nvim_chan_send(vim.b.terminal_job_id, "\2")
                 vim.cmd("startinsert")
               end, { buffer = term.bufnr, desc = "Send tmux prefix and resume terminal" })
+            else
+              -- Native mode: buffer-local tab-switch maps (<C-b>{1-9}/c/r), used
+              -- from terminal-normal mode. See config.terms.
+              require("config.terms").setup_buffer_keymaps(term.bufnr)
             end
           end
         end,

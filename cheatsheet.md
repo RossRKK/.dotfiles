@@ -252,16 +252,17 @@ munging). Escape hatch: `NVIM_TERM=tmux nvim .` runs the old tmux-in-nvim setup.
 
 ### Terminal tabs (native backend)
 
-tmux-window-style tabs in the side terminal: one fills the slot, others stay
-alive but hidden, listed in a winbar strip up top (auto-named from the running
-process; active tab highlighted). Tabs are clickable.
+tmux-style tabs in the side terminal: one fills the slot, the others stay alive
+but hidden. Switch from **terminal-normal mode** (enter it with `Ctrl+N`), then
+press the `Ctrl+B` binding. `Ctrl+T` toggles the terminal from anywhere. (No
+visible tab strip yet — a titled display is coming.)
 
-| Key          | Action                                             |
-| ------------ | -------------------------------------------------- |
-| `Ctrl+B 1-9` | Switch to tab N (creates it on demand)             |
-| `Ctrl+B c`   | New tab in the next free slot                      |
-| `Ctrl+B ,`   | Rename the current tab                             |
-| `Ctrl+B r`   | Repaint the terminal (clears rare hidden-stream tearing) |
+| Key                            | Action                                            |
+| ------------------------------ | ------------------------------------------------- |
+| `Ctrl+B 1-9` (in normal mode)  | Switch to tab N (creates it on demand)            |
+| `Ctrl+B c` (in normal mode)    | New tab in the next free slot                     |
+| `Ctrl+B r` (in normal mode)    | Repaint the terminal (clears rare tearing)        |
+| `Ctrl+T`                       | Toggle the side terminal                          |
 
 ### Debug (nvim-dap)
 

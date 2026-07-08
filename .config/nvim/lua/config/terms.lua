@@ -1,11 +1,14 @@
--- tmux-window-style tabs for the vertical side terminal (native backend only).
+-- tmux-style tab switching for the vertical side terminal (native backend only).
 --
 -- One terminal occupies the side slot at a time; the others stay alive but
--- hidden, listed in a winbar tab strip across the top of the terminal window
--- (like tmux's window list). <C-b>{1-9} swaps which terminal fills the slot,
--- creating it on demand; <C-b>c opens the next free slot; <C-b>, renames the
--- current tab. This is only wired up when ide.terminal_backend == "native"
--- (see terminal.lua) — in tmux mode real tmux windows do this job instead.
+-- hidden. Switching is done from terminal-normal mode (enter it with <C-\><C-n>,
+-- or the <C-n> map): <C-b>{1-9} switches to (creating on demand) a terminal,
+-- <C-b>c opens the next free slot, <C-b>r repaints the visible terminal. <C-t>
+-- toggles the side slot from anywhere. Wired up only when
+-- ide.terminal_backend == "native" (see terminal.lua); in tmux mode real tmux
+-- windows do this job instead.
+--
+-- There's no visible tab strip yet — a titled display is the next step.
 
 local ide = require("config.ide")
 
@@ -14,14 +17,13 @@ local M = {}
 local BASE = 1 -- terminal 1 is the primary side terminal (<C-t>)
 local MAX = 9
 
-M.current = BASE -- count of the terminal currently shown
-M.names = {} -- optional display name per count (via rename)
+M.current = BASE -- id of the terminal currently shown
 
 local function tterm()
   return require("toggleterm.terminal")
 end
 
--- Our side terminals: vertical, counts 1..9, including hidden ones so a tab
+-- Our side terminals: vertical, ids 1..9, including hidden ones so a tab
 -- persists after you switch away from it (tmux-window semantics).
 local function managed()
   local out = {}
@@ -92,14 +94,14 @@ local function force_repaint(id)
   return true
 end
 
--- Show terminal `count`, creating it if it doesn't exist yet. Any other managed
+-- Show terminal `id`, creating it if it doesn't exist yet. Any other managed
 -- terminal occupying the slot is hidden (not killed) so it stays a tab.
-function M.show(count)
-  count = math.max(BASE, math.min(MAX, count))
-  local existing = tterm().get(count, true)
+function M.show(id)
+  id = math.max(BASE, math.min(MAX, id))
+  local existing = tterm().get(id, true)
 
   for _, t in ipairs(managed()) do
-    if t.id ~= count and t:is_open() then
+    if t.id ~= id and t:is_open() then
       t:close()
     end
   end
@@ -111,12 +113,11 @@ function M.show(count)
   else
     -- toggle() creates-or-shows using the global toggleterm config, so shell,
     -- on_open (winfixwidth, width, <C-k> passthrough) all apply.
-    require("toggleterm").toggle(count, ide.term_width(), nil, "vertical")
+    require("toggleterm").toggle(id, ide.term_width(), nil, "vertical")
   end
 
-  M.current = count
+  M.current = id
   vim.schedule(function()
-    M.refresh_winbar()
     vim.cmd("startinsert")
   end)
 end
@@ -157,69 +158,24 @@ function M.new()
   vim.notify("all " .. MAX .. " terminal slots in use", vim.log.levels.WARN)
 end
 
--- <C-b>,: rename the current tab.
-function M.rename()
-  local count = M.current or BASE
-  vim.ui.input({ prompt = "Rename terminal " .. count .. ": ", default = M.names[count] or "" }, function(name)
-    if name == nil then
-      return
-    end
-    M.names[count] = name ~= "" and name or nil
-    M.refresh_winbar()
-  end)
-end
-
--- The command running in a terminal's pty foreground (like tmux's automatic
--- window rename); the shell itself when nothing else is in the foreground.
-local function foreground_comm(id)
-  local pid, tpgid = term_procs(id)
-  if not pid then
-    return nil
-  end
-  local target = (tpgid and tpgid > 0) and tpgid or pid
-  local comm = read_file("/proc/" .. target .. "/comm")
-  return comm and (comm:gsub("%s+$", "")) or nil
-end
-
--- Manual rename wins; otherwise the live foreground process; otherwise "term".
-local function label(id)
-  local name = M.names[id] or foreground_comm(id) or "term"
-  return string.format(" %d:%s ", id, name)
-end
-
--- Winbar content: one clickable segment per tab, active one highlighted.
-function M.tabline()
-  local parts = {}
-  for _, t in ipairs(managed()) do
-    local hl = (t.id == M.current) and "%#TabLineSel#" or "%#TabLine#"
-    parts[#parts + 1] = string.format("%%%d@v:lua.__toggleterm_tab_click@%s%s%%X", t.id, hl, label(t.id))
-  end
-  return table.concat(parts) .. "%#TabLineFill#"
-end
-
--- Winbar tab strip disabled for now: it stole a pty row and destabilised
--- Claude Code's inline rendering (margin line + off-by-one on repaint). The tab
--- switching (<C-b>{1-9}) still works; there's just no visible strip. No-op kept
--- so callers don't need to change.
-function M.refresh_winbar() end
-
-_G.__toggleterm_tabline = M.tabline
-_G.__toggleterm_tab_click = function(minwid)
-  M.show(minwid)
-end
-
--- Install the tmux-style keymaps (native backend only). Called from terminal.lua.
-function M.setup_keymaps()
+-- Buffer-local tab keymaps for a terminal buffer (native backend). Normal-mode
+-- only: enter terminal-normal (<C-\><C-n>, or the <C-n> map) then press <C-b>N.
+-- Buffer-local so <C-b> keeps its default (page back) in every other buffer.
+function M.setup_buffer_keymaps(bufnr)
   local map = vim.keymap.set
   for i = BASE, MAX do
-    map({ "n", "t" }, "<C-b>" .. i, function()
+    map("n", "<C-b>" .. i, function()
       M.show(i)
-    end, { desc = "Terminal tab " .. i })
+    end, { buffer = bufnr, desc = "Terminal tab " .. i })
   end
-  map({ "n", "t" }, "<C-b>c", M.new, { desc = "New terminal tab" })
-  map({ "n", "t" }, "<C-b>,", M.rename, { desc = "Rename terminal tab" })
-  map({ "n", "t" }, "<C-b>r", M.repaint, { desc = "Repaint terminal (clear tearing)" })
-  map({ "n", "t" }, "<C-t>", M.toggle, { desc = "Toggle side terminal" })
+  map("n", "<C-b>c", M.new, { buffer = bufnr, desc = "New terminal tab" })
+  map("n", "<C-b>r", M.repaint, { buffer = bufnr, desc = "Repaint terminal" })
+end
+
+-- Global toggle so <C-t> summons/hides the side terminal from anywhere.
+-- Called once from terminal.lua.
+function M.setup_keymaps()
+  vim.keymap.set({ "n", "t" }, "<C-t>", M.toggle, { desc = "Toggle side terminal" })
 end
 
 return M
