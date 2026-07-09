@@ -75,7 +75,12 @@ return {
       })
 
       vim.keymap.set("n", "<leader>e", "<cmd>NvimTreeToggle<cr>", { desc = "Toggle explorer" })
-      vim.keymap.set("n", "<leader>v", "<cmd>NvimTreeFindFile<cr>", { desc = "Reveal file in explorer" })
+      -- focus=false reveals the file in the tree but keeps the cursor in the
+      -- editor -- this is normally just for context. (The :NvimTreeFindFile
+      -- command has no such option and always jumps to the tree.)
+      vim.keymap.set("n", "<leader>v", function()
+        require("nvim-tree.api").tree.find_file({ open = true, focus = false })
+      end, { desc = "Reveal file in explorer (keep focus)" })
 
       -- Link git status groups to semantic highlight groups so colours follow any theme.
       local function set_git_highlights()
