@@ -28,6 +28,9 @@ opt.splitbelow = true
 opt.ignorecase = true
 opt.smartcase = true
 
+opt.inccommand = "split" -- preview :s/ matches live, and list every changed line
+opt.confirm = true -- prompt to save on :q of a dirty buffer, rather than erroring
+
 opt.termguicolors = true
 opt.mouse = "a"
 
@@ -42,6 +45,15 @@ opt.updatetime = 250
 opt.timeoutlen = 300
 opt.showmode = false
 opt.cmdheight = 0
+
+-- Nvim ships virtual_text off by default, which leaves a diagnostic visible only
+-- as a gutter sign until <leader>d opens the float. Render the message inline.
+-- severity_sort so the end-of-line text belongs to the worst diagnostic on the
+-- line, not whichever server reported first.
+vim.diagnostic.config({
+  virtual_text = true,
+  severity_sort = true,
+})
 
 -- Fixed RPC socket for external tooling (an MCP server that reads buffers /
 -- diagnostics / review state), stable across restarts — unlike the per-instance
