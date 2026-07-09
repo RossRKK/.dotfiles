@@ -502,6 +502,12 @@ function M.setup_keymaps()
     tab_prefix,
     { desc = "Terminal prefix (<C-b>N tab / <C-b>c new / <C-b>. move / <C-b>[ copy)" }
   )
+  vim.keymap.set(
+    { "n", "t" },
+    "<C-t>",
+    tab_prefix,
+    { desc = "Terminal prefix (<C-t>N tab / <C-b>c new / <C-b>. move / <C-b>[ copy)" }
+  )
 end
 
 -- When a managed terminal's shell exits, free its slot and show another open tab
