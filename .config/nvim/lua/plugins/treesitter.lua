@@ -17,7 +17,14 @@ return {
         "helm", -- Go-template YAML; injects yaml + gotmpl highlighting
         "bash",
         "html", "css",
+        "gdscript", "gdshader", "godot_resource",
       }
+
+      -- Neovim detects .tscn/.tres as filetype "gdresource", but the parser is
+      -- named "godot_resource" and nvim-treesitter's main branch registers no
+      -- filetype->language mappings. Without this the pcall'd treesitter.start
+      -- below silently no-ops on scene and resource files.
+      vim.treesitter.language.register("godot_resource", "gdresource")
 
       -- main-branch install() builds parsers with the upstream `tree-sitter` CLI,
       -- which mason-tool-installer provisions. On a cold machine the CLI often

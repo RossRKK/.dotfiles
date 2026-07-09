@@ -36,6 +36,7 @@ return {
         "prettierd", -- js/ts/svelte/json/yaml/css/html/markdown
         "ruff", -- python (format + import sort)
         "shfmt", -- sh/bash
+        "gdtoolkit", -- gdscript (provides the gdformat bin)
       },
     },
   },
@@ -83,6 +84,13 @@ return {
         -- helm_ls shells out to yaml-language-server (already installed above)
         -- for the embedded YAML, finding it on mason's PATH.
         helm_ls = {},
+        -- Not in mason's ensure_installed above: the GDScript server *is* the
+        -- Godot editor, which hosts it on 127.0.0.1:6005 (override with
+        -- $GDScript_Port). lspconfig's lsp/gdscript.lua supplies the
+        -- vim.lsp.rpc.connect cmd and project.godot root marker. Opening a .gd
+        -- file with Godot closed logs a connection error and leaves the buffer
+        -- on treesitter highlighting alone -- that's expected, not a misconfig.
+        gdscript = {},
         lua_ls = {
           settings = {
             Lua = {
