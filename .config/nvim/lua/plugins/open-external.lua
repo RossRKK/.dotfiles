@@ -13,6 +13,8 @@
 
 local group = vim.api.nvim_create_augroup("open_external", { clear = true })
 
+-- Grouped by kind; stylua would otherwise put each extension on its own line.
+-- stylua: ignore
 local extensions = {
   "pdf",
   "doc", "docx", "odt", "rtf",

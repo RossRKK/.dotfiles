@@ -235,7 +235,7 @@ end
 
 --- Rebuild M.marked (tree decorator set) from live comments and drafts.
 ---@param root string
-local function rebuild_marked(root)
+function M.rebuild_marked(root)
   local marked = {}
   local nroot = vim.fs.normalize(root)
   for rel in pairs(M.by_path) do
@@ -251,7 +251,7 @@ end
 
 local function persist_drafts(root)
   save_drafts(root)
-  rebuild_marked(root)
+  M.rebuild_marked(root)
 end
 
 -- ---------------------------------------------------------------------------
@@ -266,7 +266,10 @@ local function resolve_pr(root)
   if branch == "" then
     return nil
   end
-  local prs = gh_json({ "pr", "list", "--head", branch, "--state", "open", "--json", "number,headRefOid,title" }, root)
+  local prs = gh_json(
+    { "pr", "list", "--head", branch, "--state", "open", "--json", "number,headRefOid,title" },
+    root
+  )
   if not prs or #prs == 0 then
     return nil
   end
@@ -322,6 +325,7 @@ local function resolved_comment_ids(root, number)
       }
     }
   ]]
+  -- stylua: ignore
   local data = gh_json({
     "api", "graphql",
     "-f", "query=" .. query,
@@ -329,7 +333,8 @@ local function resolved_comment_ids(root, number)
     "-f", "name=" .. name,
     "-F", "number=" .. number,
   }, root)
-  local threads = vim.tbl_get(data or {}, "data", "repository", "pullRequest", "reviewThreads", "nodes")
+  local threads =
+    vim.tbl_get(data or {}, "data", "repository", "pullRequest", "reviewThreads", "nodes")
   local resolved = {}
   for _, thread in ipairs(threads or {}) do
     if thread.isResolved then
@@ -509,8 +514,13 @@ local function render_buf(buf)
             { "▌ ", "ReviewCommentDraftSign" },
             { "@you (draft, unsent)", "ReviewCommentDraft" },
           })
-          for _, line in ipairs(vim.split((entry.d.body or ""):gsub("\r", ""), "\n", { plain = true })) do
-            table.insert(virt, { { "▌ ", "ReviewCommentDraftSign" }, { line, "ReviewCommentDraft" } })
+          for _, line in
+            ipairs(vim.split((entry.d.body or ""):gsub("\r", ""), "\n", { plain = true }))
+          do
+            table.insert(
+              virt,
+              { { "▌ ", "ReviewCommentDraftSign" }, { line, "ReviewCommentDraft" } }
+            )
           end
         else
           local c = entry.c
@@ -587,7 +597,7 @@ local function fetch_render()
     end
     resolve_names(root, logins)
 
-    rebuild_marked(root)
+    M.rebuild_marked(root)
     render_all()
   end)
 end
@@ -704,9 +714,13 @@ function M.reply()
         return
       end
       local obj = sh({
-        "gh", "api", "--method", "POST",
+        "gh",
+        "api",
+        "--method",
+        "POST",
         ("repos/:owner/:repo/pulls/%d/comments/%d/replies"):format(pr.number, target),
-        "-f", "body=" .. body,
+        "-f",
+        "body=" .. body,
       }, root)
       if obj.code == 0 then
         close()
@@ -742,32 +756,44 @@ function M.edit()
   end
 
   local function edit_draft(d)
-    open_input("Edit draft", vim.split(d.body:gsub("\r", ""), "\n", { plain = true }), function(body, close)
-      d.body = body
-      persist_drafts(root)
-      close()
-      vim.notify("review: draft updated")
-      render_all()
-    end)
+    open_input(
+      "Edit draft",
+      vim.split(d.body:gsub("\r", ""), "\n", { plain = true }),
+      function(body, close)
+        d.body = body
+        persist_drafts(root)
+        close()
+        vim.notify("review: draft updated")
+        render_all()
+      end
+    )
   end
 
   local function edit_live(c)
-    open_input("Edit comment", vim.split(c.body:gsub("\r", ""), "\n", { plain = true }), function(body, close)
-      run(function()
-        local obj = sh({
-          "gh", "api", "--method", "PATCH",
-          ("repos/:owner/:repo/pulls/comments/%d"):format(c.id),
-          "-f", "body=" .. body,
-        }, root)
-        if obj.code == 0 then
-          close()
-          vim.notify("review: comment updated")
-          fetch_render()
-        else
-          vim.notify("review: edit failed: " .. gh_error(obj), vim.log.levels.ERROR)
-        end
-      end)
-    end)
+    open_input(
+      "Edit comment",
+      vim.split(c.body:gsub("\r", ""), "\n", { plain = true }),
+      function(body, close)
+        run(function()
+          local obj = sh({
+            "gh",
+            "api",
+            "--method",
+            "PATCH",
+            ("repos/:owner/:repo/pulls/comments/%d"):format(c.id),
+            "-f",
+            "body=" .. body,
+          }, root)
+          if obj.code == 0 then
+            close()
+            vim.notify("review: comment updated")
+            fetch_render()
+          else
+            vim.notify("review: edit failed: " .. gh_error(obj), vim.log.levels.ERROR)
+          end
+        end)
+      end
+    )
   end
 
   run(function()
@@ -775,11 +801,16 @@ function M.edit()
     local login = resolve_viewer(root)
     local items = {}
     for _, d in ipairs(draft_hits) do
-      items[#items + 1] = { kind = "draft", d = d, label = "[draft] " .. (d.body:gsub("%s+", " ")):sub(1, 50) }
+      items[#items + 1] =
+        { kind = "draft", d = d, label = "[draft] " .. (d.body:gsub("%s+", " ")):sub(1, 50) }
     end
     for _, c in ipairs(M.by_path[rel] or {}) do
       if (c.line or c.original_line) == line and login and c.user.login == login then
-        items[#items + 1] = { kind = "live", c = c, label = "@" .. login .. " " .. (c.body:gsub("%s+", " ")):sub(1, 50) }
+        items[#items + 1] = {
+          kind = "live",
+          c = c,
+          label = "@" .. login .. " " .. (c.body:gsub("%s+", " ")):sub(1, 50),
+        }
       end
     end
 
@@ -868,9 +899,13 @@ function M.submit()
           payload.body = "LGTM" -- a bare approval shouldn't go out wordless
         end
         local obj = sh({
-          "gh", "api", "--method", "POST",
+          "gh",
+          "api",
+          "--method",
+          "POST",
           ("repos/:owner/:repo/pulls/%d/reviews"):format(pr.number),
-          "--input", "-",
+          "--input",
+          "-",
         }, root, vim.json.encode(payload))
 
         if obj.code == 0 then
@@ -955,11 +990,31 @@ function M.setup()
   vim.api.nvim_create_user_command("ReviewComment", function()
     M.comment(nil, vim.fn.line("."))
   end, { desc = "Draft a comment on the current line for the branch PR" })
-  vim.api.nvim_create_user_command("ReviewReply", M.reply, { desc = "Reply to the PR comment on this line" })
-  vim.api.nvim_create_user_command("ReviewEditComment", M.edit, { desc = "Edit your PR comment/draft on this line" })
-  vim.api.nvim_create_user_command("ReviewDiscardDraft", M.discard_draft, { desc = "Discard the draft on this line" })
-  vim.api.nvim_create_user_command("ReviewSubmit", M.submit, { desc = "Submit the drafted review to the PR" })
-  vim.api.nvim_create_user_command("ReviewCommentsRefresh", M.refresh, { desc = "Re-fetch PR comments" })
+  vim.api.nvim_create_user_command(
+    "ReviewReply",
+    M.reply,
+    { desc = "Reply to the PR comment on this line" }
+  )
+  vim.api.nvim_create_user_command(
+    "ReviewEditComment",
+    M.edit,
+    { desc = "Edit your PR comment/draft on this line" }
+  )
+  vim.api.nvim_create_user_command(
+    "ReviewDiscardDraft",
+    M.discard_draft,
+    { desc = "Discard the draft on this line" }
+  )
+  vim.api.nvim_create_user_command(
+    "ReviewSubmit",
+    M.submit,
+    { desc = "Submit the drafted review to the PR" }
+  )
+  vim.api.nvim_create_user_command(
+    "ReviewCommentsRefresh",
+    M.refresh,
+    { desc = "Re-fetch PR comments" }
+  )
 end
 
 return M

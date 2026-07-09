@@ -75,11 +75,7 @@ local function goto_ref(ref)
   --   * a name(...) wrapper, e.g. Claude Code's Update(<path>) / Read(<path>)
   --   * a git-diff a/ or b/ prefix (diffs render paths as a/<path> and b/<path>)
   --   * a leading ./ and any leftover trailing bracket
-  local bare = token
-    :gsub("^%w+%(", "")
-    :gsub("[%)%]]+$", "")
-    :gsub("^[ab]/", "")
-    :gsub("^%./", "")
+  local bare = token:gsub("^%w+%(", ""):gsub("[%)%]]+$", ""):gsub("^[ab]/", ""):gsub("^%./", "")
   local spellings = { token }
   if bare ~= token then
     table.insert(spellings, bare)
@@ -163,5 +159,9 @@ local function yank_file_path(with_position)
   vim.notify("yanked: " .. path)
 end
 
-map("n", "<leader>yp", function() yank_file_path(false) end, { desc = "Yank file path" })
-map("n", "<leader>yl", function() yank_file_path(true) end, { desc = "Yank file path:line:col" })
+map("n", "<leader>yp", function()
+  yank_file_path(false)
+end, { desc = "Yank file path" })
+map("n", "<leader>yl", function()
+  yank_file_path(true)
+end, { desc = "Yank file path:line:col" })

@@ -240,9 +240,8 @@ file under it is approved.
 
 ### Terminal
 
-Terminals run natively in nvim buffers (`native` backend) — full vim normal mode
-over real scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI
-munging). Escape hatch: `NVIM_TERM=tmux nvim .` runs the old tmux-in-nvim setup.
+Terminals run natively in nvim buffers — full vim normal mode over real
+scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI munging).
 
 | Key                    | Action                                                |
 | ---------------------- | ----------------------------------------------------- |
@@ -250,12 +249,12 @@ munging). Escape hatch: `NVIM_TERM=tmux nvim .` runs the old tmux-in-nvim setup.
 | `Ctrl+G`               | Toggle lazygit (works in normal & terminal mode)      |
 | `Ctrl+N` (in terminal) | Enter terminal-normal mode (then `gf` jumps to a ref) |
 
-### Terminal tabs (native backend)
+### Terminal tabs
 
 tmux-style tabs in the side terminal: one fills the slot, the others stay alive
 but hidden. Switch from **terminal-normal mode** (enter it with `Ctrl+N`), then
-press the `Ctrl+B` binding. `Ctrl+T` toggles the terminal from anywhere. (No
-visible tab strip yet — a titled display is coming.)
+press the `Ctrl+B` binding. `Ctrl+T` toggles the terminal from anywhere. A
+titled tab strip shows across the top when the side terminal is open.
 
 | Key                            | Action                                            |
 | ------------------------------ | ------------------------------------------------- |

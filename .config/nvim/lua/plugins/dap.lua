@@ -43,17 +43,17 @@ return {
         layouts = {
           {
             elements = {
-              { id = "scopes",      size = 0.4 },
+              { id = "scopes", size = 0.4 },
               { id = "breakpoints", size = 0.2 },
-              { id = "stacks",      size = 0.2 },
-              { id = "watches",     size = 0.2 },
+              { id = "stacks", size = 0.2 },
+              { id = "watches", size = 0.2 },
             },
             size = 40,
             position = "left",
           },
           {
             elements = {
-              { id = "repl",    size = 0.5 },
+              { id = "repl", size = 0.5 },
               { id = "console", size = 0.5 },
             },
             size = 12,
@@ -91,14 +91,14 @@ return {
           dap.continue() -- start via the filetype's launch config
         end
       end, { desc = "Debug: start / continue" })
-      map("n", "<F10>",      dap.step_over,         { desc = "Debug: step over" })
-      map("n", "<F11>",      dap.step_into,         { desc = "Debug: step into" })
-      map("n", "<F12>",      dap.step_out,          { desc = "Debug: step out" })
-      map("n", "<leader>b",  dap.toggle_breakpoint, { desc = "Toggle breakpoint" })
-      map("n", "<leader>B",  function()
+      map("n", "<F10>", dap.step_over, { desc = "Debug: step over" })
+      map("n", "<F11>", dap.step_into, { desc = "Debug: step into" })
+      map("n", "<F12>", dap.step_out, { desc = "Debug: step out" })
+      map("n", "<leader>b", dap.toggle_breakpoint, { desc = "Toggle breakpoint" })
+      map("n", "<leader>B", function()
         dap.set_breakpoint(vim.fn.input("Breakpoint condition: "))
       end, { desc = "Conditional breakpoint" })
-      map("n", "<leader>du", dapui.toggle,          { desc = "Toggle debug UI" })
+      map("n", "<leader>du", dapui.toggle, { desc = "Toggle debug UI" })
     end,
   },
 }

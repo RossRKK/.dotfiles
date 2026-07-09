@@ -53,7 +53,12 @@ return {
           -- default mappings
           api.config.mappings.default_on_attach(bufnr)
           -- single click to open files and folders
-          vim.keymap.set("n", "<LeftRelease>", api.node.open.edit, { buffer = bufnr, noremap = true })
+          vim.keymap.set(
+            "n",
+            "<LeftRelease>",
+            api.node.open.edit,
+            { buffer = bufnr, noremap = true }
+          )
           -- remove Ctrl+T binding so it reaches toggleterm
           vim.keymap.del("n", "<C-t>", { buffer = bufnr })
         end,
@@ -90,7 +95,11 @@ return {
         vim.api.nvim_set_hl(0, "NvimTreeGitMergeIcon", { link = "DiagnosticError" })
         -- Colour only the glyph on folders, not the folder name.
         for _, kind in ipairs({ "Dirty", "Staged", "Deleted", "Ignored", "Merge", "New", "Renamed" }) do
-          vim.api.nvim_set_hl(0, "NvimTreeGitFolder" .. kind .. "HL", { link = "NvimTreeFolderName" })
+          vim.api.nvim_set_hl(
+            0,
+            "NvimTreeGitFolder" .. kind .. "HL",
+            { link = "NvimTreeFolderName" }
+          )
         end
       end
       vim.api.nvim_create_autocmd("ColorScheme", { callback = set_git_highlights })
