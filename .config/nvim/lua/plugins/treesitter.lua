@@ -4,6 +4,8 @@ return {
     branch = "main", -- the rewrite; setup()/ensure_installed of the master API is gone
     build = ":TSUpdate",
     config = function()
+      -- Grouped by language family; stylua would put each on its own line.
+      -- stylua: ignore
       local parsers = {
         "lua", "vim", "vimdoc", "query",
         "python", "javascript", "typescript", "tsx",

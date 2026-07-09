@@ -12,28 +12,6 @@
 
 local M = {}
 
--- Backend for the side terminal / toggleterm.
---   "native" — run the shell (and Claude Code) directly in nvim's terminal
---              buffer. Gives 100% native-vim normal mode over the scrollback.
---              Default since nvim 0.12 fixed the Claude Code TUI munging
---              (DEC mode 2026 / synchronized output — see the munging memory).
---   "tmux"   — run tmux inside the terminal (the pre-0.12 setup). Escape hatch
---              if the native buffer ever misbehaves, and gives tmux-side pane
---              management back.
--- Flip the default by editing the fallback below; override for a single launch
--- without editing anything via `NVIM_TERM=tmux nvim .` (or NVIM_TERM=native).
-M.terminal_backend = vim.env.NVIM_TERM or "native"
-
-function M.use_tmux()
-  return M.terminal_backend == "tmux"
-end
-
--- Shell command toggleterm launches for the side terminal. nil = toggleterm's
--- default (vim.o.shell), i.e. a plain login shell in native mode.
-function M.term_shell()
-  return M.use_tmux() and "tmux new-session -A -s neovim" or nil
-end
-
 -- The side terminal never drops below 80 columns (enough for console output and
 -- Claude Code). If that crowds the code, toggle it off (<C-t>) and the buffer
 -- reclaims the whole remaining area.

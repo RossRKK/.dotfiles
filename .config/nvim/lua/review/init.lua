@@ -283,7 +283,9 @@ local function do_refresh(mygen)
   -- merge-result diff, so files the branch changed to content the default branch
   -- already has don't appear. Cached on the two shas, so it's free (no git) when
   -- neither HEAD nor the base has moved since the last refresh.
-  local committed = branch and base_sha and head_sha
+  local committed = branch
+    and base_sha
+    and head_sha
     and committed_changed(root, branch, base_sha, head_sha)
   if stale() then
     return
@@ -541,7 +543,13 @@ local function diff_base()
   if base then
     return base
   end
-  local default = vim.fn.systemlist({ "git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD" })[1]
+  local default = vim.fn.systemlist({
+    "git",
+    "symbolic-ref",
+    "--quiet",
+    "--short",
+    "refs/remotes/origin/HEAD",
+  })[1]
   return (default and default ~= "") and default or "origin/main"
 end
 
@@ -638,9 +646,17 @@ function M.setup()
 
   require("review.comments").setup()
 
-  vim.api.nvim_create_user_command("ReviewRefresh", M.refresh, { desc = "Recompute branch review status" })
+  vim.api.nvim_create_user_command(
+    "ReviewRefresh",
+    M.refresh,
+    { desc = "Recompute branch review status" }
+  )
   vim.api.nvim_create_user_command("ReviewToggle", M.toggle, { desc = "Toggle branch review mode" })
-  vim.api.nvim_create_user_command("ReviewDiff", M.toggle_diff, { desc = "Toggle inline diff vs review base" })
+  vim.api.nvim_create_user_command(
+    "ReviewDiff",
+    M.toggle_diff,
+    { desc = "Toggle inline diff vs review base" }
+  )
   vim.api.nvim_create_user_command("ReviewMark", function()
     M.mark("approved")
   end, { desc = "Mark file/folder under cursor approved" })

@@ -1,65 +1,124 @@
--- Tests for the review/ plugin's pure logic.
---
--- Dependency-free: run under headless Neovim, no plenary/busted needed.
---   nvim --headless -u NONE -l tests/review_spec.lua
--- (or `make test` from ~/.config/nvim). Exits non-zero on any failure, so it
--- drops straight into CI or a pre-push hook.
+-- Pure logic in review/init.lua: the triage rollup and the path lookups.
 
--- Make the config's lua/ importable regardless of the cwd nvim was launched in.
-vim.opt.runtimepath:append(vim.fn.expand("~/.config/nvim"))
-
-local passed, failed = 0, 0
-
----@param name string
----@param got any
----@param want any
-local function eq(name, got, want)
-  if got == want then
-    passed = passed + 1
-    print(("  ok   %s"):format(name))
-  else
-    failed = failed + 1
-    print(("  FAIL %s  (got %s, want %s)"):format(name, vim.inspect(got), vim.inspect(want)))
-  end
-end
-
--- ---------------------------------------------------------------------------
--- review.verdict(): the review event inferred from the triage state. The whole
--- batched-submit flow leans on this, so pin every branch of the reduction.
--- ---------------------------------------------------------------------------
+local assert = require("luassert")
 local review = require("review.init")
 
----@param state table<string, string> abs-path -> status
----@return string?
-local function verdict_of(state)
-  review.status_by_path = state
-  return review.verdict()
-end
+describe("review.verdict", function()
+  ---@param state table<string, string> abs-path -> status
+  local function verdict_of(state)
+    review.status_by_path = state
+    return review.verdict()
+  end
 
-print("review.verdict()")
-eq("no changes -> nil", verdict_of({}), nil)
-eq("all approved -> APPROVE", verdict_of({ a = "approved", b = "approved" }), "APPROVE")
-eq("lone rejection -> REQUEST_CHANGES", verdict_of({ a = "rejected" }), "REQUEST_CHANGES")
-eq("approved + rejected -> REQUEST_CHANGES", verdict_of({ a = "approved", b = "rejected" }), "REQUEST_CHANGES")
--- The mid-review property: while anything's still untriaged, a rejection does
--- NOT harden into a blocking verdict — an early submit goes out as COMMENT.
-eq("changed + rejected -> COMMENT (mid-review)", verdict_of({ a = "changed", b = "rejected" }), "COMMENT")
-eq("approved + changed -> COMMENT", verdict_of({ a = "approved", b = "changed" }), "COMMENT")
-eq("revised counts as pending -> COMMENT", verdict_of({ a = "revised" }), "COMMENT")
-eq("revised outranks rejection -> COMMENT", verdict_of({ a = "revised", b = "rejected" }), "COMMENT")
+  after_each(function()
+    review.status_by_path = {}
+  end)
 
--- ---------------------------------------------------------------------------
--- Module API smoke test: the comments module loads and exposes the surface the
--- keymaps/commands bind to. Guards against a require-time break or a rename.
--- ---------------------------------------------------------------------------
-print("review.comments API")
-local comments = require("review.comments")
-for _, fn in ipairs({ "comment", "reply", "edit", "discard_draft", "submit", "set_shown", "refresh", "has_comments" }) do
-  eq(("exposes %s()"):format(fn), type(comments[fn]), "function")
-end
+  it("is nil when nothing changed", function()
+    assert.is_nil(verdict_of({}))
+  end)
 
--- ---------------------------------------------------------------------------
-print(("\n%d passed, %d failed"):format(passed, failed))
-if failed > 0 then
-  os.exit(1)
-end
+  it("approves when every file is approved", function()
+    assert.equals("APPROVE", verdict_of({ a = "approved", b = "approved" }))
+  end)
+
+  it("requests changes on a lone rejection", function()
+    assert.equals("REQUEST_CHANGES", verdict_of({ a = "rejected" }))
+  end)
+
+  it("requests changes when a rejection sits among approvals", function()
+    assert.equals("REQUEST_CHANGES", verdict_of({ a = "approved", b = "rejected" }))
+  end)
+
+  -- The mid-review property: while anything is still untriaged, a rejection does
+  -- NOT harden into a blocking verdict -- an early submit goes out as COMMENT.
+  it("stays COMMENT while an untriaged file outranks a rejection", function()
+    assert.equals("COMMENT", verdict_of({ a = "changed", b = "rejected" }))
+  end)
+
+  it("stays COMMENT while an untriaged file sits among approvals", function()
+    assert.equals("COMMENT", verdict_of({ a = "approved", b = "changed" }))
+  end)
+
+  it("treats revised as pending", function()
+    assert.equals("COMMENT", verdict_of({ a = "revised" }))
+  end)
+
+  it("ranks revised above a rejection", function()
+    assert.equals("COMMENT", verdict_of({ a = "revised", b = "rejected" }))
+  end)
+end)
+
+describe("review.status", function()
+  before_each(function()
+    review.status_by_path = { ["/repo/a.lua"] = "approved" }
+  end)
+
+  after_each(function()
+    review.status_by_path = {}
+  end)
+
+  it("is nil for a nil path", function()
+    assert.is_nil(review.status(nil))
+  end)
+
+  it("is nil for an untracked path", function()
+    assert.is_nil(review.status("/repo/other.lua"))
+  end)
+
+  it("looks up a tracked path", function()
+    assert.equals("approved", review.status("/repo/a.lua"))
+  end)
+
+  -- Callers pass raw nvim-tree node paths, which are not normalized.
+  it("normalizes the path before looking it up", function()
+    assert.equals("approved", review.status("/repo/sub/../a.lua"))
+  end)
+end)
+
+describe("review.folder", function()
+  before_each(function()
+    review.folder_status = { ["/repo/src"] = "changed" }
+  end)
+
+  after_each(function()
+    review.folder_status = {}
+  end)
+
+  it("is nil for a nil path", function()
+    assert.is_nil(review.folder(nil))
+  end)
+
+  it("is nil for a directory with no rolled-up status", function()
+    assert.is_nil(review.folder("/repo/docs"))
+  end)
+
+  it("looks up a rolled-up directory", function()
+    assert.equals("changed", review.folder("/repo/src"))
+  end)
+
+  it("normalizes the path before looking it up", function()
+    assert.equals("changed", review.folder("/repo/docs/../src"))
+  end)
+end)
+
+describe("review.comments", function()
+  local comments = require("review.comments")
+
+  -- The keymaps and user commands bind straight to these; a rename or a
+  -- require-time break should fail here rather than at first keypress.
+  it("exposes the surface the keymaps bind to", function()
+    for _, fn in ipairs({
+      "comment",
+      "reply",
+      "edit",
+      "discard_draft",
+      "submit",
+      "set_shown",
+      "refresh",
+      "has_comments",
+    }) do
+      assert.equals("function", type(comments[fn]), fn .. "() is missing")
+    end
+  end)
+end)

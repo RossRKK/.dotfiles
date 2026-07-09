@@ -52,4 +52,3 @@ if vim.uv.fs_stat(rpc_socket) then
   os.remove(rpc_socket)
 end
 pcall(vim.fn.serverstart, rpc_socket)
-

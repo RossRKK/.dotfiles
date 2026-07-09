@@ -12,13 +12,9 @@ return {
             return ide.term_width()
           end
         end,
-        -- Native mode: config.terms owns <C-t> (toggles the current tab). tmux
-        -- mode keeps the plain toggleterm mapping.
-        open_mapping = ide.use_tmux() and [[<C-t>]] or nil,
         hide_numbers = true,
         shade_terminals = false,
         start_in_insert = true,
-        shell = ide.term_shell(),
         -- Applies to whichever terminal actually opens (incl. the <C-t> side
         -- terminal, which is created fresh from this global config).
         on_open = function(term)
@@ -31,31 +27,17 @@ return {
             -- The side terminal is full-height (nothing above it), so <C-k> nav
             -- is useless here; pass it through to the running app (e.g. Claude Code).
             vim.keymap.set("t", "<C-k>", "<C-k>", { buffer = term.bufnr })
-            -- tmux backend only: in normal mode <C-b> would otherwise be a no-op
-            -- nvim key. Send the tmux prefix (0x02) straight to the job and resume
-            -- terminal mode, so tmux shortcuts work without first pressing i to
-            -- re-enter the terminal. Useless in native mode (no inner tmux).
-            if ide.use_tmux() then
-              vim.keymap.set("n", "<C-b>", function()
-                vim.api.nvim_chan_send(vim.b.terminal_job_id, "\2")
-                vim.cmd("startinsert")
-              end, { buffer = term.bufnr, desc = "Send tmux prefix and resume terminal" })
-            end
-            -- Native mode needs nothing here: tab switching is the global <C-b>
-            -- prefix from config.terms.setup_keymaps.
           end
         end,
       })
 
-      -- Native mode: install the tmux-window-style tab keymaps (<C-b>{1-9}, etc).
-      if not ide.use_tmux() then
-        require("config.terms").setup_keymaps()
-        require("config.terms").setup_copymode()
-        require("config.terms").setup_exit()
-        -- Show the titled tab strip when the side terminal is in play (IDE mode).
-        if ide.is_ide_mode() then
-          require("config.terms").enable_tabline()
-        end
+      -- Tab keymaps for the side terminal (<C-b>{1-9}, etc).
+      require("config.terms").setup_keymaps()
+      require("config.terms").setup_copymode()
+      require("config.terms").setup_exit()
+      -- Show the titled tab strip when the side terminal is in play (IDE mode).
+      if ide.is_ide_mode() then
+        require("config.terms").enable_tabline()
       end
 
       -- IDE mode (opened a directory) auto-opens the side terminal, then hands
@@ -68,7 +50,9 @@ return {
             return
           end
           vim.schedule(function()
-            require("toggleterm").toggle(1, ide.term_width(), nil, "vertical")
+            -- Go through config.terms so slot 1 is registered as a tab.
+            -- insert = false because we hand focus straight back to the editor.
+            require("config.terms").show(1, { insert = false })
             vim.cmd("wincmd p")
             vim.cmd("stopinsert")
           end)
@@ -85,70 +69,6 @@ return {
         end,
       })
 
-      -- tmux backend only. Keep the terminal in terminal-mode through a mouse
-      -- drag-selection (tmux copy-mode) that strays over the split boundary. Per
-      -- :help terminal, a mouse event over another window drops the terminal from
-      -- terminal-mode into terminal-normal in place (no window switch) and nvim
-      -- starts its own visual selection there, killing the in-flight tmux
-      -- selection. Two parts:
-      --   1. In the terminal buffer's normal/visual mode, <LeftDrag>/<LeftRelease>
-      --      are no-ops, so a stray drag can't begin a visual selection. Terminal-
-      --      mode drags are untouched and still forward to tmux.
-      --   2. When a mouse (not a keyboard <C-\><C-n>) knocks us out of terminal-
-      --      mode, resume it immediately. The <LeftDrag> timestamp tells the two
-      --      apart, so keyboard normal-mode for gf/scrollback is preserved.
-      -- Off in native mode: config.terms owns copy-mode, and its snapshot buffer is
-      -- also filetype "toggleterm", so this would fight the snapshot's selection.
-      if ide.use_tmux() then
-        local drag_group = vim.api.nvim_create_augroup("terminal_drag_guard", { clear = true })
-        local last_drag_ms = 0
-        vim.on_key(function(key)
-          if #key >= 3 and vim.fn.keytrans(key) == "<LeftDrag>" then
-            last_drag_ms = vim.uv.now()
-          end
-        end, vim.api.nvim_create_namespace("terminal_drag_guard"))
-
-        local function nop_terminal_drag(buf)
-          for _, lhs in ipairs({ "<LeftDrag>", "<LeftRelease>" }) do
-            pcall(vim.keymap.set, { "n", "x" }, lhs, "<Nop>", { buffer = buf })
-          end
-        end
-        vim.api.nvim_create_autocmd("FileType", {
-          group = drag_group,
-          pattern = "toggleterm",
-          callback = function(args)
-            nop_terminal_drag(args.buf)
-          end,
-        })
-
-        vim.api.nvim_create_autocmd("TermLeave", {
-          group = drag_group,
-          callback = function()
-            local buf = vim.api.nvim_get_current_buf()
-            if vim.bo[buf].filetype ~= "toggleterm" then
-              return
-            end
-            -- A keyboard <C-\><C-n> has no recent drag: leave us in normal mode.
-            if vim.uv.now() - last_drag_ms > 300 then
-              return
-            end
-            vim.schedule(function()
-              local b = vim.api.nvim_get_current_buf()
-              if vim.bo[b].filetype ~= "toggleterm" then
-                return
-              end
-              local mode = vim.api.nvim_get_mode().mode
-              if mode ~= "t" then
-                if mode:match("[vV\022]") then
-                  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
-                end
-                vim.cmd("startinsert")
-              end
-            end)
-          end,
-        })
-      end
-
       -- Hold the vertical side terminal at its target width (even split of the
       -- post-explorer region, floored at 80). winfixwidth only blocks automatic
       -- equalization, not the explicit resizes nvim-tree does on open, so re-assert
@@ -164,7 +84,11 @@ return {
           for _, win in ipairs(vim.api.nvim_list_wins()) do
             local buf = vim.api.nvim_win_get_buf(win)
             local floating = vim.api.nvim_win_get_config(win).relative ~= ""
-            if vim.bo[buf].filetype == "toggleterm" and not floating and vim.api.nvim_win_get_width(win) ~= target then
+            if
+              vim.bo[buf].filetype == "toggleterm"
+              and not floating
+              and vim.api.nvim_win_get_width(win) ~= target
+            then
               vim.api.nvim_win_set_width(win, target)
             end
           end
@@ -193,7 +117,6 @@ return {
       vim.keymap.set({ "n", "t" }, "<C-g>", function()
         lazygit:toggle()
       end, { desc = "Open lazygit" })
-
     end,
   },
 }
