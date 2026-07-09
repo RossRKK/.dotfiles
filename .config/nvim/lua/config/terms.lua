@@ -81,11 +81,11 @@ end
 
 -- ===================== copy mode (frozen snapshot) =====================
 -- Live terminals yank the cursor to the bottom on every output frame, so you
--- can't read or scroll while output streams. Instead, whenever a managed
--- terminal enters terminal-normal mode we replace it in its window with a
--- frozen snapshot of its contents (an ordinary buffer) where normal/visual/
--- search/yank all work and nothing moves; entering insert mode in the snapshot
--- swaps the live terminal back. Driven entirely by ModeChanged (setup_copymode).
+-- can't read or scroll while output streams. Copy mode (entered deliberately
+-- with <C-b>[) replaces the terminal in its window with a frozen snapshot of
+-- its contents (an ordinary buffer) where normal/visual/search/yank all work
+-- and nothing moves; entering insert mode in the snapshot (i/a/q) swaps the
+-- live terminal back.
 
 local snap_of = {} -- terminal id -> snapshot bufnr
 local id_of_snap = {} -- snapshot bufnr -> terminal id
@@ -123,6 +123,15 @@ local function snapshot_buf(id)
 	snap_of[id] = b
 	id_of_snap[b] = id
 	return b
+end
+
+-- <C-b>[: deliberately enter copy mode on the focused terminal (or, if <C-b>
+-- was pressed from the editor, the open side terminal).
+function M.enter_copy_current()
+	local term = term_by_buf(vim.api.nvim_get_current_buf()) or open_managed()
+	if term then
+		M.enter_copy(term)
+	end
 end
 
 -- Swap the live terminal for its snapshot in its window (enter copy mode).
@@ -195,36 +204,13 @@ local function restore_all_copy()
 	end
 end
 
--- Wire the mode-driven swapping (native only). Called once from terminal.lua.
--- Window/buffer swaps are deferred with vim.schedule so they don't run inside
--- the (text-locked) ModeChanged callback.
+-- Wire copy mode's exit trigger (native only). Called once from terminal.lua.
+-- Entry is deliberate now (<C-b>[ -> enter_copy_current); the only mode-driven
+-- part left is leaving -- entering insert in the snapshot swaps the live
+-- terminal back. The vim.schedule keeps the swap out of the (text-locked)
+-- ModeChanged callback.
 function M.setup_copymode()
 	local grp = vim.api.nvim_create_augroup("TermCopyMode", { clear = true })
-	vim.api.nvim_create_autocmd("ModeChanged", {
-		group = grp,
-		pattern = "t:nt",
-		callback = function()
-			local buf = vim.api.nvim_get_current_buf()
-			local term = term_by_buf(buf)
-			if not term then
-				return
-			end
-			-- Only freeze into copy mode if focus is STILL on this terminal when the
-			-- deferred swap runs. A deliberate <C-\><C-n> or a mouse scroll/drag keeps
-			-- focus here; switching to another window (defocus) has moved it away by
-			-- then, so a plain defocus leaves the live terminal be.
-			local win = vim.api.nvim_get_current_win()
-			vim.schedule(function()
-				if
-					vim.api.nvim_win_is_valid(win)
-					and vim.api.nvim_get_current_win() == win
-					and vim.api.nvim_get_current_buf() == buf
-				then
-					M.enter_copy(term)
-				end
-			end)
-		end,
-	})
 	vim.api.nvim_create_autocmd("ModeChanged", {
 		group = grp,
 		pattern = "*:i",
@@ -447,9 +433,11 @@ function M.setup_keymaps()
 			M.show(tonumber(key))
 		elseif key == "c" then
 			M.new()
+		elseif key == "[" then
+			M.enter_copy_current()
 		end
 	end
-	vim.keymap.set({ "n", "t" }, "<C-b>", tab_prefix, { desc = "Terminal tab prefix (<C-b>N / <C-b>c)" })
+	vim.keymap.set({ "n", "t" }, "<C-b>", tab_prefix, { desc = "Terminal prefix (<C-b>N tab / <C-b>c new / <C-b>[ copy)" })
 end
 
 -- When a managed terminal's shell exits, drop that tab and show another open tab
