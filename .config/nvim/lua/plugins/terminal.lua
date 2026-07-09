@@ -75,16 +75,6 @@ return {
         end,
       })
 
-      -- Auto enter insert mode when focusing a terminal buffer
-      vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter" }, {
-        pattern = "term://*",
-        callback = function()
-          vim.schedule(function()
-            vim.cmd("startinsert")
-          end)
-        end,
-      })
-
       -- tmux backend only. Keep the terminal in terminal-mode through a mouse
       -- drag-selection (tmux copy-mode) that strays over the split boundary. Per
       -- :help terminal, a mouse event over another window drops the terminal from

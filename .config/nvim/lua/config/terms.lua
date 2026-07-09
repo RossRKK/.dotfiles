@@ -151,7 +151,8 @@ function M.enter_copy(term)
 	pcall(vim.cmd, "redrawtabline")
 end
 
--- Swap the snapshot for its live terminal and resume terminal mode.
+-- Swap the snapshot for its live terminal, landing in terminal-normal mode --
+-- the mode the terminal was in when copy mode took over. Press i to type.
 function M.exit_copy(id)
 	if not M.copymode[id] then
 		return
@@ -168,9 +169,8 @@ function M.exit_copy(id)
 	end
 	win = win or (term and term.window)
 	if term and win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(term.bufnr) then
-		-- Leave the snapshot's insert mode first: swapping buffers mid-insert lands
-		-- in terminal-normal and the startinsert below is a no-op (needing a second
-		-- press). Drop to normal, swap, then enter terminal mode cleanly.
+		-- If we arrived via the *:i autocmd (insert started in the snapshot), drop
+		-- that insert first so the swap lands cleanly in terminal-normal.
 		vim.cmd("stopinsert")
 		vim.api.nvim_win_set_buf(win, term.bufnr)
 		vim.api.nvim_set_current_win(win)
