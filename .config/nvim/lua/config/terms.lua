@@ -2,8 +2,10 @@
 --
 -- One terminal occupies the side slot at a time; the others stay alive but
 -- hidden. Switching is done from terminal-normal mode (enter it with <C-\><C-n>,
--- or the <C-n> map): <C-b>{1-9} switches to (creating on demand) a terminal and
--- <C-b>c opens the next free slot. <C-t> toggles the side slot from anywhere.
+-- or the <C-n> map): <C-b>{1-9} switches to (creating on demand) a terminal,
+-- <C-b>c opens the next free slot, and <C-b>.{1-9} renumbers the current
+-- terminal to another slot (tmux move-window). <C-t> toggles the side slot from
+-- anywhere.
 -- Wired up only when
 -- ide.terminal_backend == "native" (see terminal.lua); in tmux mode real tmux
 -- windows do this job instead.
@@ -22,6 +24,23 @@ M.copymode = {} -- id -> true while that terminal is showing a frozen snapshot
 
 local function tterm()
 	return require("toggleterm.terminal")
+end
+
+-- toggleterm's id->terminal map is a module-local with no setter, but get()
+-- closes over it, so we can reach the live table through that upvalue. get_all()
+-- reads each terminal's .id while get() indexes by table key, so a renumber has
+-- to re-key the table *and* set .id together or the two views desync.
+local function registry()
+	local get = tterm().get
+	for i = 1, math.huge do
+		local name, value = debug.getupvalue(get, i)
+		if not name then
+			return nil
+		end
+		if name == "terminals" then
+			return value
+		end
+	end
 end
 
 -- Our side terminals: vertical, ids 1..9, including hidden ones so a tab
@@ -281,6 +300,38 @@ function M.new()
 	vim.notify("all " .. MAX .. " terminal slots in use", vim.log.levels.WARN)
 end
 
+-- <C-b>.{1-9}: renumber the shown side terminal to `dest` (tmux move-window).
+-- If `dest` is occupied the two terminals swap ids so neither is clobbered;
+-- otherwise the source slot is freed. The shown window/buffer are untouched --
+-- only the id (hence tab label and switch key) changes.
+function M.move(dest)
+	restore_all_copy()
+	dest = math.max(BASE, math.min(MAX, dest))
+	local term = term_by_buf(vim.api.nvim_get_current_buf()) or open_managed()
+	if not term or term.id == dest then
+		return
+	end
+	local reg = registry()
+	if not reg then
+		vim.notify("couldn't reach toggleterm registry to renumber", vim.log.levels.ERROR)
+		return
+	end
+	local source = term.id
+	local occupant = reg[dest]
+	reg[dest] = term
+	term.id = dest
+	if occupant then
+		reg[source] = occupant
+		occupant.id = source
+	else
+		reg[source] = nil
+	end
+	M.current = dest
+	vim.schedule(function()
+		pcall(vim.cmd, "redrawtabline")
+	end)
+end
+
 local function truncate(s, n)
 	if vim.fn.strchars(s) > n then
 		return vim.fn.strcharpart(s, 0, n - 1) .. "…"
@@ -435,9 +486,15 @@ function M.setup_keymaps()
 			M.new()
 		elseif key == "[" then
 			M.enter_copy_current()
+		elseif key == "." then
+			-- tmux move-window: the next keystroke is the destination slot.
+			local ok2, dest = pcall(vim.fn.getcharstr)
+			if ok2 and dest:match("^[1-9]$") then
+				M.move(tonumber(dest))
+			end
 		end
 	end
-	vim.keymap.set({ "n", "t" }, "<C-b>", tab_prefix, { desc = "Terminal prefix (<C-b>N tab / <C-b>c new / <C-b>[ copy)" })
+	vim.keymap.set({ "n", "t" }, "<C-b>", tab_prefix, { desc = "Terminal prefix (<C-b>N tab / <C-b>c new / <C-b>. move / <C-b>[ copy)" })
 end
 
 -- When a managed terminal's shell exits, drop that tab and show another open tab
