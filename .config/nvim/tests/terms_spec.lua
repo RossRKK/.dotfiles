@@ -33,6 +33,11 @@ function Terminal:close()
   self.opened = false
 end
 
+function Terminal:shutdown()
+  self.opened = false
+  self.killed = true
+end
+
 --- A fresh config.terms with the toggleterm fake installed and no slot state.
 local function fresh_terms()
   package.loaded["toggleterm.terminal"] = { Terminal = Terminal }
@@ -207,6 +212,30 @@ describe("terms.move", function()
     terms.move(99)
     assert.same({ 9 }, slots_of(terms))
     assert.equals(9, terms.current)
+  end)
+end)
+
+describe("terms.kill", function()
+  local terms
+
+  before_each(function()
+    terms = fresh_terms()
+  end)
+
+  -- kill() shuts the terminal's shell down; freeing the slot is TermClose's job
+  -- (see terms.new "fills a hole"), so here we only assert the shutdown call.
+  it("shuts down the open terminal", function()
+    terms.show(1)
+    local term = terms.slots[1]
+
+    terms.kill()
+    assert.is_true(term.killed)
+    assert.is_false(term:is_open())
+  end)
+
+  it("does nothing when no terminal is open", function()
+    terms.kill()
+    assert.same({}, slots_of(terms))
   end)
 end)
 
