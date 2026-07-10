@@ -52,13 +52,20 @@ return {
           local api = require("nvim-tree.api")
           -- default mappings
           api.config.mappings.default_on_attach(bufnr)
-          -- single click to open files and folders
-          vim.keymap.set(
-            "n",
-            "<LeftRelease>",
-            api.node.open.edit,
-            { buffer = bufnr, noremap = true }
-          )
+          -- single click to open files and folders, but never navigate up a
+          -- level: clicking the root folder row normally changes the root to
+          -- the parent dir, which we never want.
+          local function click_open()
+            local node = api.tree.get_node_under_cursor()
+            if not node or node.name == ".." then
+              return
+            end
+            api.node.open.edit()
+          end
+          vim.keymap.set("n", "<LeftRelease>", click_open, { buffer = bufnr, noremap = true })
+          -- Double-click defaults to the raw open action, which on the ".." root
+          -- row navigates up a level -- guard it the same way.
+          vim.keymap.set("n", "<2-LeftMouse>", click_open, { buffer = bufnr, noremap = true })
           -- remove Ctrl+T binding so it reaches toggleterm
           vim.keymap.del("n", "<C-t>", { buffer = bufnr })
         end,
