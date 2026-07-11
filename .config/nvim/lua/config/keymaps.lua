@@ -30,11 +30,17 @@ map("n", "<S-l>", "<cmd>bnext<cr>", { desc = "Next buffer" })
 map("n", "<S-h>", "<cmd>bprevious<cr>", { desc = "Prev buffer" })
 map("n", "<leader>x", "<cmd>bp|bdelete #<cr>", { desc = "Close buffer" })
 
--- A window is a "main" editor window if it holds an ordinary file buffer — not
--- the terminal, the nvim-tree explorer, or another special/scratch buffer.
+-- A window is a "main" editor window only if it positively holds an ordinary,
+-- listed file buffer. This is an allowlist on purpose: anything else — the
+-- terminal, the nvim-tree explorer, and every floating/scratch menu (Lazy's
+-- update UI, help peeks, quickfix) — is not a target, without having to name it.
 local function is_editor_window(win)
+  -- Floating windows (Lazy, notifications, help peeks) are never editor targets.
+  if vim.api.nvim_win_get_config(win).relative ~= "" then
+    return false
+  end
   local buf = vim.api.nvim_win_get_buf(win)
-  return vim.bo[buf].buftype == "" and vim.bo[buf].filetype ~= "NvimTree"
+  return vim.bo[buf].buftype == "" and vim.bo[buf].buflisted
 end
 
 -- Ensure the current window is a main editor window before opening a file, so a
