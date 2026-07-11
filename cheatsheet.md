@@ -75,10 +75,19 @@ Folds follow the code structure; files open fully expanded.
 | `gd` | Go to definition                         |
 | `gi` | Go to implementation                     |
 | `gr` | Go to references                         |
-| `gf` | Open file under cursor (`path:line:col`; fuzzy-finder fallback) |
-| `Space+yp` | Yank current file path (reverse of `gf`) |
-| `Space+yl` | Yank current file `path:line:col` at cursor |
+| `gf` / `gF` | Native goto-file under cursor, opened in the **main window** — the *only* difference from the builtins. `gF` also jumps to a trailing line (`foo.rs:42`). Works from the terminal (enter terminal-normal mode with `Ctrl+N` first): jump to a path a program printed |
+| `Space+o` | Open the path in a register in the main window (`"a Space+o` for register a; bare = clipboard) |
+| `Space+yf` | Yank the open **file's** path (jumps back via `gf` / `Space+o`) |
+| `Space+yl` | Yank the open file's `path:line` at cursor |
 | `K`  | Hover docs                               |
+
+The file-path yanks (`Space+yf` / `Space+yl`) and `Space+o` are register-aware:
+prefix `"a` to target register a — e.g. `"a Space+yf` yanks a path into register
+a, then `"a Space+o` opens it. Bare (no prefix) uses the clipboard.
+
+To yank a path out of *buffer text* (a path printed in the terminal, a diff, a
+log) just use a native text object: `yiW` for a bare token, `yi(` for one
+wrapped like `Read(src/foo.rs)`.
 
 ### ] / [ — Next / prev
 
