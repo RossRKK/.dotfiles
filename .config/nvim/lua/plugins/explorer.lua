@@ -123,8 +123,13 @@ return {
           vim.cmd.cd(vim.fn.fnameescape(data.file))
           vim.cmd.enew() -- empty editor window
           pcall(vim.api.nvim_buf_delete, data.buf, { force = true }) -- drop the dir buffer
-          pcall(require("persistence").load) -- reopen this dir's files (no-op if none saved)
+          -- Capture the editor window now and restore into it explicitly: if
+          -- another window has stolen focus by the time load runs (e.g. Lazy's
+          -- update UI popped up on startup), persistence would otherwise :edit
+          -- the restored files into the wrong window.
           local editor = vim.api.nvim_get_current_win()
+          vim.api.nvim_set_current_win(editor)
+          pcall(require("persistence").load) -- reopen this dir's files (no-op if none saved)
           require("nvim-tree.api").tree.open()
           vim.api.nvim_set_current_win(editor) -- leave focus in the editor
         end,
