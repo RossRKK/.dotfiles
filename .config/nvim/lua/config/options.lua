@@ -46,12 +46,12 @@ opt.timeoutlen = 300
 opt.showmode = false
 opt.cmdheight = 0
 
--- Nvim ships virtual_text off by default, which leaves a diagnostic visible only
--- as a gutter sign until <leader>d opens the float. Render the message inline.
--- severity_sort so the end-of-line text belongs to the worst diagnostic on the
--- line, not whichever server reported first.
+-- Diagnostics stay as a gutter sign only; land on the line and <leader>d opens
+-- the float with the message. Inline virtual_text (even errors-only) was more
+-- noise than it was worth. severity_sort so the sign/float belong to the worst
+-- diagnostic on the line, not whichever server reported first.
 vim.diagnostic.config({
-  virtual_text = true,
+  virtual_text = false,
   severity_sort = true,
 })
 
