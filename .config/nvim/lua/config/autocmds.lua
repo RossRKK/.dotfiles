@@ -53,6 +53,17 @@ vim.api.nvim_create_autocmd("LspAttach", {
   end,
 })
 
+-- Don't continue the comment leader when opening a line with `o`/`O` from a
+-- comment -- opening a line below a comment almost always means "write code
+-- now", not "keep commenting". The `r` flag is left alone, so pressing Enter
+-- mid-comment in insert mode still continues it. Runs on FileType (pattern "*")
+-- so it lands after each ftplugin sets its own formatoptions.
+vim.api.nvim_create_autocmd("FileType", {
+  callback = function()
+    vim.opt_local.formatoptions:remove("o")
+  end,
+})
+
 -- autoread only reloads when nudged; check on focus/idle/buffer-switch.
 vim.api.nvim_create_autocmd(
   { "FocusGained", "BufEnter", "CursorHold", "CursorHoldI", "TermClose", "TermLeave" },
