@@ -3,9 +3,9 @@
 -- One terminal occupies the side slot at a time; the others stay alive but
 -- hidden. Switching is done from terminal-normal mode (enter it with <C-\><C-n>,
 -- or the <C-n> map): <C-b>{1-9} switches to (creating on demand) a terminal,
--- <C-b>c opens the next free slot, and <C-b>.{1-9} renumbers the current
--- terminal to another slot (tmux move-window). <C-t> toggles the side slot from
--- anywhere.
+-- <C-b>c opens the next free slot, <C-b>& kills the current terminal (tmux
+-- kill-window), and <C-b>.{1-9} renumbers the current terminal to another slot
+-- (tmux move-window). <C-t> toggles the side slot from anywhere.
 --
 -- Slots (1..9) are ours; toggleterm's own terminal ids are opaque and never
 -- shown or relied on. M.slots is the sole slot->Terminal mapping, so renumbering
@@ -316,6 +316,17 @@ function M.new()
   vim.notify("all " .. MAX .. " terminal slots in use", vim.log.levels.WARN)
 end
 
+-- <C-b>&: kill the current side terminal (tmux kill-window). Unlike <C-t>, which
+-- only hides the tab, this shuts the shell down; the TermClose handler
+-- (setup_exit) then frees the slot and shows another open tab if one remains.
+function M.kill()
+  restore_all_copy()
+  local _, term = current_target()
+  if term then
+    term:shutdown()
+  end
+end
+
 -- <C-b>.{1-9}: renumber the shown side terminal to `dest` (tmux move-window).
 -- If `dest` is occupied the two terminals swap slots so neither is clobbered;
 -- otherwise the source slot is freed. The shown window/buffer are untouched --
@@ -486,6 +497,8 @@ function M.setup_keymaps()
       M.show(tonumber(key))
     elseif key == "c" then
       M.new()
+    elseif key == "&" then
+      M.kill()
     elseif key == "[" then
       M.enter_copy_current()
     elseif key == "." then
@@ -500,7 +513,7 @@ function M.setup_keymaps()
     { "n", "t" },
     "<C-b>",
     tab_prefix,
-    { desc = "Terminal prefix (<C-b>N tab / <C-b>c new / <C-b>. move / <C-b>[ copy)" }
+    { desc = "Terminal prefix (<C-b>N tab / <C-b>c new / <C-b>& kill / <C-b>. move / <C-b>[ copy)" }
   )
 end
 
