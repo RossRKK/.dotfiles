@@ -2,7 +2,12 @@
 
 Personal Neovim config, tracked in the bare dotfiles repo at `~/.dotfiles`
 (work tree `$HOME`). Stage changes with `dotfiles add`, not plain `git add` —
-see `~/README.md`.
+the dotfiles workflow (bare-repo clone, the `dotfiles` alias) is documented in
+`~/README.md`.
+
+User-facing keymaps and features are documented in `~/cheatsheet.md` (a broader
+sheet also covering tmux and the dotfiles commands). **Keep it in sync:** when
+you add, remove, or rebind a mapping here, update the matching table there.
 
 ## Tests
 
@@ -65,3 +70,24 @@ hidden-but-alive tabs, `move-window`) natively.
   `lua-language-server`) and not just via the in-editor `lsp.lua` settings.
 - Comments explain *why*, and state constraints the code can't. Don't add
   comments describing code that used to be there.
+
+## Keymaps
+
+- **Don't shadow built-in commands.** Keys like `gf`/`gF` (goto file), `gp`/`gP`
+  (paste, cursor after), `gy`, `gq`, `gc` mean something in stock Vim; rebinding
+  them silently costs a real feature. Prefer an unused key or a `<leader>`
+  mapping. If overriding a builtin is genuinely worth it, the mapping should be a
+  strict superset of what it replaces, and the trade-off noted in a comment.
+- **Make custom commands feel native.** Follow Vim idioms rather than porting
+  another editor's model. Prefer register semantics over "the clipboard" (a
+  command that reads `v:register`, defaulting to the unnamed register, is more
+  Vim-ish — and more general — than one hardcoded to `+`); compose with motions
+  and text objects where it fits; mirror the naming and behaviour of the builtin
+  a command is analogous to.
+- **Only customise what Vim genuinely can't do — don't paper over internals
+  worth learning.** A mapping should exist for a real gap (usually layout /
+  window routing, which no amount of Vim fluency changes), not to replace a
+  native command. Example: `gf`/`gF` differ from the builtins *only* by opening
+  in the main window; resolution is still Vim's own (`<cfile>`, `findfile()`,
+  `path`/`suffixesadd`). Things with a native answer stay native — fuzzy finding
+  is `Ctrl-P`, extracting a path from text is `yi(`/`yiW`.
