@@ -19,6 +19,13 @@ return {
         "helm_ls",
       },
       automatic_installation = true,
+      -- rust_analyzer is installed in mason but owned/started by rustaceanvim
+      -- (see rust.lua). Without this exclude, mason-lspconfig's automatic_enable
+      -- would vim.lsp.enable() it too, attaching a second rust-analyzer to every
+      -- Rust buffer -- which shows up as doubled inlay hints (": String: String").
+      automatic_enable = {
+        exclude = { "rust_analyzer" },
+      },
     },
   },
   {
