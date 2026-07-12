@@ -57,18 +57,6 @@
 | `n` / `N` | Next / prev match      |
 | `Esc`     | Clear search highlight |
 
-### Folding (treesitter)
-
-Folds follow the code structure; files open fully expanded.
-
-| Key         | Action                                       |
-| ----------- | -------------------------------------------- |
-| `zM` / `zR` | Collapse to definitions / expand everything  |
-| `zm` / `zr` | Fold / unfold one more level                 |
-| `za`        | Toggle fold under cursor                     |
-| `zc` / `zo` | Close / open fold under cursor               |
-| `zj` / `zk` | Jump to next / prev fold                     |
-
 ### Splits & Buffers
 
 | Key                   | Action                                      |
@@ -277,12 +265,14 @@ but hidden. Switch from **terminal-normal mode** (enter it with `Ctrl+N`), then
 press the `Ctrl+B` binding. `Ctrl+T` toggles the terminal from anywhere. A
 titled tab strip shows across the top when the side terminal is open.
 
-| Key                            | Action                                            |
-| ------------------------------ | ------------------------------------------------- |
-| `Ctrl+B 1-9` (in normal mode)  | Switch to tab N (creates it on demand)            |
-| `Ctrl+B c` (in normal mode)    | New tab in the next free slot                     |
-| `Ctrl+B r` (in normal mode)    | Repaint the terminal (clears rare tearing)        |
-| `Ctrl+T`                       | Toggle the side terminal                          |
+| Key           | Action                                            |
+| ------------- | ------------------------------------------------- |
+| `Ctrl+B 1-9`  | Switch to tab N (creates it on demand)            |
+| `Ctrl+B c`    | New tab in the next free slot                     |
+| `Ctrl+B &`    | Kill the current tab                              |
+| `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
+| `Ctrl+B [`    | Enter copy / scrollback mode                      |
+| `Ctrl+T`      | Toggle the side terminal                          |
 
 ### Debug (nvim-dap)
 
@@ -306,7 +296,7 @@ titled tab strip shows across the top when the side terminal is open.
 | ----------------------- | ------------------------ |
 | `Ctrl+B c`              | New window               |
 | `Ctrl+B n` / `Ctrl+B p` | Next / prev window       |
-| `Ctrl+B 0-9`            | Jump to window by number |
+| `Ctrl+B 1-9`            | Jump to window by number |
 | `Ctrl+B ,`              | Rename window            |
 | `Ctrl+B &`              | Close window             |
 
