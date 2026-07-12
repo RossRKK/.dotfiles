@@ -148,18 +148,18 @@ Maps are buffer-local and only live while the file is conflicted.
 | `Space+c0`  | Keep **neither**           |
 | `]x` / `[x` | Next / prev conflict       |
 
-### Space+h — Git hunks (gitsigns)
+### Space+g — Git hunks (gitsigns)
 
 | Key        | Action                    |
 | ---------- | ------------------------- |
-| `Space+hd` | Diff current file vs HEAD |
-| `Space+hp` | Preview hunk              |
-| `Space+hs` | Stage hunk                |
-| `Space+hr` | Reset hunk                |
-| `Space+hb` | Blame current line (popup) |
-| `Space+hB` | Toggle inline blame       |
+| `Space+gd` | Toggle inline diff vs HEAD (in-buffer, no split) |
+| `Space+gp` | Preview hunk              |
+| `Space+gs` | Stage hunk                |
+| `Space+gr` | Reset hunk                |
+| `Space+gb` | Blame current line (popup) |
+| `Space+gB` | Toggle inline blame       |
 
-Inline blame (dimmed, at end of the current line) is on by default; `Space+hB`
+Inline blame (dimmed, at end of the current line) is on by default; `Space+gB`
 toggles it off/on.
 
 ### Space+r — Branch review mode
