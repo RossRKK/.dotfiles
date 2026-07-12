@@ -24,6 +24,23 @@ return {
         map("[h", function()
           gs.nav_hunk("prev")
         end, "Prev hunk")
+        -- Inline diff vs HEAD (deleted lines as virtual text, changed lines
+        -- highlighted word-level in the buffer) instead of a side-by-side split,
+        -- so the fixed window layout stays put. Toggle, since the overlay is
+        -- persistent. Same gitsigns machinery as review's <leader>rd, but against
+        -- HEAD (gitsigns' default base) rather than the review base.
+        map("<leader>gd", function()
+          gs.toggle_deleted()
+          gs.toggle_linehl()
+          gs.toggle_word_diff()
+        end, "Toggle inline diff vs HEAD")
+        map("<leader>gp", gs.preview_hunk, "Preview hunk")
+        map("<leader>gs", gs.stage_hunk, "Stage hunk")
+        map("<leader>gr", gs.reset_hunk, "Reset hunk")
+        map("<leader>gb", function()
+          gs.blame_line({ full = true })
+        end, "Blame line (popup)")
+        map("<leader>gB", gs.toggle_current_line_blame, "Toggle inline blame")
       end,
     },
   },
