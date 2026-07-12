@@ -130,13 +130,23 @@ wrapped like `Read(src/foo.rs)`.
 | `Space+e` | Toggle file explorer            |
 | `Space+v` | Reveal current file in explorer |
 
-### Space+g — Git
+### Merge conflicts (git-conflict.nvim)
 
-| Key        | Action                                          |
-| ---------- | ----------------------------------------------- |
-| `Space+gd` | Diffview: uncommitted changes                   |
-| `Space+gb` | Diffview: whole-branch diff (vs default branch) |
-| `Space+gh` | Diffview: current file history                  |
+Resolve conflicts **in place** in the current buffer — no 3-way diff splits, so
+the window layout never moves. The plugin highlights the ours/theirs regions and
+suppresses LSP diagnostics on the marker lines while a file is conflicted.
+Staging / committing lives in lazygit (`Ctrl+G`).
+
+Maps are buffer-local and only live while the file is conflicted.
+
+| Key         | Action                     |
+| ----------- | -------------------------- |
+| `Space+cc`  | Keep **this one** (side under cursor) |
+| `Space+co`  | Keep **ours** (HEAD)       |
+| `Space+ct`  | Keep **theirs** (incoming) |
+| `Space+cb`  | Keep **both**              |
+| `Space+c0`  | Keep **neither**           |
+| `]x` / `[x` | Next / prev conflict       |
 
 ### Space+h — Git hunks (gitsigns)
 
