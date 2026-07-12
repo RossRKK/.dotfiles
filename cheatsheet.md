@@ -37,6 +37,18 @@
 | `Space+rf`        | Reload file from disk                  |
 | `.`               | Repeat last change                     |
 
+### Surround (nvim-surround)
+
+| Key             | Action                                        |
+| --------------- | --------------------------------------------- |
+| `ysiw"`         | Wrap word in quotes                           |
+| `ysiw)` `ysiw}` | Wrap word in parens / braces (no inner space) |
+| `ysiw(` `ysiw{` | Wrap word in parens / braces (inner space)    |
+| `yss)`          | Wrap whole line in parens                     |
+| `S)` (visual)   | Wrap selection in parens                      |
+| `cs"'`          | Change surrounding `"` to `'`                 |
+| `ds"`           | Delete surrounding quotes                     |
+
 ### Search
 
 | Key       | Action                 |
