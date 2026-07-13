@@ -46,6 +46,16 @@ return {
       vim.keymap.set("n", "<leader>fg", builtin.live_grep, { desc = "Live grep" })
       vim.keymap.set("n", "<leader>fb", builtin.buffers, { desc = "Find buffers" })
       vim.keymap.set("n", "<leader>fh", builtin.help_tags, { desc = "Help tags" })
+      -- LSP symbol search (candidates are symbols, not text lines -- the VS Code
+      -- "Go to Symbol" analogue). fs: current file (like Ctrl+Shift+O); fw: whole
+      -- workspace, re-queried from the LSP on each keystroke (like Ctrl+T).
+      vim.keymap.set("n", "<leader>fs", builtin.lsp_document_symbols, { desc = "Document symbols" })
+      vim.keymap.set(
+        "n",
+        "<leader>fw",
+        builtin.lsp_dynamic_workspace_symbols,
+        { desc = "Workspace symbols" }
+      )
     end,
   },
 }

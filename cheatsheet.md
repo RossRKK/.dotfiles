@@ -103,7 +103,13 @@ wrapped like `Read(src/foo.rs)`.
 | `Ctrl+P`   | Find files               |
 | `Space+fg` | Live grep across project |
 | `Space+fb` | Find open buffers        |
+| `Space+fs` | Symbols in current file (LSP) |
+| `Space+fw` | Symbols across workspace (LSP, live) |
 | `Space+fh` | Help tags                |
+
+`Space+fs` / `Space+fw` search LSP *symbols* (functions, types, …) rather than
+text — the "Go to Symbol" analogues. `fw` re-queries the language server on each
+keystroke, so it needs an LSP attached (e.g. rust-analyzer on a `.rs` file).
 
 ### Space+c — Code
 
