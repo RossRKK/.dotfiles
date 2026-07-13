@@ -105,11 +105,62 @@ wrapped like `Read(src/foo.rs)`.
 | `Space+fb` | Find open buffers        |
 | `Space+fs` | Symbols in current file (LSP) |
 | `Space+fw` | Symbols across workspace (LSP, live) |
+| `Space+ft` | Find TODO / FIXME / … comments |
+| `Space+fr` | Project find **& replace** (grug-far) |
 | `Space+fh` | Help tags                |
 
 `Space+fs` / `Space+fw` search LSP *symbols* (functions, types, …) rather than
 text — the "Go to Symbol" analogues. `fw` re-queries the language server on each
 keystroke, so it needs an LSP attached (e.g. rust-analyzer on a `.rs` file).
+
+`Space+fr` opens a ripgrep search in an editable buffer: type a search + a
+replacement, preview matches, apply across the whole project (regex + capture
+groups supported).
+
+### Flash — jump anywhere
+
+| Key           | Action                                        |
+| ------------- | --------------------------------------------- |
+| `s{chars}`    | Jump to any visible match (labels appear; press the label) |
+| `S`           | Select by treesitter node (expand with repeats) |
+| `r` (op-pend) | "Remote" — e.g. `yr{jump}` yanks elsewhere without moving |
+| `f`/`t`/`/`   | Enhanced with jump labels automatically       |
+
+`s` shadows Vim's substitute — use `cl` (char) / `cc` (line) for that.
+
+### Space+t — Tests (neotest)
+
+| Key        | Action                       |
+| ---------- | ---------------------------- |
+| `Space+tr` | Run nearest test             |
+| `Space+tf` | Run all tests in the file    |
+| `Space+td` | Debug nearest test (via dap) |
+| `Space+tt` | Toggle the summary tree      |
+| `Space+to` | Show output of the last test |
+| `Space+tO` | Toggle the output panel      |
+| `Space+ts` | Stop a running test          |
+
+Pass/fail signs render in the gutter; driven by rust-analyzer runnables.
+
+### Space+l — Lists (Trouble)
+
+| Key        | Action                              |
+| ---------- | ----------------------------------- |
+| `Space+ld` | Workspace diagnostics               |
+| `Space+lD` | Current-buffer diagnostics          |
+| `Space+lr` | LSP references                      |
+| `Space+ls` | Document symbols                    |
+| `Space+ll` | LSP definitions / refs / impls      |
+| `Space+lq` | Quickfix list                       |
+| `Space+lt` | TODO comments                       |
+
+### Space+u — Undo tree
+
+| Key       | Action                                          |
+| --------- | ----------------------------------------------- |
+| `Space+u` | Toggle the undo-tree panel (branching history)  |
+
+Undo is persisted to disk (`undofile`), so the tree survives restarts.
 
 ### Space+c — Code
 
