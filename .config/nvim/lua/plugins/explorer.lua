@@ -33,7 +33,7 @@ return {
                 unmerged = "U",
                 renamed = "R",
                 deleted = "D",
-                ignored = "◌",
+                ignored = "",
               },
             },
           },
@@ -41,9 +41,14 @@ return {
         filters = {
           dotfiles = false,
         },
+        -- Watch the filesystem so the tree reflects external changes (moves,
+        -- deletes, new files) without a manual refresh.
+        filesystem_watchers = {
+          enable = true,
+        },
         git = {
           enable = true,
-          ignore = true,
+          ignore = false, -- show git-ignored files rather than hiding them
         },
         -- Don't let the tree take over the window when opening a directory; the
         -- VimEnter handler below places it as a side panel beside an editor window.
@@ -68,6 +73,17 @@ return {
           vim.keymap.set("n", "<2-LeftMouse>", click_open, { buffer = bufnr, noremap = true })
           -- remove Ctrl+T binding so it reaches toggleterm
           vim.keymap.del("n", "<C-t>", { buffer = bufnr })
+          -- Live grep the folder under the cursor: a directory node greps
+          -- itself, a file node greps its containing directory.
+          vim.keymap.set("n", "<leader>fg", function()
+            local node = api.tree.get_node_under_cursor()
+            if not node then
+              return
+            end
+            local dir = node.type == "directory" and node.absolute_path
+              or vim.fn.fnamemodify(node.absolute_path, ":h")
+            require("telescope.builtin").live_grep({ search_dirs = { dir } })
+          end, { buffer = bufnr, desc = "Live grep in folder under cursor" })
         end,
         actions = {
           open_file = {
