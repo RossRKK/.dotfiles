@@ -46,6 +46,10 @@ opt.timeoutlen = 300
 opt.showmode = false
 opt.cmdheight = 0
 
+-- Persist undo history to disk so it survives closing a file (and powers the
+-- undotree plugin across sessions). Undo files live under stdpath("state")/undo.
+opt.undofile = true
+
 -- Diagnostics stay as a gutter sign only; land on the line and <leader>d opens
 -- the float with the message. Inline virtual_text (even errors-only) was more
 -- noise than it was worth. severity_sort so the sign/float belong to the worst
