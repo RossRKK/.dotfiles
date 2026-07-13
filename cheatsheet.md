@@ -101,7 +101,8 @@ wrapped like `Read(src/foo.rs)`.
 | Key        | Action                   |
 | ---------- | ------------------------ |
 | `Ctrl+P`   | Find files               |
-| `Space+fg` | Live grep across project |
+| `Space+fg` | Live grep across project (in the explorer: grep the folder under the cursor) |
+| `Space+fd` | Live grep the current file's directory |
 | `Space+fb` | Find open buffers        |
 | `Space+fh` | Help tags                |
 
@@ -227,7 +228,10 @@ immediately.
 | `gy`    | Copy absolute path        |
 | `a`     | Create file               |
 | `d`     | Delete file               |
-| `r`     | Rename file               |
+| `r`     | Rename file (basename only) |
+| `u`     | Rename with full path (edit the dir to move a file) |
+| `x` / `p` | Cut / paste (move a file between folders) |
+| `Space+fg` | Live grep the folder under the cursor |
 
 ### Explorer git status glyphs
 
@@ -239,7 +243,8 @@ immediately.
 | `D`   | Deleted             |
 | `R`   | Renamed             |
 | `U`   | Unmerged (conflict) |
-| `◌`   | Ignored             |
+
+Git-ignored files are shown greyed with no glyph (they're no longer hidden).
 
 ### Explorer review indicators
 
