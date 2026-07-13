@@ -20,6 +20,24 @@ return {
     },
     lazy = false, -- IDE mode auto-opens it at VimEnter (below)
     config = function()
+      -- Copy a tree node's path to the system clipboard (and the unnamed register
+      -- so it also pastes with `p`). `modify` is a :h filename-modifiers spec:
+      -- ":." for cwd-relative, "" for absolute, ":t" for the bare filename.
+      -- neo-tree ships no path-copy command, so these are custom mappings; `y`
+      -- itself stays neo-tree's file-copy-to-clipboard.
+      local function copy_path(modify)
+        return function(state)
+          local node = state.tree:get_node()
+          if not node or not node.path then
+            return
+          end
+          local path = modify == "" and node.path or vim.fn.fnamemodify(node.path, modify)
+          vim.fn.setreg("+", path)
+          vim.fn.setreg('"', path)
+          vim.notify("Copied: " .. path)
+        end
+      end
+
       require("neo-tree").setup({
         sources = { "filesystem", "document_symbols" },
         -- Keep focus in the editor when neo-tree closes a window, and don't let
@@ -51,6 +69,10 @@ return {
             -- Single left-click opens files and toggles folders, matching the old
             -- nvim-tree behaviour. Double-click also opens (neo-tree default).
             ["<LeftRelease>"] = "open",
+            -- Copy the node's path (y stays neo-tree's file copy): gy relative,
+            -- gY absolute -- a natural pair.
+            ["gy"] = copy_path(":."),
+            ["gY"] = copy_path(""),
           },
         },
         filesystem = {
