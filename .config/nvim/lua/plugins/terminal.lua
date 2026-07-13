@@ -71,7 +71,7 @@ return {
 
       -- Hold the vertical side terminal at its target width (even split of the
       -- post-explorer region, floored at 80). winfixwidth only blocks automatic
-      -- equalization, not the explicit resizes nvim-tree does on open, so re-assert
+      -- equalization, not the explicit resizes the explorer does on open, so re-assert
       -- the width whenever the layout changes (tree toggled, window resized, etc.).
       local enforcing_term_width = false
       vim.api.nvim_create_autocmd({ "WinResized", "VimResized" }, {

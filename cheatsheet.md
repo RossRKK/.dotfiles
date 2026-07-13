@@ -127,7 +127,7 @@ wrapped like `Read(src/foo.rs)`.
 
 | Key       | Action                          |
 | --------- | ------------------------------- |
-| `Space+e` | Toggle file explorer            |
+| `Space+e` | Toggle explorer + outline       |
 | `Space+v` | Reveal current file in explorer |
 
 ### Merge conflicts (git-conflict.nvim)
@@ -217,17 +217,22 @@ sends even when empty, `q` cancels); a bare approval with no summary defaults to
 fresh batch. Replies and edits to already-posted comments still go out
 immediately.
 
-### File explorer (nvim-tree)
+### File explorer (neo-tree)
 
-| Key     | Action                    |
-| ------- | ------------------------- |
-| `Enter` | Open file / expand folder |
-| `y`     | Copy filename             |
-| `Y`     | Copy relative path        |
-| `gy`    | Copy absolute path        |
-| `a`     | Create file               |
-| `d`     | Delete file               |
-| `r`     | Rename file               |
+| Key       | Action                    |
+| --------- | ------------------------- |
+| `Enter` / click | Open file / expand folder |
+| `y`       | Copy filename             |
+| `Y`       | Copy relative path        |
+| `a`       | Create file               |
+| `d`       | Delete file               |
+| `r`       | Rename file               |
+| `H`       | Toggle hidden / gitignored |
+| `?`       | Show all explorer mappings |
+
+The left column stacks two neo-tree windows: the file tree on top and a symbols
+outline (`document_symbols`) below it — a live, LSP-driven tree of the focused
+file's functions / types you can jump through. `Space+e` toggles both together.
 
 ### Explorer git status glyphs
 

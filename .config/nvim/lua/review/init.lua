@@ -6,8 +6,8 @@
 -- — is not flagged. Two surfaces consume this:
 --   * gitsigns, based on the default-branch tip so its sign-column marks show the
 --     lines that differ from what's already there (see lua/plugins/git.lua).
---   * a custom nvim-tree decorator that colours changed files in the explorer
---     (see lua/review/decorator.lua).
+--   * the file explorer, which colours changed files via a renderer component
+--     behind review/adapter (see review/adapter/neotree.lua).
 --
 -- The file list combines the merge-result diff (committed branch work) with your
 -- uncommitted changes and untracked files, so you can review before committing.
@@ -448,15 +448,10 @@ end
 --- the explorer, otherwise the current buffer's file. nil if neither applies.
 ---@return string?
 local function target_path()
-  if vim.bo.filetype == "NvimTree" then
-    local ok, api = pcall(require, "nvim-tree.api")
-    if ok then
-      local node = api.tree.get_node_under_cursor()
-      if node and node.absolute_path then
-        return node.absolute_path
-      end
-    end
-    return nil
+  -- In the explorer, act on the node under the cursor; elsewhere, the buffer.
+  local node = require("review.adapter").cursor_path()
+  if node then
+    return node
   end
   local name = vim.api.nvim_buf_get_name(0)
   return name ~= "" and name or nil
@@ -583,12 +578,9 @@ function M.toggle_diff()
   end
 end
 
---- Re-render the explorer so the decorator picks up new status.
+--- Re-render the explorer so its review component picks up new status.
 function M.redraw_tree()
-  local ok, api = pcall(require, "nvim-tree.api")
-  if ok and api.tree.is_visible() then
-    api.tree.reload()
-  end
+  require("review.adapter").redraw()
 end
 
 function M.setup()

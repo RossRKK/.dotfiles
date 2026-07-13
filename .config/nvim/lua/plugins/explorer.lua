@@ -1,113 +1,186 @@
+-- File explorer (neo-tree) + a symbols outline, sharing the left column.
+--
+-- Two neo-tree sources are used: `filesystem` (the tree) and `document_symbols`
+-- (an outline of the focused file, driven by the LSP's documentSymbol request).
+-- The branch-review UI paints its triage glyphs on the filesystem tree via a
+-- renderer component behind review/adapter; see lua/review/.
+--
+-- Window routing (which window a file opens into, the side-terminal geometry) is
+-- shared with config/ide.lua and config/terms.lua, which key off the "neo-tree"
+-- filetype -- keep those in sync if this moves off neo-tree.
+
 return {
   {
-    "nvim-tree/nvim-tree.lua",
-    dependencies = { "nvim-tree/nvim-web-devicons" },
+    "nvim-neo-tree/neo-tree.nvim",
+    branch = "v3.x",
+    dependencies = {
+      "nvim-lua/plenary.nvim",
+      "nvim-tree/nvim-web-devicons",
+      "MunifTanjim/nui.nvim",
+    },
+    lazy = false, -- IDE mode auto-opens it at VimEnter (below)
     config = function()
-      require("nvim-tree").setup({
-        view = {
+      require("neo-tree").setup({
+        sources = { "filesystem", "document_symbols" },
+        -- Keep focus in the editor when neo-tree closes a window, and don't let
+        -- opening a directory hijack the current window (the VimEnter handler
+        -- below places the tree as a side panel beside a real editor window).
+        open_files_do_not_replace_types = { "terminal", "toggleterm", "trouble", "qf" },
+        enable_git_status = true,
+        default_component_configs = {
+          git_status = {
+            symbols = {
+              untracked = "?",
+              staged = "✓",
+              unstaged = "M",
+              unmerged = "U",
+              renamed = "R",
+              deleted = "D",
+              ignored = "◌",
+              -- Suppress the added/modified word-glyphs neo-tree also shows; the
+              -- staged/unstaged marks above already carry the status.
+              added = "",
+              modified = "",
+            },
+          },
+        },
+        window = {
+          position = "left",
           width = 35,
-          side = "left",
-        },
-        renderer = {
-          group_empty = true,
-          highlight_git = "all", -- colour both the git icon and the filename
-          -- Append the branch-review decorator after the builtins so its
-          -- ●/✓ indicators sit at the end of the row.
-          decorators = {
-            "Git",
-            "Open",
-            "Hidden",
-            "Modified",
-            "Bookmark",
-            "Diagnostics",
-            "Copied",
-            require("review.decorator"),
-            "Cut",
+          mappings = {
+            -- Single left-click opens files and toggles folders, matching the old
+            -- nvim-tree behaviour. Double-click also opens (neo-tree default).
+            ["<LeftRelease>"] = "open",
           },
-          icons = {
-            glyphs = {
-              git = {
-                untracked = "?",
-                staged = "✓",
-                unstaged = "M",
-                unmerged = "U",
-                renamed = "R",
-                deleted = "D",
-                ignored = "◌",
+        },
+        filesystem = {
+          follow_current_file = { enabled = true },
+          -- Don't take over the window when nvim opens on a directory; the
+          -- VimEnter handler below arranges the panel explicitly.
+          hijack_netrw_behavior = "disabled",
+          filtered_items = {
+            visible = true, -- show dotfiles and gitignored, just dimmed
+            hide_dotfiles = false,
+            hide_gitignored = false,
+          },
+          -- neo-tree resolves components per source, so the branch-review glyph
+          -- component is registered on filesystem (not globally) and referenced
+          -- from this source's renderers below -- document_symbols keeps its own.
+          components = {
+            review_status = require("review.adapter").status_component,
+          },
+          renderers = {
+            -- Default filesystem renderers with `review_status` inserted just
+            -- before the name, so the triage glyph sits at the front of the row.
+            directory = {
+              { "indent" },
+              { "icon" },
+              { "current_filter" },
+              {
+                "container",
+                content = {
+                  { "review_status", zindex = 10 },
+                  { "name", zindex = 10 },
+                  { "clipboard", zindex = 10 },
+                  { "diagnostics", errors_only = true, zindex = 20, align = "right", hide_when_expanded = true },
+                  { "git_status", zindex = 10, align = "right", hide_when_expanded = true },
+                },
+              },
+            },
+            file = {
+              { "indent" },
+              { "icon" },
+              {
+                "container",
+                content = {
+                  { "review_status", zindex = 10 },
+                  { "name", zindex = 10 },
+                  { "clipboard", zindex = 10 },
+                  { "bufnr", zindex = 10 },
+                  { "modified", zindex = 20, align = "right" },
+                  { "diagnostics", zindex = 20, align = "right" },
+                  { "git_status", zindex = 10, align = "right" },
+                },
               },
             },
           },
         },
-        filters = {
-          dotfiles = false,
-        },
-        git = {
-          enable = true,
-          ignore = true,
-        },
-        -- Don't let the tree take over the window when opening a directory; the
-        -- VimEnter handler below places it as a side panel beside an editor window.
-        hijack_directories = { enable = false },
-        on_attach = function(bufnr)
-          local api = require("nvim-tree.api")
-          -- default mappings
-          api.config.mappings.default_on_attach(bufnr)
-          -- single click to open files and folders, but never navigate up a
-          -- level: clicking the root folder row normally changes the root to
-          -- the parent dir, which we never want.
-          local function click_open()
-            local node = api.tree.get_node_under_cursor()
-            if not node or node.name == ".." then
-              return
-            end
-            api.node.open.edit()
-          end
-          vim.keymap.set("n", "<LeftRelease>", click_open, { buffer = bufnr, noremap = true })
-          -- Double-click defaults to the raw open action, which on the ".." root
-          -- row navigates up a level -- guard it the same way.
-          vim.keymap.set("n", "<2-LeftMouse>", click_open, { buffer = bufnr, noremap = true })
-          -- remove Ctrl+T binding so it reaches toggleterm
-          vim.keymap.del("n", "<C-t>", { buffer = bufnr })
-        end,
-        actions = {
-          open_file = {
-            quit_on_open = false,
-            -- Never open files into the terminal window (which forces a split under it,
-            -- inheriting the terminal's width). Excluding it sends files to a real editor
-            -- window, or the picker if several are open.
-            window_picker = {
-              enable = true,
-              exclude = {
-                filetype = { "toggleterm" },
-                buftype = { "terminal" },
-              },
-            },
-          },
+        document_symbols = {
+          follow_cursor = true,
         },
       })
 
-      vim.keymap.set("n", "<leader>e", "<cmd>NvimTreeToggle<cr>", { desc = "Toggle explorer" })
-      -- focus=false reveals the file in the tree but keeps the cursor in the
-      -- editor -- this is normally just for context. (The :NvimTreeFindFile
-      -- command has no such option and always jumps to the tree.)
-      vim.keymap.set("n", "<leader>v", function()
-        require("nvim-tree.api").tree.find_file({ open = true, focus = false })
-      end, { desc = "Reveal file in explorer (keep focus)" })
+      -- The left column stacks two neo-tree windows: the file tree on top, the
+      -- symbols outline below it. neo-tree won't stack two sources in one managed
+      -- window (a second source at the same position just replaces the first), so
+      -- the outline opens in a manual split under the tree via position="current".
+      local OUTLINE_HEIGHT = 15
 
-      -- Link git status groups to semantic highlight groups so colours follow any theme.
-      local function set_git_highlights()
-        vim.api.nvim_set_hl(0, "NvimTreeGitDirtyIcon", { link = "DiagnosticWarn" })
-        vim.api.nvim_set_hl(0, "NvimTreeGitNewIcon", { link = "Added" })
-        vim.api.nvim_set_hl(0, "NvimTreeGitDeletedIcon", { link = "Removed" })
-        vim.api.nvim_set_hl(0, "NvimTreeGitMergeIcon", { link = "DiagnosticError" })
-        -- Colour only the glyph on folders, not the folder name.
-        for _, kind in ipairs({ "Dirty", "Staged", "Deleted", "Ignored", "Merge", "New", "Renamed" }) do
-          vim.api.nvim_set_hl(
-            0,
-            "NvimTreeGitFolder" .. kind .. "HL",
-            { link = "NvimTreeFolderName" }
-          )
+      -- The window in this tab showing neo-tree `source`, or nil.
+      local function neotree_win(source)
+        for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+          local buf = vim.api.nvim_win_get_buf(win)
+          local ok, src = pcall(vim.api.nvim_buf_get_var, buf, "neo_tree_source")
+          if ok and src == source then
+            return win
+          end
         end
+      end
+
+      -- Open the file tree in the left column with the outline stacked beneath it,
+      -- leaving focus wherever it started (so it can auto-open without stealing it).
+      local function open_sidebar()
+        local start_win = vim.api.nvim_get_current_win()
+        vim.cmd("Neotree filesystem show left")
+        local fs = neotree_win("filesystem")
+        if fs and not neotree_win("document_symbols") then
+          vim.api.nvim_set_current_win(fs)
+          -- `new`, not `split`: a plain empty split, so the window's filetype is
+          -- not "neo-tree". position="current" is overridden back to the managed
+          -- left window when invoked from inside a neo-tree window (a second left
+          -- tree, the "two explorers" bug), so the outline needs a plain host.
+          vim.cmd("belowright new")
+          vim.cmd("Neotree document_symbols current") -- fill it with the outline
+          vim.api.nvim_win_set_height(0, OUTLINE_HEIGHT)
+          vim.wo.winfixheight = true -- don't let layout changes reflow the outline
+        end
+        if vim.api.nvim_win_is_valid(start_win) then
+          vim.api.nvim_set_current_win(start_win)
+        end
+      end
+
+      -- Close every neo-tree window in the tab (both the tree and the outline; the
+      -- outline lives in a plain split, so :Neotree close alone wouldn't get it).
+      local function close_sidebar()
+        for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+          local buf = vim.api.nvim_win_get_buf(win)
+          if pcall(vim.api.nvim_buf_get_var, buf, "neo_tree_source") then
+            pcall(vim.api.nvim_win_close, win, false)
+          end
+        end
+      end
+
+      local function toggle_sidebar()
+        if neotree_win("filesystem") or neotree_win("document_symbols") then
+          close_sidebar()
+        else
+          open_sidebar()
+        end
+      end
+
+      vim.keymap.set("n", "<leader>e", toggle_sidebar, { desc = "Toggle explorer + outline" })
+      vim.keymap.set("n", "<leader>v", "<cmd>Neotree filesystem reveal left reveal_force_cwd<cr>", {
+        desc = "Reveal file in explorer",
+      })
+
+      -- Link neo-tree's git-status highlight groups to semantic groups so the
+      -- colours follow any theme.
+      local function set_git_highlights()
+        vim.api.nvim_set_hl(0, "NeoTreeGitModified", { link = "DiagnosticWarn" })
+        vim.api.nvim_set_hl(0, "NeoTreeGitUntracked", { link = "Added" })
+        vim.api.nvim_set_hl(0, "NeoTreeGitAdded", { link = "Added" })
+        vim.api.nvim_set_hl(0, "NeoTreeGitDeleted", { link = "Removed" })
+        vim.api.nvim_set_hl(0, "NeoTreeGitConflict", { link = "DiagnosticError" })
       end
       vim.api.nvim_create_autocmd("ColorScheme", { callback = set_git_highlights })
       set_git_highlights()
@@ -130,7 +203,7 @@ return {
           local editor = vim.api.nvim_get_current_win()
           vim.api.nvim_set_current_win(editor)
           pcall(require("persistence").load) -- reopen this dir's files (no-op if none saved)
-          require("nvim-tree.api").tree.open()
+          open_sidebar() -- tree + outline stacked in the left column, focus kept here
           vim.api.nvim_set_current_win(editor) -- leave focus in the editor
         end,
       })
