@@ -404,7 +404,7 @@ end
 -- Name of the file in the main editor window (relative to cwd).
 local function editor_bufname()
   local function is_editor(b)
-    return vim.bo[b].buftype == "" and vim.bo[b].filetype ~= "NvimTree"
+    return vim.bo[b].buftype == "" and vim.bo[b].filetype ~= "neo-tree"
   end
   local function name_of(b)
     local n = vim.api.nvim_buf_get_name(b)

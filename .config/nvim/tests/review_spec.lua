@@ -70,7 +70,7 @@ describe("review.status", function()
     assert.equals("approved", review.status("/repo/a.lua"))
   end)
 
-  -- Callers pass raw nvim-tree node paths, which are not normalized.
+  -- Callers pass raw explorer node paths, which are not normalized.
   it("normalizes the path before looking it up", function()
     assert.equals("approved", review.status("/repo/sub/../a.lua"))
   end)

@@ -60,7 +60,7 @@ describe("ide.tree_width", function()
   -- +1 for the window separator column the tree costs the rest of the layout.
   it("includes the separator column of a live explorer window", function()
     local buf = vim.api.nvim_create_buf(false, true)
-    vim.bo[buf].filetype = "NvimTree"
+    vim.bo[buf].filetype = "neo-tree"
     vim.cmd("vsplit")
     local win = vim.api.nvim_get_current_win()
     vim.api.nvim_win_set_buf(win, buf)
