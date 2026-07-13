@@ -39,7 +39,7 @@ return {
       end
 
       require("neo-tree").setup({
-        sources = { "filesystem", "document_symbols" },
+        sources = { "filesystem", "document_symbols", "git_status" },
         -- Keep focus in the editor when neo-tree closes a window, and don't let
         -- opening a directory hijack the current window (the VimEnter handler
         -- below places the tree as a side panel beside a real editor window).
@@ -194,6 +194,17 @@ return {
       vim.keymap.set("n", "<leader>v", "<cmd>Neotree filesystem reveal left reveal_force_cwd<cr>", {
         desc = "Reveal file in explorer",
       })
+      -- Swap the top pane between the file tree and the git_status source (a
+      -- changed-files view with per-file stage/unstage/revert/commit keys:
+      -- ga/gu/gr/gc/gp/gg). Same managed left window, so the outline split below
+      -- stays put; toggles back to the file tree.
+      vim.keymap.set("n", "<leader>gt", function()
+        if neotree_win("git_status") then
+          vim.cmd("Neotree filesystem show left")
+        else
+          vim.cmd("Neotree git_status show left")
+        end
+      end, { desc = "Toggle git status in explorer" })
 
       -- Link neo-tree's git-status highlight groups to semantic groups so the
       -- colours follow any theme.

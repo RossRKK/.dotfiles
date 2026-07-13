@@ -164,6 +164,24 @@ Maps are buffer-local and only live while the file is conflicted.
 | `Space+gr` | Reset hunk                |
 | `Space+gb` | Blame current line (popup) |
 | `Space+gB` | Toggle inline blame       |
+| `Space+gt` | Swap explorer to the git status view |
+
+`Space+gt` swaps the explorer's top pane to neo-tree's `git_status` source (and
+back) — a changed-files list where you stage / commit per file:
+
+| Key  | Action                          |
+| ---- | ------------------------------- |
+| `ga` | Stage the file                  |
+| `gu` | Unstage the file                |
+| `gt` | Toggle staged / unstaged        |
+| `gr` | Revert (discard changes)        |
+| `gc` | Commit                          |
+| `gp` | Push                            |
+| `gg` | Commit **and** push             |
+| `gU` | Undo last commit                |
+
+(These overlap with lazygit at `Ctrl+G` and gitsigns hunk staging above — use
+whichever fits.)
 
 Inline blame (dimmed, at end of the current line) is on by default; `Space+gB`
 toggles it off/on.
