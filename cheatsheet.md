@@ -219,20 +219,65 @@ immediately.
 
 ### File explorer (neo-tree)
 
-| Key       | Action                    |
-| --------- | ------------------------- |
-| `Enter` / click | Open file / expand folder |
-| `y`       | Copy filename             |
-| `Y`       | Copy relative path        |
-| `a`       | Create file               |
-| `d`       | Delete file               |
-| `r`       | Rename file               |
-| `H`       | Toggle hidden / gitignored |
-| `?`       | Show all explorer mappings |
-
 The left column stacks two neo-tree windows: the file tree on top and a symbols
 outline (`document_symbols`) below it — a live, LSP-driven tree of the focused
 file's functions / types you can jump through. `Space+e` toggles both together.
+All keys below are inside the tree; `?` shows the full, live list.
+
+**Open & navigate**
+
+| Key             | Action                               |
+| --------------- | ------------------------------------ |
+| `Enter` / click | Open file / expand folder            |
+| `S` / `s`       | Open in horizontal / vertical split  |
+| `t`             | Open in a new tab                    |
+| `w`             | Open via the window picker           |
+| `P`             | Toggle a floating preview of the file |
+| `C` / `z`       | Collapse this node / all nodes       |
+| `.` / `<BS>`    | Set tree root here / go up a level   |
+| `R`             | Refresh the tree                     |
+
+**Search & filter**
+
+| Key      | Action                                              |
+| -------- | --------------------------------------------------- |
+| `/`      | Fuzzy filter the tree (live; `Esc` to keep, `C-x` clears) |
+| `#`      | Fuzzy *sort* (fzy) without hiding non-matches       |
+| `D`      | Fuzzy filter within a chosen directory              |
+| `f`      | Filter on submit (type, `Enter` to apply)           |
+| `C-x`    | Clear an active filter                              |
+
+In the filter popup, `C-n`/`C-p` (or ↓/↑) move through matches, `S-Enter` keeps
+the filter after selecting, `C-Enter` selects and clears it.
+
+**File operations**
+
+| Key       | Action                                    |
+| --------- | ----------------------------------------- |
+| `a` / `A` | Add file (trailing `/` = dir) / add dir   |
+| `r` / `b` | Rename / rename just the basename         |
+| `d`       | Delete                                     |
+| `c` / `m` | Copy / move (prompts for destination)      |
+| `y` / `x` | Copy / cut the file to neo-tree's clipboard |
+| `p`       | Paste clipboard here (`C-r` clears it)     |
+| `i`       | Show file details (size, times, perms)     |
+
+**Copy a path to the system clipboard** (custom — `y` above copies the *file*):
+
+| Key  | Copies                          |
+| ---- | ------------------------------- |
+| `gy` | Path relative to the cwd        |
+| `gY` | Absolute path                   |
+
+**Git, ordering & sources**
+
+| Key          | Action                                            |
+| ------------ | ------------------------------------------------- |
+| `]g` / `[g`  | Jump to next / prev git-modified file             |
+| `o` then …   | Order by: `c`reated `d`iagnostics `g`it `m`odified `n`ame `s`ize `t`ype |
+| `H`          | Toggle hidden / gitignored files                  |
+| `<` / `>`    | Previous / next source (files ↔ symbols)          |
+| `?` / `q`    | Show all mappings / close the window              |
 
 ### Explorer git status glyphs
 
