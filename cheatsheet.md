@@ -152,12 +152,17 @@ wrapped like `Read(src/foo.rs)`.
 | ---------- | ------------------------ |
 | `Ctrl+P`   | Find files               |
 | `Space+fg` | Live grep across project |
+| `Space+fd` | Live grep in the current file's directory |
 | `Space+fb` | Find open buffers        |
 | `Space+fs` | Symbols in current file (LSP) |
 | `Space+fw` | Symbols across workspace (LSP, live) |
-| `Space+ft` | Find TODO / FIXME / … comments |
+| `Space+ft` | List TODO / FIXME / … comments (Trouble) |
 | `Space+fr` | Project find **& replace** (grug-far) |
 | `Space+fh` | Help tags                |
+
+The finder is the [snacks picker](https://github.com/folke/snacks.nvim) (input on
+top, preview on the right); it also backs `vim.ui.select`, so selection prompts
+(e.g. branch-review menus) use the same UI.
 
 `Space+fs` / `Space+fw` search LSP *symbols* (functions, types, …) rather than
 text — the "Go to Symbol" analogues. `fw` re-queries the language server on each

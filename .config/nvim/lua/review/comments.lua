@@ -195,7 +195,7 @@ local function run(fn)
 end
 
 --- vim.ui.select as a coroutine call. Returns the chosen 1-based index, or nil.
---- Handles both the async pickers (dressing/telescope: callback fires later, so
+--- Handles both the async pickers (snacks: callback fires later, so
 --- we yield and resume) and Neovim's builtin select (callback fires *before*
 --- vim.ui.select returns — resuming a still-running coroutine would error, so we
 --- just hand back the answer directly).
