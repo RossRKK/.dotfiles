@@ -133,10 +133,11 @@ return {
       })
 
       -- The left column stacks two neo-tree windows: the file tree on top, the
-      -- symbols outline below it. neo-tree won't stack two sources in one managed
-      -- window (a second source at the same position just replaces the first), so
-      -- the outline opens in a manual split under the tree via position="current".
-      local OUTLINE_HEIGHT = 15
+      -- symbols outline below it. edgy owns the stacking (see lua/plugins/edgy.lua):
+      -- both sources open with `show` (which doesn't steal focus), and edgy
+      -- relocates each into its left-edge slot by neo_tree_source. document_symbols
+      -- opens at a neutral position so neo-tree doesn't replace the filesystem
+      -- window before edgy moves it -- the old "two explorers" collision.
 
       -- The window in this tab showing neo-tree `source`, or nil.
       local function neotree_win(source)
@@ -149,25 +150,12 @@ return {
         end
       end
 
-      -- Open the file tree in the left column with the outline stacked beneath it,
-      -- leaving focus wherever it started (so it can auto-open without stealing it).
+      -- Open the file tree and the outline; edgy stacks them in the left edgebar.
+      -- `show` reveals without focusing, so this is safe to call from auto-open.
       local function open_sidebar()
-        local start_win = vim.api.nvim_get_current_win()
         vim.cmd("Neotree filesystem show left")
-        local fs = neotree_win("filesystem")
-        if fs and not neotree_win("document_symbols") then
-          vim.api.nvim_set_current_win(fs)
-          -- `new`, not `split`: a plain empty split, so the window's filetype is
-          -- not "neo-tree". position="current" is overridden back to the managed
-          -- left window when invoked from inside a neo-tree window (a second left
-          -- tree, the "two explorers" bug), so the outline needs a plain host.
-          vim.cmd("belowright new")
-          vim.cmd("Neotree document_symbols current") -- fill it with the outline
-          vim.api.nvim_win_set_height(0, OUTLINE_HEIGHT)
-          vim.wo.winfixheight = true -- don't let layout changes reflow the outline
-        end
-        if vim.api.nvim_win_is_valid(start_win) then
-          vim.api.nvim_set_current_win(start_win)
+        if not neotree_win("document_symbols") then
+          vim.cmd("Neotree document_symbols show bottom")
         end
       end
 
