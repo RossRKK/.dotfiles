@@ -99,6 +99,9 @@ below work while focused inside an edge window (explorer, outline, terminal):
 | `]w` / `[w`             | Next / prev window in the edgebar       |
 | `Q`                     | Close the whole edgebar                 |
 
+Notifications use the snacks notifier (toasts, top-right); `Space+n` opens the
+scrollback history of everything that was notified.
+
 ---
 
 ## Navigation
@@ -130,6 +133,11 @@ wrapped like `Read(src/foo.rs)`.
 | ----------- | ---------------------- |
 | `]d` / `[d` | Next / prev diagnostic |
 | `]h` / `[h` | Next / prev git hunk   |
+| `]i` / `[i` | Jump to bottom / top edge of the current scope (snacks) |
+
+`]i` / `[i` shadow the builtins that echo the first line containing the keyword
+under the cursor — an accepted trade-off. The scope also gives text objects:
+`ii` / `ai` (operator/visual) select the current indent/treesitter scope.
 
 ### Flash — jump anywhere
 
@@ -259,6 +267,8 @@ Pass/fail signs render in the gutter; driven by rust-analyzer runnables.
 | `Space+gb` | Blame current line (popup) |
 | `Space+gB` | Toggle inline blame       |
 | `Space+gt` | Swap explorer to the git status view |
+| `Space+ghi` | Browse GitHub issues (snacks picker + `gh` CLI) |
+| `Space+ghp` | Browse GitHub PRs (snacks picker + `gh` CLI) |
 
 `Space+gt` swaps the explorer's top pane to neo-tree's `git_status` source (and
 back) — a changed-files list where you stage / commit per file:
