@@ -42,7 +42,7 @@ opt.autoread = true
 opt.clipboard = "unnamedplus"
 
 opt.updatetime = 250
-opt.timeoutlen = 300
+opt.timeoutlen = 500
 opt.showmode = false
 opt.cmdheight = 0
 
