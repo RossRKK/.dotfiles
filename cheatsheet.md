@@ -316,6 +316,7 @@ All keys below are inside the tree; `?` shows the full, live list.
 | `C` / `z`       | Collapse this node / all nodes       |
 | `.` / `<BS>`    | Set tree root here / go up a level   |
 | `R`             | Refresh the tree                     |
+| `e`             | Toggle auto-expand width (fit long / nested names; press again to snap back) |
 
 **Search & filter**
 
