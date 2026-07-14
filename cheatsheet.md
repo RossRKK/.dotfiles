@@ -1,6 +1,22 @@
 # Cheatsheet
 
-## Neovim
+## Contents
+
+- [Editing](#editing) — modes · movement · editing · surround · search · splits & buffers
+- [Navigation](#navigation) — `g` go-to · `]`/`[` next/prev · Flash jumps
+- [Find and lists](#find-and-lists) — `Space+f` find · `Space+l` Trouble
+- [Code and diagnostics](#code-and-diagnostics) — `Space+c` action · `Space+rn` rename · `Space+d` diagnostics · `Space+u` undo
+- [Tests and debugging](#tests-and-debugging) — `Space+t` neotest · dap debug
+- [Git](#git) — `Space+g` hunks · merge conflicts
+- [Branch review](#branch-review) — review mode · PR comments
+- [File explorer](#file-explorer) — neo-tree keys · git glyphs · review indicators
+- [Terminal](#terminal) — side terminal · tabs
+- [tmux](#tmux)
+- [dotfiles](#dotfiles)
+
+---
+
+## Editing
 
 ### Modes
 
@@ -68,6 +84,10 @@
 | `Shift+L` / `Shift+H` | Next / prev buffer                          |
 | `Space+x`             | Close buffer                                |
 
+---
+
+## Navigation
+
 ### g — Go somewhere
 
 | Key  | Action                                   |
@@ -96,6 +116,21 @@ wrapped like `Read(src/foo.rs)`.
 | `]d` / `[d` | Next / prev diagnostic |
 | `]h` / `[h` | Next / prev git hunk   |
 
+### Flash — jump anywhere
+
+| Key           | Action                                        |
+| ------------- | --------------------------------------------- |
+| `s{chars}`    | Jump to any visible match (labels appear; press the label) |
+| `S`           | Select by treesitter node (expand with repeats) |
+| `r` (op-pend) | "Remote" — e.g. `yr{jump}` yanks elsewhere without moving |
+| `f`/`t`/`/`   | Enhanced with jump labels automatically       |
+
+`s` shadows Vim's substitute — use `cl` (char) / `cc` (line) for that.
+
+---
+
+## Find and lists
+
 ### Space+f — Find
 
 | Key        | Action                   |
@@ -117,16 +152,51 @@ keystroke, so it needs an LSP attached (e.g. rust-analyzer on a `.rs` file).
 replacement, preview matches, apply across the whole project (regex + capture
 groups supported).
 
-### Flash — jump anywhere
+### Space+l — Lists (Trouble)
 
-| Key           | Action                                        |
-| ------------- | --------------------------------------------- |
-| `s{chars}`    | Jump to any visible match (labels appear; press the label) |
-| `S`           | Select by treesitter node (expand with repeats) |
-| `r` (op-pend) | "Remote" — e.g. `yr{jump}` yanks elsewhere without moving |
-| `f`/`t`/`/`   | Enhanced with jump labels automatically       |
+| Key        | Action                              |
+| ---------- | ----------------------------------- |
+| `Space+ld` | Workspace diagnostics               |
+| `Space+lD` | Current-buffer diagnostics          |
+| `Space+lr` | LSP references                      |
+| `Space+ls` | Document symbols                    |
+| `Space+ll` | LSP definitions / refs / impls      |
+| `Space+lq` | Quickfix list                       |
+| `Space+lt` | TODO comments                       |
 
-`s` shadows Vim's substitute — use `cl` (char) / `cc` (line) for that.
+---
+
+## Code and diagnostics
+
+### Space+c — Code
+
+| Key        | Action      |
+| ---------- | ----------- |
+| `Space+ca` | Code action |
+
+### Space+rn — Rename
+
+| Key        | Action        |
+| ---------- | ------------- |
+| `Space+rn` | Rename symbol |
+
+### Space+d — Diagnostics
+
+| Key       | Action                |
+| --------- | --------------------- |
+| `Space+d` | Show diagnostic popup |
+
+### Space+u — Undo tree
+
+| Key       | Action                                          |
+| --------- | ----------------------------------------------- |
+| `Space+u` | Toggle the undo-tree panel (branching history)  |
+
+Undo is persisted to disk (`undofile`), so the tree survives restarts.
+
+---
+
+## Tests and debugging
 
 ### Space+t — Tests (neotest)
 
@@ -142,68 +212,21 @@ groups supported).
 
 Pass/fail signs render in the gutter; driven by rust-analyzer runnables.
 
-### Space+l — Lists (Trouble)
+### Debug (nvim-dap)
 
-| Key        | Action                              |
-| ---------- | ----------------------------------- |
-| `Space+ld` | Workspace diagnostics               |
-| `Space+lD` | Current-buffer diagnostics          |
-| `Space+lr` | LSP references                      |
-| `Space+ls` | Document symbols                    |
-| `Space+ll` | LSP definitions / refs / impls      |
-| `Space+lq` | Quickfix list                       |
-| `Space+lt` | TODO comments                       |
+| Key        | Action                 |
+| ---------- | ---------------------- |
+| `F5`       | Start / continue       |
+| `F10`      | Step over              |
+| `F11`      | Step into              |
+| `F12`      | Step out               |
+| `Space+b`  | Toggle breakpoint      |
+| `Space+B`  | Conditional breakpoint |
+| `Space+du` | Toggle debug UI        |
 
-### Space+u — Undo tree
+---
 
-| Key       | Action                                          |
-| --------- | ----------------------------------------------- |
-| `Space+u` | Toggle the undo-tree panel (branching history)  |
-
-Undo is persisted to disk (`undofile`), so the tree survives restarts.
-
-### Space+c — Code
-
-| Key        | Action      |
-| ---------- | ----------- |
-| `Space+ca` | Code action |
-
-### Space+r — Rename
-
-| Key        | Action        |
-| ---------- | ------------- |
-| `Space+rn` | Rename symbol |
-
-### Space+d — Diagnostics
-
-| Key       | Action                |
-| --------- | --------------------- |
-| `Space+d` | Show diagnostic popup |
-
-### Explorer
-
-| Key       | Action                          |
-| --------- | ------------------------------- |
-| `Space+e` | Toggle explorer + outline       |
-| `Space+v` | Reveal current file in explorer |
-
-### Merge conflicts (git-conflict.nvim)
-
-Resolve conflicts **in place** in the current buffer — no 3-way diff splits, so
-the window layout never moves. The plugin highlights the ours/theirs regions and
-suppresses LSP diagnostics on the marker lines while a file is conflicted.
-Staging / committing lives in lazygit (`Ctrl+G`).
-
-Maps are buffer-local and only live while the file is conflicted.
-
-| Key         | Action                     |
-| ----------- | -------------------------- |
-| `Space+cc`  | Keep **this one** (side under cursor) |
-| `Space+co`  | Keep **ours** (HEAD)       |
-| `Space+ct`  | Keep **theirs** (incoming) |
-| `Space+cb`  | Keep **both**              |
-| `Space+c0`  | Keep **neither**           |
-| `]x` / `[x` | Next / prev conflict       |
+## Git
 
 ### Space+g — Git hunks (gitsigns)
 
@@ -237,7 +260,29 @@ whichever fits.)
 Inline blame (dimmed, at end of the current line) is on by default; `Space+gB`
 toggles it off/on.
 
-### Space+r — Branch review mode
+### Merge conflicts (git-conflict.nvim)
+
+Resolve conflicts **in place** in the current buffer — no 3-way diff splits, so
+the window layout never moves. The plugin highlights the ours/theirs regions and
+suppresses LSP diagnostics on the marker lines while a file is conflicted.
+Staging / committing lives in lazygit (`Ctrl+G`).
+
+Maps are buffer-local and only live while the file is conflicted.
+
+| Key         | Action                     |
+| ----------- | -------------------------- |
+| `Space+cc`  | Keep **this one** (side under cursor) |
+| `Space+co`  | Keep **ours** (HEAD)       |
+| `Space+ct`  | Keep **theirs** (incoming) |
+| `Space+cb`  | Keep **both**              |
+| `Space+c0`  | Keep **neither**           |
+| `]x` / `[x` | Next / prev conflict       |
+
+---
+
+## Branch review
+
+### Review mode (Space+r)
 
 Highlights what merging this branch into the default branch would actually
 change (the merge-result diff): gitsigns marks changed lines in the sign column,
@@ -270,7 +315,7 @@ shown inline, added / changed lines highlighted — against the review base
 review mode is on; it's a global mode, so it applies to all buffers until
 toggled off.
 
-### Space+r — PR comments (batched review)
+### PR comments (batched review)
 
 With review mode on, drop line comments in your normal buffers. New comments
 queue as **local drafts** (rendered inline in a dimmer hue) rather than posting
@@ -286,6 +331,8 @@ alongside them.
 | `Space+rx` | Discard the draft on the line                             |
 | `Space+rS` | Submit all drafts as one review                           |
 | `Space+rC` | Refresh PR comments from GitHub                           |
+| `Space+ro` | Toggle showing outdated comments (anchor line gone)       |
+| `Space+rs` | Toggle showing resolved-thread comments                   |
 
 Submit infers the verdict from the triage rollup — no picking: any live
 rejection → **request changes**, all approved → **approve**, anything still
@@ -297,12 +344,24 @@ sends even when empty, `q` cancels); a bare approval with no summary defaults to
 fresh batch. Replies and edits to already-posted comments still go out
 immediately.
 
-### File explorer (neo-tree)
+Outdated comments (GitHub dropped their anchor line) show by default, tagged
+`(outdated)`; resolved-thread comments are hidden by default. Toggle each with
+`Space+ro` / `Space+rs`. The review-mode status string (top-left) shows the
+target branch and which comment categories are currently on show.
+
+---
+
+## File explorer
 
 The left column stacks two neo-tree windows: the file tree on top and a symbols
 outline (`document_symbols`) below it — a live, LSP-driven tree of the focused
-file's functions / types you can jump through. `Space+e` toggles both together.
-All keys below are inside the tree; `?` shows the full, live list.
+file's functions / types you can jump through. All keys in the sub-tables below
+are inside the tree; `?` shows the full, live list.
+
+| Key       | Action                          |
+| --------- | ------------------------------- |
+| `Space+e` | Toggle explorer + outline       |
+| `Space+v` | Reveal current file in explorer |
 
 **Open & navigate**
 
@@ -380,7 +439,7 @@ the filter after selecting, `C-Enter` selects and clears it.
 | `✓`   | Approved and unchanged since                                              |
 | `✗`   | Rejected / flagged, unchanged since                                       |
 | `↻`   | Was rejected, then edited — re-review the fix                             |
-| `✎`   | Has PR comments or unsent drafts (review mode on)                         |
+| 💬    | Has PR comments or unsent drafts (review mode on)                         |
 
 Folders show the highest-priority child status, ordered by what needs *your*
 attention: revised > changed > rejected > approved. So a folder surfaces work
@@ -388,7 +447,9 @@ still to do (won't read as done while it holds changed/revised files), an open
 flag (rejected) outranks a clean `✓`, and it only shows `✓` once every changed
 file under it is approved.
 
-### Terminal
+---
+
+## Terminal
 
 Terminals run natively in nvim buffers — full vim normal mode over real
 scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI munging).
@@ -420,21 +481,11 @@ titled tab strip shows across the top when the side terminal is open.
 | `Ctrl+B [`    | Enter copy / scrollback mode                      |
 | `Ctrl+T`      | Toggle the side terminal                          |
 
-### Debug (nvim-dap)
-
-| Key        | Action                 |
-| ---------- | ---------------------- |
-| `F5`       | Start / continue       |
-| `F10`      | Step over              |
-| `F11`      | Step into              |
-| `F12`      | Step out               |
-| `Space+b`  | Toggle breakpoint      |
-| `Space+B`  | Conditional breakpoint |
-| `Space+du` | Toggle debug UI        |
-
 ---
 
-## tmux (prefix = `Ctrl+B`)
+## tmux
+
+Prefix = `Ctrl+B`.
 
 ### Windows
 
