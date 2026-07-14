@@ -32,7 +32,7 @@ map("n", "<leader>x", "<cmd>bp|bdelete #<cr>", { desc = "Close buffer" })
 
 -- A window is a "main" editor window only if it positively holds an ordinary,
 -- listed file buffer. This is an allowlist on purpose: anything else — the
--- terminal, the nvim-tree explorer, and every floating/scratch menu (Lazy's
+-- terminal, the neo-tree explorer, and every floating/scratch menu (Lazy's
 -- update UI, help peeks, quickfix) — is not a target, without having to name it.
 local function is_editor_window(win)
   -- Floating windows (Lazy, notifications, help peeks) are never editor targets.
