@@ -120,10 +120,17 @@ return {
           local map = function(keys, func, desc)
             vim.keymap.set("n", keys, func, { buffer = ev.buf, desc = desc })
           end
-          local builtin = require("telescope.builtin")
-          map("gd", builtin.lsp_definitions, "Go to definition")
-          map("gi", builtin.lsp_implementations, "Go to implementation")
-          map("gr", builtin.lsp_references, "Go to references")
+          -- Nav pickers use snacks (see lua/plugins/picker.lua); each opens a
+          -- picker of the candidates, jumping straight through on a single match.
+          map("gd", function()
+            Snacks.picker.lsp_definitions()
+          end, "Go to definition")
+          map("gi", function()
+            Snacks.picker.lsp_implementations()
+          end, "Go to implementation")
+          map("gr", function()
+            Snacks.picker.lsp_references()
+          end, "Go to references")
           map("K", vim.lsp.buf.hover, "Hover docs")
           map("<leader>ca", vim.lsp.buf.code_action, "Code action")
           map("<leader>rn", vim.lsp.buf.rename, "Rename")

@@ -1,4 +1,4 @@
--- Alternate colorschemes kept installed for switching via `:Telescope colorscheme`.
+-- Alternate colorschemes kept installed for switching via `Snacks.picker.colorschemes()`.
 -- The active one is set in theme.lua (tokyonight). Loaded so they register in the picker.
 return {
   { "scottmckendry/cyberdream.nvim", lazy = false },
