@@ -28,6 +28,7 @@
 | `jk`      | Exit insert mode       |
 | `v`       | Visual mode            |
 | `V`       | Visual line mode       |
+| `Ctrl+Q`  | Visual block mode      |
 
 ### Movement
 
