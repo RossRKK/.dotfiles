@@ -586,22 +586,25 @@ local function wrap_text(text)
   return lines
 end
 
---- Draw the cached comments and drafts for one buffer (no network). Clears
---- first, so it's safe to call on any redraw. A no-op while comments are hidden.
+--- Group a buffer's comments and drafts by the row they render on: the
+--- anchor->entries map keying render_buf's draw and comment navigation, so
+--- markers and jumps agree on every position. Live comments are remapped from
+--- their base commit to the working copy (see remap_line); drafts anchor on their
+--- own line. Returns nil while comments are hidden or the buffer holds none.
 ---@param buf integer
-local function render_buf(buf)
-  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+---@return table<integer, table[]>?
+local function buf_by_line(buf)
   if not M.shown or not M.root then
-    return
+    return nil
   end
   local rel = rel_of(buf, M.root)
   if not rel then
-    return
+    return nil
   end
   local live = M.by_path[rel]
   local drafts = M.drafts_root == M.root and M.drafts[rel] or nil
   if not live and not drafts then
-    return
+    return nil
   end
 
   -- Group a line's comments into one stacked thread. For live comments, `line`
@@ -660,6 +663,18 @@ local function render_buf(buf)
   end
   for _, d in ipairs(drafts or {}) do
     add(d.line, { kind = "draft", d = d })
+  end
+  return by_line
+end
+
+--- Draw the cached comments and drafts for one buffer (no network). Clears
+--- first, so it's safe to call on any redraw. A no-op while comments are hidden.
+---@param buf integer
+local function render_buf(buf)
+  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  local by_line = buf_by_line(buf)
+  if not by_line then
+    return
   end
 
   local last = vim.api.nvim_buf_line_count(buf)
@@ -1235,6 +1250,62 @@ function M.display_summary()
   return table.concat(extra, "+")
 end
 
+--- The nearest row strictly past `cur` in direction `dir` (1 forward, -1 back)
+--- from ascending `rows`. Strict, so a jump always leaves the current line; no
+--- wrap, so nil means "nothing further that way".
+---@param rows integer[] ascending
+---@param cur integer
+---@param dir integer
+---@return integer?
+function M.next_anchor(rows, cur, dir)
+  if dir > 0 then
+    for _, r in ipairs(rows) do
+      if r > cur then
+        return r
+      end
+    end
+  else
+    for i = #rows, 1, -1 do
+      if rows[i] < cur then
+        return rows[i]
+      end
+    end
+  end
+  return nil
+end
+
+--- Move the cursor to the next (dir=1) or previous (dir=-1) comment/draft anchor
+--- in the current buffer, using the same rows render_buf draws on so a jump always
+--- lands on a visible marker. Sets the ' mark first (so '' / <C-o> return), clamps
+--- into the buffer, and centers; notifies when there's nothing further that way.
+---@param dir integer
+function M.jump_comment(dir)
+  local buf = vim.api.nvim_get_current_buf()
+  local by_line = buf_by_line(buf)
+  if not by_line then
+    vim.notify("review: no PR comments in this file (is review mode on?)", vim.log.levels.INFO)
+    return
+  end
+  local last = vim.api.nvim_buf_line_count(buf)
+  local rows = {}
+  for anchor in pairs(by_line) do
+    rows[#rows + 1] = math.max(1, math.min(anchor, last))
+  end
+  table.sort(rows)
+
+  local target = M.next_anchor(rows, vim.fn.line("."), dir)
+  if not target then
+    vim.notify(
+      "review: no " .. (dir > 0 and "further" or "earlier") .. " comment in this file",
+      vim.log.levels.INFO
+    )
+    return
+  end
+  vim.cmd("normal! m'") -- leave a jump-back point before moving
+  vim.api.nvim_win_set_cursor(0, { target, 0 })
+  vim.cmd("normal! zz")
+end
+
 function M.setup()
   local function set_hl()
     vim.api.nvim_set_hl(0, "ReviewComment", { link = "Comment", default = true })
@@ -1293,6 +1364,12 @@ function M.setup()
     M.resolve,
     { desc = "Review: resolve/unresolve PR thread on line" }
   )
+  vim.keymap.set("n", "]r", function()
+    M.jump_comment(1)
+  end, { desc = "Review: jump to next PR comment" })
+  vim.keymap.set("n", "[r", function()
+    M.jump_comment(-1)
+  end, { desc = "Review: jump to previous PR comment" })
   vim.keymap.set("n", "<leader>re", M.edit, { desc = "Review: edit PR comment/draft on line" })
   vim.keymap.set("n", "<leader>rx", M.discard_draft, { desc = "Review: discard draft on line" })
   vim.keymap.set("n", "<leader>rS", M.submit, { desc = "Review: submit drafted review (batched)" })
@@ -1323,6 +1400,12 @@ function M.setup()
     M.resolve,
     { desc = "Resolve/unresolve the PR thread on this line" }
   )
+  vim.api.nvim_create_user_command("ReviewNextComment", function()
+    M.jump_comment(1)
+  end, { desc = "Jump to the next PR comment in this file" })
+  vim.api.nvim_create_user_command("ReviewPrevComment", function()
+    M.jump_comment(-1)
+  end, { desc = "Jump to the previous PR comment in this file" })
   vim.api.nvim_create_user_command(
     "ReviewEditComment",
     M.edit,

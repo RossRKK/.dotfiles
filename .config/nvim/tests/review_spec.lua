@@ -118,6 +118,7 @@ describe("review.comments", function()
       "set_shown",
       "refresh",
       "has_comments",
+      "jump_comment",
     }) do
       assert.equals("function", type(comments[fn]), fn .. "() is missing")
     end
@@ -178,5 +179,28 @@ describe("review.comments.remap_line", function()
     local row, tracked = remap({ { 0, 0, 1, 2 }, { 2, 1, 3, 0 } }, 4)
     assert.equals(5, row) -- 4 + 2 (insert) - 1 (delete)
     assert.is_true(tracked)
+  end)
+end)
+
+describe("review.comments.next_anchor", function()
+  local next_anchor = require("review.comments").next_anchor
+  local rows = { 3, 7, 12 }
+
+  it("finds the next row strictly past the cursor", function()
+    assert.equals(7, next_anchor(rows, 3, 1)) -- on an anchor: skips to the next
+    assert.equals(7, next_anchor(rows, 5, 1))
+    assert.equals(3, next_anchor(rows, 1, 1))
+  end)
+
+  it("finds the previous row strictly before the cursor", function()
+    assert.equals(3, next_anchor(rows, 7, -1)) -- on an anchor: skips to the prev
+    assert.equals(7, next_anchor(rows, 9, -1))
+    assert.equals(12, next_anchor(rows, 99, -1))
+  end)
+
+  it("does not wrap: nil when nothing lies that way", function()
+    assert.is_nil(next_anchor(rows, 12, 1))
+    assert.is_nil(next_anchor(rows, 3, -1))
+    assert.is_nil(next_anchor({}, 5, 1))
   end)
 end)
