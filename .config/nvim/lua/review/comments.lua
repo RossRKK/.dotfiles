@@ -16,9 +16,12 @@
 -- comment it PATCHes GitHub; if both are present it asks which.
 --
 -- Everyone's line comments render inline as virtual text, shown/hidden with
--- review mode; your unsent drafts render alongside them in a dimmer hue.
--- Comments in resolved threads are dropped (see resolved_comment_ids), so the
--- tree icon and inline text only reflect threads that still want attention.
+-- review mode; your unsent drafts render alongside them in a dimmer hue. Two
+-- categories are noisy, so they're filtered at render time behind toggles
+-- (M.show_outdated / M.show_resolved, and the tree icon follows suit): comments
+-- GitHub no longer anchors (its `line` nulled — "outdated"), shown by default and
+-- tagged; and comments in resolved threads (see resolved_comment_ids), hidden by
+-- default. Both are still fetched, so toggling either needs no round-trip.
 --
 -- The PR is found from the active branch: none -> stay quiet; one -> use it;
 -- several -> ask once (remembered per branch). Rendering reads a cache, so only
@@ -43,11 +46,41 @@ M.viewer = nil
 M.names = {}
 -- Whether inline comments are currently drawn (driven by review mode).
 M.shown = false
+-- Visibility toggles. Both outdated and resolved comments are kept in M.by_path
+-- and filtered at render time, so toggling either needs no re-fetch. Outdated
+-- shows by default (surfacing stale-line comments is the point); resolved hides
+-- by default (a resolved thread no longer wants attention).
+M.show_outdated = true
+M.show_resolved = false
 -- Absolute paths of files with comments or drafts, plus their ancestor dirs, for
 -- the tree decorator. Rebuilt on each fetch; empty while comments are hidden.
 M.marked = {}
 
 local ns = vim.api.nvim_create_namespace("review_comments")
+
+--- Normalize a value decoded from gh JSON: JSON null arrives as vim.NIL (a
+--- truthy userdata, not nil), so `x or fallback` never falls through without
+--- this. Returns nil for both nil and vim.NIL, else the value unchanged.
+local function val(x)
+  if x == nil or x == vim.NIL then
+    return nil
+  end
+  return x
+end
+
+--- Whether a live comment should render, given the visibility toggles. A comment
+--- is outdated when GitHub has nulled its `line` (anchor no longer exists).
+---@param c table
+---@return boolean
+local function comment_visible(c)
+  if c.resolved and not M.show_resolved then
+    return false
+  end
+  if val(c.line) == nil and not M.show_outdated then
+    return false
+  end
+  return true
+end
 
 --- Run a command async, yielding until it exits. Returns the vim.system result
 --- object ({ code, stdout, stderr }). MUST run inside a coroutine. `stdin`, when
@@ -238,8 +271,13 @@ end
 function M.rebuild_marked(root)
   local marked = {}
   local nroot = vim.fs.normalize(root)
-  for rel in pairs(M.by_path) do
-    mark_with_ancestors(marked, nroot, rel)
+  for rel, list in pairs(M.by_path) do
+    for _, c in ipairs(list) do
+      if comment_visible(c) then
+        mark_with_ancestors(marked, nroot, rel)
+        break
+      end
+    end
   end
   for rel, list in pairs(M.drafts) do
     if #list > 0 then
@@ -406,7 +444,9 @@ local function thread_at_cursor()
   local line = vim.fn.line(".")
   local thread = {}
   for _, c in ipairs(M.by_path[rel] or {}) do
-    if (c.line or c.original_line) == line then
+    -- Match the rendered anchor: an outdated comment (line nulled) shows on
+    -- original_line, so act on it there too. Skip comments hidden by a toggle.
+    if comment_visible(c) and (val(c.line) or val(c.original_line)) == line then
       thread[#thread + 1] = c
     end
   end
@@ -467,6 +507,35 @@ local function open_input(title, initial, on_submit, allow_empty)
   end
 end
 
+-- Column width to soft-wrap inline comment bodies to. virt_lines don't wrap on
+-- their own, so long lines (e.g. a bare URL) would run off the right edge.
+local WRAP_WIDTH = 80
+
+--- Soft-wrap `text` to WRAP_WIDTH columns, breaking on spaces and hard-breaking
+--- any token longer than the width (e.g. a bare URL). Empty input -> {""}.
+--- Counts bytes, so wide multibyte text wraps a touch early — fine for prose.
+---@param text string
+---@return string[]
+local function wrap_text(text)
+  local lines, cur = {}, ""
+  for word in text:gmatch("%S+") do
+    while #word > WRAP_WIDTH do -- token too long to ever fit: bite off a chunk
+      if cur ~= "" then
+        lines[#lines + 1], cur = cur, ""
+      end
+      lines[#lines + 1], word = word:sub(1, WRAP_WIDTH), word:sub(WRAP_WIDTH + 1)
+    end
+    local sep = cur == "" and "" or " "
+    if #cur + #sep + #word > WRAP_WIDTH then
+      lines[#lines + 1], cur = cur, word
+    else
+      cur = cur .. sep .. word
+    end
+  end
+  lines[#lines + 1] = cur
+  return lines
+end
+
 --- Draw the cached comments and drafts for one buffer (no network). Clears
 --- first, so it's safe to call on any redraw. A no-op while comments are hidden.
 ---@param buf integer
@@ -486,9 +555,10 @@ local function render_buf(buf)
   end
 
   -- Group a line's comments into one stacked thread. For live comments, `line`
-  -- is the position at the PR's latest commit; original_line is the fallback
-  -- when GitHub marks it outdated (line == nil). Drafts anchor on their own end
-  -- line. Each entry carries its kind so it renders in the right hue.
+  -- is the position at the PR's latest commit; when GitHub marks a comment
+  -- outdated it nulls `line`, so we fall back to original_line and flag the
+  -- entry so it renders as outdated. Drafts anchor on their own end line. Each
+  -- entry carries its kind so it renders in the right hue.
   local by_line = {}
   local function add(anchor, entry)
     if not anchor then
@@ -498,7 +568,15 @@ local function render_buf(buf)
     table.insert(by_line[anchor], entry)
   end
   for _, c in ipairs(live or {}) do
-    add(c.line or c.original_line, { kind = "live", c = c })
+    if comment_visible(c) then
+      local line = val(c.line)
+      add(line or val(c.original_line), {
+        kind = "live",
+        c = c,
+        outdated = line == nil,
+        resolved = c.resolved == true,
+      })
+    end
   end
   for _, d in ipairs(drafts or {}) do
     add(d.line, { kind = "draft", d = d })
@@ -506,37 +584,48 @@ local function render_buf(buf)
 
   local last = vim.api.nvim_buf_line_count(buf)
   for anchor, thread in pairs(by_line) do
-    if anchor >= 1 and anchor <= last then
-      local virt = {}
-      for _, entry in ipairs(thread) do
-        if entry.kind == "draft" then
-          table.insert(virt, {
-            { "▌ ", "ReviewCommentDraftSign" },
-            { "@you (draft, unsent)", "ReviewCommentDraft" },
-          })
-          for _, line in
-            ipairs(vim.split((entry.d.body or ""):gsub("\r", ""), "\n", { plain = true }))
-          do
+    -- An outdated comment's original_line is numbered against the old file and
+    -- may point past the current end, so clamp into range rather than drop it.
+    local row = math.max(1, math.min(anchor, last))
+    local virt = {}
+    for _, entry in ipairs(thread) do
+      if entry.kind == "draft" then
+        table.insert(virt, {
+          { "▌ ", "ReviewCommentDraftSign" },
+          { "@you (draft, unsent)", "ReviewCommentDraft" },
+        })
+        for _, line in
+          ipairs(vim.split((entry.d.body or ""):gsub("\r", ""), "\n", { plain = true }))
+        do
+          for _, seg in ipairs(wrap_text(line)) do
             table.insert(
               virt,
-              { { "▌ ", "ReviewCommentDraftSign" }, { line, "ReviewCommentDraft" } }
+              { { "▌ ", "ReviewCommentDraftSign" }, { seg, "ReviewCommentDraft" } }
             )
           end
-        else
-          local c = entry.c
-          local header = { { "▌ ", "ReviewCommentSign" } }
-          vim.list_extend(header, author_chunks(c.user.login))
-          if c.side == "LEFT" then
-            header[#header + 1] = { "  (old side)", "ReviewComment" }
-          end
-          table.insert(virt, header)
-          for _, line in ipairs(vim.split((c.body or ""):gsub("\r", ""), "\n", { plain = true })) do
-            table.insert(virt, { { "▌ ", "ReviewCommentSign" }, { line, "ReviewComment" } })
+        end
+      else
+        local c = entry.c
+        local header = { { "▌ ", "ReviewCommentSign" } }
+        vim.list_extend(header, author_chunks(c.user.login))
+        if c.side == "LEFT" then
+          header[#header + 1] = { "  (removed side)", "ReviewComment" }
+        end
+        if entry.outdated then
+          header[#header + 1] = { "  (outdated)", "ReviewCommentOutdated" }
+        end
+        if entry.resolved then
+          header[#header + 1] = { "  (resolved)", "ReviewCommentResolved" }
+        end
+        table.insert(virt, header)
+        for _, line in ipairs(vim.split((c.body or ""):gsub("\r", ""), "\n", { plain = true })) do
+          for _, seg in ipairs(wrap_text(line)) do
+            table.insert(virt, { { "▌ ", "ReviewCommentSign" }, { seg, "ReviewComment" } })
           end
         end
       end
-      pcall(vim.api.nvim_buf_set_extmark, buf, ns, anchor - 1, 0, { virt_lines = virt })
     end
+    pcall(vim.api.nvim_buf_set_extmark, buf, ns, row - 1, 0, { virt_lines = virt })
   end
 end
 
@@ -571,7 +660,10 @@ local function fetch_render()
         local resolved = resolved_comment_ids(root, pr.number)
         local by_path = {}
         for _, c in ipairs(comments) do
-          if c.path and not resolved[c.id] then
+          if c.path then
+            -- Keep resolved comments (tagged) so they can be toggled on rather
+            -- than re-fetched; render_buf filters them per M.show_resolved.
+            c.resolved = resolved[c.id] == true
             by_path[c.path] = by_path[c.path] or {}
             table.insert(by_path[c.path], c)
           end
@@ -805,7 +897,12 @@ function M.edit()
         { kind = "draft", d = d, label = "[draft] " .. (d.body:gsub("%s+", " ")):sub(1, 50) }
     end
     for _, c in ipairs(M.by_path[rel] or {}) do
-      if (c.line or c.original_line) == line and login and c.user.login == login then
+      if
+        comment_visible(c)
+        and (val(c.line) or val(c.original_line)) == line
+        and login
+        and c.user.login == login
+      then
         items[#items + 1] = {
           kind = "live",
           c = c,
@@ -949,6 +1046,42 @@ function M.refresh()
   end
 end
 
+--- Re-mark and redraw from the caches after a visibility toggle (no network).
+local function redisplay()
+  if M.root then
+    M.rebuild_marked(M.root)
+  end
+  render_all()
+end
+
+--- Toggle whether outdated comments (anchor line gone) are drawn.
+function M.toggle_outdated()
+  M.show_outdated = not M.show_outdated
+  vim.notify("review: outdated comments " .. (M.show_outdated and "shown" or "hidden"))
+  redisplay()
+end
+
+--- Toggle whether comments in resolved threads are drawn.
+function M.toggle_resolved()
+  M.show_resolved = not M.show_resolved
+  vim.notify("review: resolved comments " .. (M.show_resolved and "shown" or "hidden"))
+  redisplay()
+end
+
+--- The extra comment categories currently shown beyond current/unresolved, for
+--- the review-mode status string. "" when only the default set is visible.
+---@return string
+function M.display_summary()
+  local extra = {}
+  if M.show_outdated then
+    extra[#extra + 1] = "outdated"
+  end
+  if M.show_resolved then
+    extra[#extra + 1] = "resolved"
+  end
+  return table.concat(extra, "+")
+end
+
 function M.setup()
   local function set_hl()
     vim.api.nvim_set_hl(0, "ReviewComment", { link = "Comment", default = true })
@@ -958,6 +1091,10 @@ function M.setup()
     -- already on GitHub and what you've only queued are visually distinct.
     vim.api.nvim_set_hl(0, "ReviewCommentDraft", { link = "DiagnosticHint", default = true })
     vim.api.nvim_set_hl(0, "ReviewCommentDraftSign", { link = "DiagnosticHint", default = true })
+    -- Header tags for comments GitHub no longer anchors (outdated) or that live
+    -- in a resolved thread: outdated warns (stale anchor), resolved reads dim.
+    vim.api.nvim_set_hl(0, "ReviewCommentOutdated", { link = "DiagnosticWarn", default = true })
+    vim.api.nvim_set_hl(0, "ReviewCommentResolved", { link = "Comment", default = true })
   end
   vim.api.nvim_create_autocmd("ColorScheme", { callback = set_hl })
   set_hl()
@@ -986,6 +1123,18 @@ function M.setup()
   vim.keymap.set("n", "<leader>rx", M.discard_draft, { desc = "Review: discard draft on line" })
   vim.keymap.set("n", "<leader>rS", M.submit, { desc = "Review: submit drafted review (batched)" })
   vim.keymap.set("n", "<leader>rC", M.refresh, { desc = "Review: refresh PR comments" })
+  vim.keymap.set(
+    "n",
+    "<leader>ro",
+    M.toggle_outdated,
+    { desc = "Review: toggle outdated comments" }
+  )
+  vim.keymap.set(
+    "n",
+    "<leader>rs",
+    M.toggle_resolved,
+    { desc = "Review: toggle resolved comments" }
+  )
 
   vim.api.nvim_create_user_command("ReviewComment", function()
     M.comment(nil, vim.fn.line("."))
@@ -1014,6 +1163,16 @@ function M.setup()
     "ReviewCommentsRefresh",
     M.refresh,
     { desc = "Re-fetch PR comments" }
+  )
+  vim.api.nvim_create_user_command(
+    "ReviewToggleOutdated",
+    M.toggle_outdated,
+    { desc = "Toggle display of outdated PR comments" }
+  )
+  vim.api.nvim_create_user_command(
+    "ReviewToggleResolved",
+    M.toggle_resolved,
+    { desc = "Toggle display of resolved PR comments" }
   )
 end
 

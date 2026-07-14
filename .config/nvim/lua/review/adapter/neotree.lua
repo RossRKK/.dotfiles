@@ -4,8 +4,8 @@
 -- this interface (see review/adapter/init.lua, which selects the active one):
 --
 --   status_component(config, node, state) -> chunk[]   a neo-tree renderer
---     component that draws the ●/✓/✗/↻ triage glyph (and the ✎ comment marker)
---     before a node's name. Coloured glyph only; the name is left untouched.
+--     component that draws the ●/✓/✗/↻ triage glyph (and a speech-bubble comment
+--     marker) before a node's name. Coloured glyph only; the name is left alone.
 --   cursor_path() -> string?   absolute path of the node under the cursor when
 --     the explorer is focused, else nil (so callers fall back to the buffer).
 --   redraw()   repaint the explorer so the component picks up new status.
@@ -25,14 +25,13 @@ local icon_by_status = {
   revised = { text = "↻ ", highlight = "ReviewRevised" },
 }
 
---- A neo-tree renderer component: the triage glyph plus a ✎ when the path has PR
+--- A neo-tree renderer component: the triage glyph plus a speech bubble when the path has PR
 --- comments or drafts. Directories show their rolled-up descendant status. Placed
 --- before "name" in the file/directory renderers (see plugins/explorer.lua).
 ---@return table chunk, or a list of chunks
 function M.status_component(_, node, _)
   local review = require("review")
-  local status = node.type == "directory" and review.folder(node.path)
-    or review.status(node.path)
+  local status = node.type == "directory" and review.folder(node.path) or review.status(node.path)
 
   local chunks = {}
   local icon = status and icon_by_status[status]
@@ -40,7 +39,9 @@ function M.status_component(_, node, _)
     chunks[#chunks + 1] = icon
   end
   if require("review.comments").has_comments(node.path) then
-    chunks[#chunks + 1] = { text = "✎ ", highlight = "ReviewCommentSign" }
+    -- "\xef\x81\xb5" is U+F075, the nerd-font speech bubble (fa-comment); written
+    -- as bytes so the glyph can't be lost in transit when the file is edited.
+    chunks[#chunks + 1] = { text = "\xef\x81\xb5 ", highlight = "ReviewCommentTreeIcon" }
   end
 
   -- neo-tree renders a single chunk or a list of them; empty text is a no-op.

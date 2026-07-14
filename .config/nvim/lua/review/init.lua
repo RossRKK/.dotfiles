@@ -30,9 +30,17 @@ M.folder_status = {}
 -- Whether review mode is currently active (a git repo with a usable merge-base).
 M.active = false
 
+-- The branch the active review is diffed against (the resolved review base), for
+-- the status string. nil while inactive.
+M.base = nil
+
 -- Toggle: when false, gitsigns stays on its normal HEAD base and the explorer
 -- decorator is dormant. Defaults off; turn on per-branch with <leader>rt.
 M.enabled = false
+
+-- User-chosen branch to review against, overriding auto-detection. nil = auto
+-- (origin/HEAD, else main/master). Set with <leader>rb / :ReviewBase.
+M.target_override = nil
 
 local uv = vim.uv or vim.loop
 
@@ -89,6 +97,14 @@ local function default_branch(root)
     end
   end
   return nil
+end
+
+--- The branch the current branch is reviewed against: the user's override if set
+--- (<leader>rb / :ReviewBase), else the auto-detected default branch.
+---@param root string
+---@return string?
+local function review_branch(root)
+  return M.target_override or default_branch(root)
 end
 
 --- The tree that would result from merging HEAD into the default branch — i.e.
@@ -251,6 +267,7 @@ local function deactivate()
   M.status_by_path = {}
   M.folder_status = {}
   M.active = false
+  M.base = nil
   require("review.gitsigns").set_base(nil)
   M.redraw_tree()
 end
@@ -276,7 +293,7 @@ local function do_refresh(mygen)
     return deactivate()
   end
 
-  local branch = default_branch(root)
+  local branch = review_branch(root)
   local base_sha = branch and rev(root, branch)
   local head_sha = rev(root, "HEAD")
   -- Files the merge would actually change vs the default branch. This is the
@@ -371,6 +388,7 @@ local function do_refresh(mygen)
   M.status_by_path = status_by_path
   M.folder_status = folder_status
   M.active = true
+  M.base = branch
   -- Drop decisions for files that no longer differ (e.g. after a rebase).
   if next(decisions) then
     save_decisions(root, still)
@@ -392,6 +410,33 @@ function M.refresh()
     if not ok then
       vim.notify("review: refresh failed: " .. tostring(err), vim.log.levels.ERROR)
     end
+  end)()
+end
+
+--- Set the branch to review against, or clear back to auto-detection. Validates
+--- the ref resolves before adopting it, then refreshes so the file list, signs
+--- and inline diff all move to the new base.
+---@param ref string? branch/commit-ish, or nil/"" to clear
+function M.set_target(ref)
+  if ref then
+    ref = vim.trim(ref)
+    if ref == "" then
+      ref = nil
+    end
+  end
+  coroutine.wrap(function()
+    if ref then
+      local root = repo_root()
+      if not root then
+        return vim.notify("review: not in a git repo", vim.log.levels.WARN)
+      end
+      if not rev(root, ref) then
+        return vim.notify("review: no such ref: " .. ref, vim.log.levels.ERROR)
+      end
+    end
+    M.target_override = ref
+    vim.notify("review target: " .. (ref or "auto"))
+    M.refresh()
   end)()
 end
 
@@ -442,6 +487,31 @@ function M.verdict()
   else
     return "COMMENT" -- changed or revised: still mid-review
   end
+end
+
+--- The review-mode status string for the statusline: the base being reviewed
+--- against plus which comment categories are on show. Empty while review mode is
+--- off, so the statusline component collapses to nothing.
+---@return string
+function M.statusline()
+  if not M.enabled then
+    return ""
+  end
+  local base = M.base or M.target_override or "…"
+  -- Git-merge glyph (U+F419): the review diffs what merging into `base` would
+  -- change, so a merge icon reads truer than a plain branch. Bytes, not the raw
+  -- glyph, so it can't be lost when the file is edited.
+  local merge = "\xef\x90\x99"
+  local parts = { merge .. " " .. base }
+  -- Comments only render once review mode has fetched them. The  marks that
+  -- they're on; a trailing "+outdated"/"+resolved" names any category shown
+  -- beyond the default (current, unresolved) set, so the toggles are discoverable.
+  if require("review.comments").shown then
+    local extra = require("review.comments").display_summary()
+    local bubble = "\xef\x81\xb5" -- U+F075 nerd-font speech bubble (fa-comment)
+    parts[#parts + 1] = bubble .. (extra ~= "" and (" +" .. extra:gsub("%+", " +")) or "")
+  end
+  return vim.trim(table.concat(parts, "  "))
 end
 
 --- The path the review action should act on: the node under the cursor when in
@@ -538,6 +608,9 @@ local function diff_base()
   if base then
     return base
   end
+  if M.target_override then
+    return M.target_override
+  end
   local default = vim.fn.systemlist({
     "git",
     "symbolic-ref",
@@ -612,6 +685,9 @@ function M.setup()
     -- Revised = a rejection that's since been edited; blue reads as "action
     -- pending, re-review" and stays distinct from the red/green/yellow trio.
     vim.api.nvim_set_hl(0, "ReviewRevised", { link = "DiagnosticInfo", default = true })
+    -- The tree's comment marker: plain foreground (whiteish in dark themes) so it
+    -- reads as a neutral "has comments" flag, not another coloured status glyph.
+    vim.api.nvim_set_hl(0, "ReviewCommentTreeIcon", { link = "Normal", default = true })
     -- Inline diff (M.toggle_diff) word-level highlight. gitsigns defaults these
     -- to TermCursor (a loud, wrong-hued cyan in most themes). Give each its own
     -- diff hue — the sign colour (green add / blue change / red delete) tinted
@@ -644,6 +720,26 @@ function M.setup()
     { desc = "Recompute branch review status" }
   )
   vim.api.nvim_create_user_command("ReviewToggle", M.toggle, { desc = "Toggle branch review mode" })
+  -- Complete :ReviewBase with local and remote branch names matching the prefix.
+  local function complete_ref(arg)
+    local refs = vim.fn.systemlist({
+      "git",
+      "for-each-ref",
+      "--format=%(refname:short)",
+      "refs/heads",
+      "refs/remotes",
+    })
+    return vim.tbl_filter(function(r)
+      return r:sub(1, #arg) == arg
+    end, refs)
+  end
+  vim.api.nvim_create_user_command("ReviewBase", function(o)
+    M.set_target(o.args)
+  end, {
+    nargs = "?",
+    complete = complete_ref,
+    desc = "Set review target branch (no arg to auto-detect)",
+  })
   vim.api.nvim_create_user_command(
     "ReviewDiff",
     M.toggle_diff,
@@ -669,6 +765,16 @@ function M.setup()
     M.mark(nil)
   end, { desc = "Review: clear decision (untriage)" })
   vim.keymap.set("n", "<leader>rt", M.toggle, { desc = "Review: toggle review mode" })
+  vim.keymap.set("n", "<leader>rb", function()
+    vim.ui.input(
+      { prompt = "Review target (empty = auto): ", default = M.target_override or "" },
+      function(input)
+        if input ~= nil then
+          M.set_target(input)
+        end
+      end
+    )
+  end, { desc = "Review: set target branch" })
   vim.keymap.set("n", "<leader>rd", M.toggle_diff, { desc = "Review: toggle inline diff view" })
   vim.keymap.set("n", "<leader>rR", M.refresh, { desc = "Review: refresh status" })
 
