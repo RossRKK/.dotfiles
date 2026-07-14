@@ -101,10 +101,66 @@ wrapped like `Read(src/foo.rs)`.
 | Key        | Action                   |
 | ---------- | ------------------------ |
 | `Ctrl+P`   | Find files               |
-| `Space+fg` | Live grep across project (in the explorer: grep the folder under the cursor) |
-| `Space+fd` | Live grep the current file's directory |
+| `Space+fg` | Live grep across project |
 | `Space+fb` | Find open buffers        |
+| `Space+fs` | Symbols in current file (LSP) |
+| `Space+fw` | Symbols across workspace (LSP, live) |
+| `Space+ft` | Find TODO / FIXME / … comments |
+| `Space+fr` | Project find **& replace** (grug-far) |
 | `Space+fh` | Help tags                |
+
+`Space+fs` / `Space+fw` search LSP *symbols* (functions, types, …) rather than
+text — the "Go to Symbol" analogues. `fw` re-queries the language server on each
+keystroke, so it needs an LSP attached (e.g. rust-analyzer on a `.rs` file).
+
+`Space+fr` opens a ripgrep search in an editable buffer: type a search + a
+replacement, preview matches, apply across the whole project (regex + capture
+groups supported).
+
+### Flash — jump anywhere
+
+| Key           | Action                                        |
+| ------------- | --------------------------------------------- |
+| `s{chars}`    | Jump to any visible match (labels appear; press the label) |
+| `S`           | Select by treesitter node (expand with repeats) |
+| `r` (op-pend) | "Remote" — e.g. `yr{jump}` yanks elsewhere without moving |
+| `f`/`t`/`/`   | Enhanced with jump labels automatically       |
+
+`s` shadows Vim's substitute — use `cl` (char) / `cc` (line) for that.
+
+### Space+t — Tests (neotest)
+
+| Key        | Action                       |
+| ---------- | ---------------------------- |
+| `Space+tr` | Run nearest test             |
+| `Space+tf` | Run all tests in the file    |
+| `Space+td` | Debug nearest test (via dap) |
+| `Space+tt` | Toggle the summary tree      |
+| `Space+to` | Show output of the last test |
+| `Space+tO` | Toggle the output panel      |
+| `Space+ts` | Stop a running test          |
+
+Pass/fail signs render in the gutter; driven by rust-analyzer runnables.
+
+### Space+l — Lists (Trouble)
+
+| Key        | Action                              |
+| ---------- | ----------------------------------- |
+| `Space+ld` | Workspace diagnostics               |
+| `Space+lD` | Current-buffer diagnostics          |
+| `Space+lr` | LSP references                      |
+| `Space+ls` | Document symbols                    |
+| `Space+ll` | LSP definitions / refs / impls      |
+| `Space+lq` | Quickfix list                       |
+| `Space+lt` | TODO comments                       |
+
+### Space+u — Undo tree
+
+| Key       | Action                                          |
+| --------- | ----------------------------------------------- |
+| `Space+u` | Toggle the undo-tree panel (branching history)  |
+
+Undo is persisted to disk (`undofile`), so the tree survives restarts.
 
 ### Space+c — Code
 
@@ -128,7 +184,7 @@ wrapped like `Read(src/foo.rs)`.
 
 | Key       | Action                          |
 | --------- | ------------------------------- |
-| `Space+e` | Toggle file explorer            |
+| `Space+e` | Toggle explorer + outline       |
 | `Space+v` | Reveal current file in explorer |
 
 ### Merge conflicts (git-conflict.nvim)
@@ -159,6 +215,24 @@ Maps are buffer-local and only live while the file is conflicted.
 | `Space+gr` | Reset hunk                |
 | `Space+gb` | Blame current line (popup) |
 | `Space+gB` | Toggle inline blame       |
+| `Space+gt` | Swap explorer to the git status view |
+
+`Space+gt` swaps the explorer's top pane to neo-tree's `git_status` source (and
+back) — a changed-files list where you stage / commit per file:
+
+| Key  | Action                          |
+| ---- | ------------------------------- |
+| `ga` | Stage the file                  |
+| `gu` | Unstage the file                |
+| `gt` | Toggle staged / unstaged        |
+| `gr` | Revert (discard changes)        |
+| `gc` | Commit                          |
+| `gp` | Push                            |
+| `gg` | Commit **and** push             |
+| `gU` | Undo last commit                |
+
+(These overlap with lazygit at `Ctrl+G` and gitsigns hunk staging above — use
+whichever fits.)
 
 Inline blame (dimmed, at end of the current line) is on by default; `Space+gB`
 toggles it off/on.
@@ -218,20 +292,67 @@ sends even when empty, `q` cancels); a bare approval with no summary defaults to
 fresh batch. Replies and edits to already-posted comments still go out
 immediately.
 
-### File explorer (nvim-tree)
+### File explorer (neo-tree)
 
-| Key     | Action                    |
-| ------- | ------------------------- |
-| `Enter` | Open file / expand folder |
-| `y`     | Copy filename             |
-| `Y`     | Copy relative path        |
-| `gy`    | Copy absolute path        |
-| `a`     | Create file               |
-| `d`     | Delete file               |
-| `r`     | Rename file (basename only) |
-| `u`     | Rename with full path (edit the dir to move a file) |
-| `x` / `p` | Cut / paste (move a file between folders) |
-| `Space+fg` | Live grep the folder under the cursor |
+The left column stacks two neo-tree windows: the file tree on top and a symbols
+outline (`document_symbols`) below it — a live, LSP-driven tree of the focused
+file's functions / types you can jump through. `Space+e` toggles both together.
+All keys below are inside the tree; `?` shows the full, live list.
+
+**Open & navigate**
+
+| Key             | Action                               |
+| --------------- | ------------------------------------ |
+| `Enter` / click | Open file / expand folder            |
+| `S` / `s`       | Open in horizontal / vertical split  |
+| `t`             | Open in a new tab                    |
+| `w`             | Open via the window picker           |
+| `P`             | Toggle a floating preview of the file |
+| `C` / `z`       | Collapse this node / all nodes       |
+| `.` / `<BS>`    | Set tree root here / go up a level   |
+| `R`             | Refresh the tree                     |
+
+**Search & filter**
+
+| Key      | Action                                              |
+| -------- | --------------------------------------------------- |
+| `/`      | Fuzzy filter the tree (live; `Esc` to keep, `C-x` clears) |
+| `#`      | Fuzzy *sort* (fzy) without hiding non-matches       |
+| `D`      | Fuzzy filter within a chosen directory              |
+| `f`      | Filter on submit (type, `Enter` to apply)           |
+| `C-x`    | Clear an active filter                              |
+
+In the filter popup, `C-n`/`C-p` (or ↓/↑) move through matches, `S-Enter` keeps
+the filter after selecting, `C-Enter` selects and clears it.
+
+**File operations**
+
+| Key       | Action                                    |
+| --------- | ----------------------------------------- |
+| `a` / `A` | Add file (trailing `/` = dir) / add dir   |
+| `r` / `b` | Rename / rename just the basename         |
+| `d`       | Delete                                     |
+| `c` / `m` | Copy / move (prompts for destination)      |
+| `y` / `x` | Copy / cut the file to neo-tree's clipboard |
+| `p`       | Paste clipboard here (`C-r` clears it)     |
+| `i`       | Show file details (size, times, perms)     |
+
+**Copy a path to the system clipboard** (custom — `y` above copies the *file*):
+
+| Key  | Copies                          |
+| ---- | ------------------------------- |
+| `gy` | Path relative to the cwd        |
+| `gY` | Absolute path                   |
+
+**Git, ordering & sources**
+
+| Key          | Action                                            |
+| ------------ | ------------------------------------------------- |
+| `]g` / `[g`  | Jump to next / prev git-modified file             |
+| `o` then …   | Order by: `c`reated `d`iagnostics `g`it `m`odified `n`ame `s`ize `t`ype |
+| `H`          | Toggle hidden / gitignored files                  |
+| `<` / `>`    | Previous / next source (files ↔ symbols)          |
+| `?` / `q`    | Show all mappings / close the window              |
 
 ### Explorer git status glyphs
 
@@ -243,8 +364,7 @@ immediately.
 | `D`   | Deleted             |
 | `R`   | Renamed             |
 | `U`   | Unmerged (conflict) |
-
-Git-ignored files are shown greyed with no glyph (they're no longer hidden).
+| `◌`   | Ignored             |
 
 ### Explorer review indicators
 
