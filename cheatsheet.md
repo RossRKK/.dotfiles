@@ -85,6 +85,20 @@
 | `Shift+L` / `Shift+H` | Next / prev buffer                          |
 | `Space+x`             | Close buffer                                |
 
+### Layout (edgy)
+
+The IDE layout is pinned by [edgy](https://github.com/folke/edgy.nvim): explorer +
+outline on the **left**, the side terminal on the **right**, the editor in the
+middle. Edge windows are sized by edgy, not resized like normal splits. Keys
+below work while focused inside an edge window (explorer, outline, terminal):
+
+| Key                     | Action                                  |
+| ----------------------- | --------------------------------------- |
+| `Ctrl+Left`/`Ctrl+Right`| Grow / shrink the edge's width          |
+| `Ctrl+Up`/`Ctrl+Down`   | Grow / shrink height (stacked panels)   |
+| `]w` / `[w`             | Next / prev window in the edgebar       |
+| `Q`                     | Close the whole edgebar                 |
+
 ---
 
 ## Navigation

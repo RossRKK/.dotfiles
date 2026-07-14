@@ -12,8 +12,6 @@
 -- a table we own -- we never rely on snacks' own cmd-keyed terminal cache.
 -- Everything else here (the tab strip) keys off the Snacks.win object.
 
-local ide = require("config.ide")
-
 local M = {}
 
 local BASE = 1 -- slot 1 is the primary side terminal (<C-t>)
@@ -26,28 +24,23 @@ local function snacks_term()
   return require("snacks.terminal")
 end
 
--- Create a fresh side terminal (right vertical split). We hold the returned
--- Snacks.win in M.slots ourselves and drive it with show()/hide(); snacks' own
--- cmd-keyed cache is bypassed via .open() (a brand-new instance every call), so
--- all nine slots stay independent even though they share cmd/cwd. interactive =
--- false keeps snacks from auto-inserting or popping an error notify when kill()
--- tears a shell down.
+-- Create a fresh side terminal. We hold the returned Snacks.win in M.slots
+-- ourselves and drive it with show()/hide(); snacks' own cmd-keyed cache is
+-- bypassed via .open() (a brand-new instance every call), so all nine slots stay
+-- independent even though they share cmd/cwd. interactive = false keeps snacks
+-- from auto-inserting or popping an error notify when kill() tears a shell down.
+-- Placement and sizing (right edge) are edgy's job -- see lua/plugins/edgy.lua.
 local function new_side_term()
   return snacks_term().open(nil, {
     interactive = false,
     win = {
       position = "right",
-      width = ide.term_width(),
-      -- Applies to whichever terminal opens; runs at the end of Snacks.win:show().
+      -- Runs at the end of Snacks.win:show().
       on_win = function(self)
-        -- Our tabline draws the labels, so suppress snacks' per-window winbar
-        -- (it defaults one on for split terminals).
+        -- Suppress snacks' per-window winbar (it defaults to "id: term_title" for
+        -- split terminals); config/terms.lua's top tab strip already titles this
+        -- region, and edgy's own title is disabled for it too.
         vim.wo[self.win].winbar = ""
-        -- winfixwidth keeps auto-equalization from collapsing the terminal to an
-        -- even split below its 80-col floor; the WinResized handler re-asserts
-        -- the target width when the outer layout changes.
-        vim.wo[self.win].winfixwidth = true
-        pcall(vim.api.nvim_win_set_width, self.win, ide.term_width())
         -- The side terminal is full-height (nothing above it), so <C-k> nav is
         -- useless here; pass it through to the running app (e.g. Claude Code).
         vim.keymap.set("t", "<C-k>", "<C-k>", { buffer = self.buf })
@@ -267,18 +260,6 @@ local function label(slot, term)
   return string.format(" %d:%s ", slot, truncate(name or "term", 24))
 end
 
--- Fit plain text to exactly w display columns (truncate with … or right-pad).
-local function fit(s, w)
-  if w <= 0 then
-    return ""
-  end
-  local len = vim.fn.strchars(s)
-  if len > w then
-    return truncate(s, w)
-  end
-  return s .. string.rep(" ", w - len)
-end
-
 -- Live text width of the side terminal window (0 if it's currently hidden).
 local function term_col_width()
   for _, w in ipairs(vim.api.nvim_list_wins()) do
@@ -290,42 +271,16 @@ local function term_col_width()
   return 0
 end
 
--- Name of the file in the main editor window (relative to cwd).
-local function editor_bufname()
-  local function is_editor(b)
-    return vim.bo[b].buftype == "" and vim.bo[b].filetype ~= "neo-tree"
-  end
-  local function name_of(b)
-    local n = vim.api.nvim_buf_get_name(b)
-    return n == "" and "[No Name]" or vim.fn.fnamemodify(n, ":.")
-  end
-  local cur = vim.api.nvim_get_current_buf()
-  if is_editor(cur) then
-    return name_of(cur)
-  end
-  for _, w in ipairs(vim.api.nvim_list_wins()) do
-    local b = vim.api.nvim_win_get_buf(w)
-    if is_editor(b) then
-      return name_of(b)
-    end
-  end
-  return ""
-end
-
--- Top bar aligned to the three windows: cwd over the explorer, the current file
--- over the editor, and the terminal tab strip over the terminal. Rendered in
+-- Top bar carrying just the terminal tab strip, right-aligned over the terminal
+-- region (edgy's right edgebar). The explorer and editor regions are left blank
+-- here -- their titles come from edgy's panel bars and the winbar. Rendered in
 -- nvim's top tabline (see M.enable_tabline) rather than a winbar on the terminal
 -- window, so it doesn't steal a pty row / destabilise the terminal's rendering.
 function M.tabline()
   local cols = vim.o.columns
-  local tw = ide.tree_width() -- explorer region incl. its separator (0 if closed)
   local rw = term_col_width() -- terminal text region (0 if hidden)
-  local mw = math.max(0, cols - tw - rw) -- editor region (incl. the term separator)
 
-  local left = tw > 0 and fit(" " .. vim.fn.fnamemodify(vim.fn.getcwd(), ":~"), tw) or ""
-  local mid = fit(" " .. editor_bufname(), mw)
-
-  -- Terminal tabs, left-aligned in the terminal region, active one highlighted.
+  -- Terminal tabs, left-aligned within the terminal region, active one highlighted.
   local tabs, used = {}, 0
   if rw > 0 then
     for _, e in ipairs(managed()) do
@@ -335,12 +290,14 @@ function M.tabline()
       tabs[#tabs + 1] = string.format("%%%d@v:lua.__snacks_term_tab_click@%s%s%%X", e.slot, hl, lbl)
     end
   end
-  local right = table.concat(tabs)
+  local strip = table.concat(tabs)
   if used < rw then
-    right = right .. "%#TabLineFill#" .. string.rep(" ", rw - used)
+    strip = strip .. "%#TabLineFill#" .. string.rep(" ", rw - used)
   end
 
-  return "%#TabLine#" .. left .. "%#TabLineFill#" .. mid .. right
+  -- Pad the editor+explorer region (everything left of the terminal) with blank.
+  local pad = math.max(0, cols - rw)
+  return "%#TabLineFill#" .. string.rep(" ", pad) .. strip
 end
 
 _G.__snacks_term_tabline = M.tabline

@@ -50,33 +50,6 @@ return {
         end,
       })
 
-      -- Hold the vertical side terminal at its target width (even split of the
-      -- post-explorer region, floored at 80). winfixwidth only blocks automatic
-      -- equalization, not the explicit resizes the explorer does on open, so re-assert
-      -- the width whenever the layout changes (tree toggled, window resized, etc.).
-      local enforcing_term_width = false
-      vim.api.nvim_create_autocmd({ "WinResized", "VimResized" }, {
-        callback = function()
-          if enforcing_term_width then
-            return
-          end
-          enforcing_term_width = true
-          local target = ide.term_width()
-          for _, win in ipairs(vim.api.nvim_list_wins()) do
-            local buf = vim.api.nvim_win_get_buf(win)
-            local floating = vim.api.nvim_win_get_config(win).relative ~= ""
-            if
-              vim.bo[buf].filetype == "snacks_terminal"
-              and not floating
-              and vim.api.nvim_win_get_width(win) ~= target
-            then
-              vim.api.nvim_win_set_width(win, target)
-            end
-          end
-          enforcing_term_width = false
-        end,
-      })
-
       -- <C-g> works from normal and terminal mode (pairs with the <C-t>
       -- side-terminal toggle) so lazygit is reachable wherever the cursor is.
       -- Snacks.lazygit() floats lazygit, auto-configured for the colorscheme, and
