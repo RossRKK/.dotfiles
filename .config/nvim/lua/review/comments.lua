@@ -20,8 +20,17 @@
 -- categories are noisy, so they're filtered at render time behind toggles
 -- (M.show_outdated / M.show_resolved, and the tree icon follows suit): comments
 -- GitHub no longer anchors (its `line` nulled — "outdated"), shown by default and
--- tagged; and comments in resolved threads (see resolved_comment_ids), hidden by
--- default. Both are still fetched, so toggling either needs no round-trip.
+-- tagged; and comments in resolved threads (see review_threads), hidden by
+-- default. Both are still fetched, so toggling either needs no round-trip. A
+-- thread can be resolved/unresolved in place (<leader>rk) via GraphQL.
+--
+-- GitHub anchors `line` to the PR-head commit (c.commit_id), but your working
+-- copy has local edits and unpushed commits, so that number drifts. We fetch the
+-- file blob at c.commit_id (cached — the sha is immutable) and diff it against the
+-- live buffer at render time, remapping each anchor through the hunks: a comment
+-- whose earlier lines shifted moves silently to track them; one whose own line
+-- changed or vanished locally can't be tracked, so it renders near the new hunk
+-- and is tagged "drifted". See remap_line / M.base_blob.
 --
 -- The PR is found from the active branch: none -> stay quiet; one -> use it;
 -- several -> ask once (remembered per branch). Rendering reads a cache, so only
@@ -55,6 +64,10 @@ M.show_resolved = false
 -- Absolute paths of files with comments or drafts, plus their ancestor dirs, for
 -- the tree decorator. Rebuilt on each fetch; empty while comments are hidden.
 M.marked = {}
+-- "<commit_id>:<rel path>" -> file text at that commit (or false if it couldn't
+-- be read). Base for the working-copy remap; keyed by sha so it survives edits
+-- and only grows.
+M.base_blob = {}
 
 local ns = vim.api.nvim_create_namespace("review_comments")
 
@@ -80,6 +93,40 @@ local function comment_visible(c)
     return false
   end
   return true
+end
+
+--- Remap a 1-based line number from a base file to its position in an edited
+--- version, given the change hunks between them (vim.diff `result_type="indices"`
+--- tuples: {start_a, count_a, start_b, count_b}, ascending by start_a). A line
+--- untouched by the edit moves by the net insert/delete of the hunks before it; a
+--- line whose own text was changed or removed can't be tracked, so we hand back
+--- the new hunk's start and false so the caller can flag it.
+---@param hunks integer[][]
+---@param old_line integer line number in the base file
+---@return integer row, boolean tracked (false == line changed/removed here)
+function M.remap_line(hunks, old_line)
+  local delta = 0
+  for _, h in ipairs(hunks) do
+    local start_a, count_a, start_b, count_b = h[1], h[2], h[3], h[4]
+    if count_a == 0 then
+      -- Pure insertion after base line start_a: shifts base lines past it down.
+      if start_a < old_line then
+        delta = delta + count_b
+      else
+        break -- this hunk and every later one sit at/after old_line
+      end
+    else
+      local last_a = start_a + count_a - 1 -- last base line the hunk changed
+      if old_line < start_a then
+        break
+      elseif old_line <= last_a then
+        return math.max(1, start_b), false -- old_line's text changed/removed
+      else
+        delta = delta + (count_b - count_a)
+      end
+    end
+  end
+  return old_line + delta, true
 end
 
 --- Run a command async, yielding until it exits. Returns the vim.system result
@@ -337,27 +384,29 @@ local function resolve_pr(root)
   return { number = chosen.number, head = chosen.headRefOid }
 end
 
---- The set of comment ids (REST id == GraphQL databaseId) belonging to *resolved*
---- review threads. REST /pulls/{n}/comments has no resolution field, so we join
---- against GraphQL reviewThreads to drop resolved comments from the display.
---- Fails open: any error returns {} so a network hiccup shows comments rather
---- than silently hiding them.
+--- Join the branch PR's review threads (GraphQL) back onto the REST comments,
+--- which carry no resolution or thread-grouping fields. Returns, keyed by REST
+--- comment id (== GraphQL databaseId): `resolved` (true for comments in a resolved
+--- thread, for the display filter) and `thread_of` (the thread's GraphQL node id,
+--- needed to resolve/unresolve it — REST ids won't do). Fails open: any error
+--- returns empty maps so a hiccup shows comments rather than hiding them, and
+--- leaves resolve unavailable rather than acting on a stale id.
 ---@param root string
 ---@param number integer
----@return table<integer, boolean>
-local function resolved_comment_ids(root, number)
+---@return table<integer, boolean> resolved, table<integer, string> thread_of
+local function review_threads(root, number)
   local repo = gh_json({ "repo", "view", "--json", "owner,name" }, root)
   local owner = repo and repo.owner and repo.owner.login
   local name = repo and repo.name
   if not owner or not name then
-    return {}
+    return {}, {}
   end
   local query = [[
     query($owner:String!,$name:String!,$number:Int!){
       repository(owner:$owner,name:$name){
         pullRequest(number:$number){
           reviewThreads(first:100){
-            nodes{ isResolved comments(first:100){ nodes{ databaseId } } }
+            nodes{ id isResolved comments(first:100){ nodes{ databaseId } } }
           }
         }
       }
@@ -373,17 +422,18 @@ local function resolved_comment_ids(root, number)
   }, root)
   local threads =
     vim.tbl_get(data or {}, "data", "repository", "pullRequest", "reviewThreads", "nodes")
-  local resolved = {}
+  local resolved, thread_of = {}, {}
   for _, thread in ipairs(threads or {}) do
-    if thread.isResolved then
-      for _, c in ipairs(thread.comments.nodes) do
-        if c.databaseId then
+    for _, c in ipairs(thread.comments.nodes) do
+      if c.databaseId then
+        thread_of[c.databaseId] = thread.id
+        if thread.isResolved then
           resolved[c.databaseId] = true
         end
       end
     end
   end
-  return resolved
+  return resolved, thread_of
 end
 
 --- The authenticated GitHub login (cached). Used to find your own comments.
@@ -567,14 +617,44 @@ local function render_buf(buf)
     by_line[anchor] = by_line[anchor] or {}
     table.insert(by_line[anchor], entry)
   end
+
+  -- Change hunks between a comment's base commit and this buffer, cached per base
+  -- commit (the buffer's path is fixed, so the sha is the only variable). Lets a
+  -- comment track its line across local edits/commits; nil when the base blob
+  -- isn't cached (commit not local), so we fall back to GitHub's anchor.
+  local buf_text
+  local hunks_cache = {}
+  local function local_hunks(sha)
+    local blob = sha and M.base_blob[sha .. ":" .. rel]
+    if not blob then
+      return nil
+    end
+    if hunks_cache[sha] == nil then
+      buf_text = buf_text or table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
+      hunks_cache[sha] = vim.diff(blob, buf_text, { result_type = "indices" }) or false
+    end
+    return hunks_cache[sha] or nil
+  end
+
   for _, c in ipairs(live or {}) do
     if comment_visible(c) then
       local line = val(c.line)
-      add(line or val(c.original_line), {
+      local anchor, drifted = val(c.original_line), false
+      if line ~= nil then
+        local hunks = local_hunks(c.commit_id)
+        if hunks then
+          local row, tracked = M.remap_line(hunks, line)
+          anchor, drifted = row, not tracked
+        else
+          anchor = line
+        end
+      end
+      add(anchor, {
         kind = "live",
         c = c,
         outdated = line == nil,
         resolved = c.resolved == true,
+        drifted = drifted,
       })
     end
   end
@@ -614,6 +694,9 @@ local function render_buf(buf)
         if entry.outdated then
           header[#header + 1] = { "  (outdated)", "ReviewCommentOutdated" }
         end
+        if entry.drifted then
+          header[#header + 1] = { "  (drifted)", "ReviewCommentDrifted" }
+        end
         if entry.resolved then
           header[#header + 1] = { "  (resolved)", "ReviewCommentResolved" }
         end
@@ -639,6 +722,31 @@ local function render_all()
   require("review").redraw_tree()
 end
 
+--- Read the file blob at `commit_id:path` for every anchored live comment whose
+--- blob isn't cached yet, so render_buf can diff it against the working copy. One
+--- `git show` per missing (sha, path); shas are immutable, so the cache only
+--- grows. A read that fails (commit not fetched locally) is cached as false so we
+--- don't retry it and the remap falls back to GitHub's line. MUST run in a
+--- coroutine (uses sh).
+---@param root string
+local function fetch_base_blobs(root)
+  local want = {}
+  for _, list in pairs(M.by_path) do
+    for _, c in ipairs(list) do
+      local sha, path = c.commit_id, c.path
+      if val(c.line) ~= nil and sha and path then
+        want[sha .. ":" .. path] = true
+      end
+    end
+  end
+  for key in pairs(want) do
+    if M.base_blob[key] == nil then
+      local obj = sh({ "git", "-C", root, "show", key })
+      M.base_blob[key] = (obj.code == 0) and obj.stdout or false
+    end
+  end
+end
+
 --- Fetch the branch PR's line comments and (re)draw every loaded buffer. Drafts
 --- are local, so they load and render even when the branch has no PR yet.
 local function fetch_render()
@@ -657,18 +765,20 @@ local function fetch_render()
         vim.notify("review: couldn't fetch comments: " .. tostring(err), vim.log.levels.WARN)
         M.by_path = {}
       else
-        local resolved = resolved_comment_ids(root, pr.number)
+        local resolved, thread_of = review_threads(root, pr.number)
         local by_path = {}
         for _, c in ipairs(comments) do
           if c.path then
             -- Keep resolved comments (tagged) so they can be toggled on rather
             -- than re-fetched; render_buf filters them per M.show_resolved.
             c.resolved = resolved[c.id] == true
+            c.thread_id = thread_of[c.id] -- GraphQL node id, for resolve/unresolve
             by_path[c.path] = by_path[c.path] or {}
             table.insert(by_path[c.path], c)
           end
         end
         M.by_path = by_path
+        fetch_base_blobs(root)
         if #comments >= 100 then
           vim.notify("review: showing the first 100 PR comments", vim.log.levels.WARN)
         end
@@ -822,6 +932,49 @@ function M.reply()
         vim.notify("review: reply failed: " .. gh_error(obj), vim.log.levels.ERROR)
       end
     end)
+  end)
+end
+
+--- Resolve (or unresolve) the review thread anchored at the cursor line. The
+--- direction toggles on the thread's current state, and only GitHub-backed threads
+--- qualify — a line carrying only unsent drafts has nothing to resolve. Uses the
+--- GraphQL mutation (REST can't resolve threads) with the thread's node id, which
+--- fetch stamps onto each comment as c.thread_id.
+function M.resolve()
+  local thread, _, root = thread_at_cursor()
+  if not thread or #thread == 0 then
+    vim.notify("review: no PR comment on this line (is review mode on?)", vim.log.levels.INFO)
+    return
+  end
+  local thread_id, currently_resolved
+  for _, c in ipairs(thread) do
+    if c.thread_id then
+      thread_id, currently_resolved = c.thread_id, c.resolved == true
+      break
+    end
+  end
+  if not thread_id then
+    vim.notify("review: couldn't find the thread id (try <leader>rC to refresh)", vim.log.levels.WARN)
+    return
+  end
+
+  local mutation = currently_resolved and "unresolveReviewThread" or "resolveReviewThread"
+  run(function()
+    local query = ([[
+      mutation($id:ID!){ %s(input:{threadId:$id}){ thread{ isResolved } } }
+    ]]):format(mutation)
+    -- stylua: ignore
+    local obj = sh({
+      "gh", "api", "graphql",
+      "-f", "query=" .. query,
+      "-f", "id=" .. thread_id,
+    }, root)
+    if obj.code == 0 then
+      vim.notify("review: thread " .. (currently_resolved and "unresolved" or "resolved"))
+      fetch_render()
+    else
+      vim.notify("review: resolve failed: " .. gh_error(obj), vim.log.levels.ERROR)
+    end
   end)
 end
 
@@ -1095,12 +1248,27 @@ function M.setup()
     -- in a resolved thread: outdated warns (stale anchor), resolved reads dim.
     vim.api.nvim_set_hl(0, "ReviewCommentOutdated", { link = "DiagnosticWarn", default = true })
     vim.api.nvim_set_hl(0, "ReviewCommentResolved", { link = "Comment", default = true })
+    -- Drifted: the commented line was edited/removed in the working copy, so the
+    -- anchor is only approximate. Warns, like outdated, but is a distinct group.
+    vim.api.nvim_set_hl(0, "ReviewCommentDrifted", { link = "DiagnosticWarn", default = true })
   end
   vim.api.nvim_create_autocmd("ColorScheme", { callback = set_hl })
   set_hl()
 
   -- Draw cached comments on buffers as they load/show (cheap; no network).
   vim.api.nvim_create_autocmd({ "BufReadPost", "BufWinEnter" }, {
+    callback = function(a)
+      if M.shown then
+        render_buf(a.buf)
+      end
+    end,
+  })
+
+  -- Re-anchor after edits: the working-copy remap diffs the base blob against the
+  -- live buffer, so a comment only follows its line once we redraw. TextChanged
+  -- (one event per normal-mode change) and InsertLeave keep it current without
+  -- diffing on every keystroke; render_buf no-ops on buffers without comments.
+  vim.api.nvim_create_autocmd({ "TextChanged", "InsertLeave" }, {
     callback = function(a)
       if M.shown then
         render_buf(a.buf)
@@ -1119,6 +1287,12 @@ function M.setup()
     M.comment(a == b and nil or a, b)
   end, { desc = "Review: draft comment on range (PR)" })
   vim.keymap.set("n", "<leader>ra", M.reply, { desc = "Review: reply to PR comment on line" })
+  vim.keymap.set(
+    "n",
+    "<leader>rk",
+    M.resolve,
+    { desc = "Review: resolve/unresolve PR thread on line" }
+  )
   vim.keymap.set("n", "<leader>re", M.edit, { desc = "Review: edit PR comment/draft on line" })
   vim.keymap.set("n", "<leader>rx", M.discard_draft, { desc = "Review: discard draft on line" })
   vim.keymap.set("n", "<leader>rS", M.submit, { desc = "Review: submit drafted review (batched)" })
@@ -1143,6 +1317,11 @@ function M.setup()
     "ReviewReply",
     M.reply,
     { desc = "Reply to the PR comment on this line" }
+  )
+  vim.api.nvim_create_user_command(
+    "ReviewResolve",
+    M.resolve,
+    { desc = "Resolve/unresolve the PR thread on this line" }
   )
   vim.api.nvim_create_user_command(
     "ReviewEditComment",
