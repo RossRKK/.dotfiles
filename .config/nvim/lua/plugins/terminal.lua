@@ -1,39 +1,20 @@
 return {
   {
-    "akinsho/toggleterm.nvim",
-    version = "*",
-    config = function()
-      local ide = require("config.ide")
+    "folke/snacks.nvim",
+    priority = 1000,
+    lazy = false,
+    ---@type snacks.Config
+    opts = {
+      -- terminal and lazygit are on-demand modules (no `enabled` needed). Add
+      -- other snacks modules here as they get adopted.
+    },
+    config = function(_, opts)
+      require("snacks").setup(opts)
 
-      require("toggleterm").setup({
-        direction = "vertical",
-        size = function(term)
-          if term.direction == "vertical" then
-            return ide.term_width()
-          end
-        end,
-        hide_numbers = true,
-        shade_terminals = false,
-        start_in_insert = true,
-        -- Applies to whichever terminal actually opens (incl. the <C-t> side
-        -- terminal, which is created fresh from this global config).
-        on_open = function(term)
-          if term.direction == "vertical" then
-            -- winfixwidth keeps auto-equalization from collapsing the terminal to
-            -- an even split below its 80-col floor; the WinResized handler re-asserts
-            -- the target width when the outer layout changes.
-            vim.wo[term.window].winfixwidth = true
-            vim.api.nvim_win_set_width(term.window, ide.term_width())
-            -- The side terminal is full-height (nothing above it), so <C-k> nav
-            -- is useless here; pass it through to the running app (e.g. Claude Code).
-            vim.keymap.set("t", "<C-k>", "<C-k>", { buffer = term.bufnr })
-          end
-        end,
-      })
+      local ide = require("config.ide")
 
       -- Tab keymaps for the side terminal (<C-b>{1-9}, etc).
       require("config.terms").setup_keymaps()
-      require("config.terms").setup_copymode()
       require("config.terms").setup_exit()
       -- Show the titled tab strip when the side terminal is in play (IDE mode).
       if ide.is_ide_mode() then
@@ -85,7 +66,7 @@ return {
             local buf = vim.api.nvim_win_get_buf(win)
             local floating = vim.api.nvim_win_get_config(win).relative ~= ""
             if
-              vim.bo[buf].filetype == "toggleterm"
+              vim.bo[buf].filetype == "snacks_terminal"
               and not floating
               and vim.api.nvim_win_get_width(win) ~= target
             then
@@ -96,26 +77,12 @@ return {
         end,
       })
 
-      local Terminal = require("toggleterm.terminal").Terminal
-
-      -- Lazygit on a dedicated id so <C-t> (terminal #1) never toggles it.
-      local lazygit = Terminal:new({
-        cmd = "lazygit",
-        count = 99,
-        direction = "float",
-        float_opts = {
-          border = "curved",
-          width = math.floor(vim.o.columns * 0.9),
-          height = math.floor(vim.o.lines * 0.9),
-        },
-        on_close = function()
-          vim.cmd("checktime") -- reload files changed by lazygit
-        end,
-      })
       -- <C-g> works from normal and terminal mode (pairs with the <C-t>
       -- side-terminal toggle) so lazygit is reachable wherever the cursor is.
+      -- Snacks.lazygit() floats lazygit, auto-configured for the colorscheme, and
+      -- runs checktime on close to reload files it changed; a second press hides it.
       vim.keymap.set({ "n", "t" }, "<C-g>", function()
-        lazygit:toggle()
+        Snacks.lazygit()
       end, { desc = "Open lazygit" })
     end,
   },
