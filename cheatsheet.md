@@ -479,7 +479,6 @@ titled tab strip shows across the top when the side terminal is open.
 | `Ctrl+B c`    | New tab in the next free slot                     |
 | `Ctrl+B &`    | Kill the current tab                              |
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
-| `Ctrl+B [`    | Enter copy / scrollback mode                      |
 | `Ctrl+T`      | Toggle the side terminal                          |
 
 ---

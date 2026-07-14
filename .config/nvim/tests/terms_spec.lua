@@ -1,46 +1,52 @@
 -- Slot bookkeeping in config/terms.lua: which terminal occupies the side panel,
 -- which stay alive but hidden, and how renumbering moves them around.
 --
--- toggleterm is faked: the real Terminal spawns a pty and owns a window, neither
--- of which exists headlessly. Everything under test is our own slot table, and
--- the only Terminal surface terms.lua touches is new/is_open/open/close/bufnr.
+-- snacks.terminal is faked: the real terminal spawns a pty and owns a window,
+-- neither of which exists headlessly. Everything under test is our own slot
+-- table, and the only Snacks.win surface terms.lua touches is
+-- .open()/win_valid/show/hide/.buf (plus buffer deletion on kill).
 
 local assert = require("luassert")
 
--- Fake toggleterm terminals. `bufnr` starts well above any real buffer number so
--- slot_of_buf(nvim_get_current_buf()) never matches one, and every command under
--- test resolves its target through open_managed() instead -- the same path taken
--- when <C-b> is pressed from the editor rather than from a terminal.
-local next_bufnr = 1000
+-- Fake Snacks.win terminals. Each gets a real (scratch) buffer so slot_of_buf and
+-- the kill() path -- which deletes the buffer with nvim_buf_delete -- behave like
+-- the real thing. slot_of_buf(nvim_get_current_buf()) still won't match a fake
+-- (the test never focuses one), so every command resolves through open_managed(),
+-- the same path taken when <C-b> is pressed from the editor.
+local FakeWin = {}
+FakeWin.__index = FakeWin
 
-local Terminal = {}
-Terminal.__index = Terminal
-
-function Terminal:new()
-  next_bufnr = next_bufnr + 1
-  return setmetatable({ bufnr = next_bufnr, opened = false }, Terminal)
+function FakeWin.new()
+  local buf = vim.api.nvim_create_buf(false, true)
+  return setmetatable({ buf = buf, win = -1, shown = true }, FakeWin)
 end
 
-function Terminal:is_open()
-  return self.opened
+-- Real Snacks.win:win_valid() checks only the window handle, but a killed
+-- terminal has its buffer wiped (which closes the window), so folding buffer
+-- validity in here lets the kill test observe the shutdown without a live pty.
+function FakeWin:win_valid()
+  return self.shown and self.buf ~= nil and vim.api.nvim_buf_is_valid(self.buf)
 end
 
-function Terminal:open()
-  self.opened = true
+function FakeWin:show()
+  self.shown = true
+  return self
 end
 
-function Terminal:close()
-  self.opened = false
+function FakeWin:hide()
+  self.shown = false
+  return self
 end
 
-function Terminal:shutdown()
-  self.opened = false
-  self.killed = true
-end
-
---- A fresh config.terms with the toggleterm fake installed and no slot state.
+--- A fresh config.terms with the snacks.terminal fake installed and no slot
+--- state. .open() returns an already-shown terminal, mirroring the real module
+--- (it opens the split and starts the job before returning).
 local function fresh_terms()
-  package.loaded["toggleterm.terminal"] = { Terminal = Terminal }
+  package.loaded["snacks.terminal"] = {
+    open = function()
+      return FakeWin.new()
+    end,
+  }
   package.loaded["config.terms"] = nil
   return require("config.terms")
 end
@@ -58,7 +64,7 @@ end
 --- The slot whose terminal is currently open, or nil if the panel is hidden.
 local function open_slot(terms)
   for slot, term in pairs(terms.slots) do
-    if term:is_open() then
+    if term:win_valid() then
       return slot
     end
   end
@@ -93,7 +99,7 @@ describe("terms.show", function()
     terms.show(2)
 
     assert.same({ 1, 2 }, slots_of(terms))
-    assert.is_false(first:is_open())
+    assert.is_false(first:win_valid())
     assert.equals(2, open_slot(terms))
     assert.equals(2, terms.current)
   end)
@@ -175,7 +181,7 @@ describe("terms.move", function()
     assert.equals(term, terms.slots[4])
     assert.equals(4, terms.current)
     -- The window/buffer are untouched: only the slot label changed.
-    assert.is_true(term:is_open())
+    assert.is_true(term:win_valid())
   end)
 
   -- A destination that is already taken must not clobber its terminal.
@@ -222,15 +228,17 @@ describe("terms.kill", function()
     terms = fresh_terms()
   end)
 
-  -- kill() shuts the terminal's shell down; freeing the slot is TermClose's job
-  -- (see terms.new "fills a hole"), so here we only assert the shutdown call.
+  -- kill() shuts the terminal's shell down by wiping its buffer; freeing the slot
+  -- is then TermClose's job (see terms.new "fills a hole"), so here we only assert
+  -- the buffer was deleted (which in the real module fires TermClose).
   it("shuts down the open terminal", function()
     terms.show(1)
     local term = terms.slots[1]
+    local buf = term.buf
 
     terms.kill()
-    assert.is_true(term.killed)
-    assert.is_false(term:is_open())
+    assert.is_false(vim.api.nvim_buf_is_valid(buf))
+    assert.is_false(term:win_valid())
   end)
 
   it("does nothing when no terminal is open", function()

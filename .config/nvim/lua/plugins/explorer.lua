@@ -43,7 +43,7 @@ return {
         -- Keep focus in the editor when neo-tree closes a window, and don't let
         -- opening a directory hijack the current window (the VimEnter handler
         -- below places the tree as a side panel beside a real editor window).
-        open_files_do_not_replace_types = { "terminal", "toggleterm", "trouble", "qf" },
+        open_files_do_not_replace_types = { "terminal", "snacks_terminal", "trouble", "qf" },
         enable_git_status = true,
         default_component_configs = {
           git_status = {
