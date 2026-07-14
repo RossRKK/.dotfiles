@@ -245,12 +245,17 @@ and the explorer flags changed files. Changes the default branch already has —
 even if the branch made them independently — don't show. Off by default; turn it
 on per-branch with `Space+rt` and approve / reject files as you go.
 
+The target defaults to the auto-detected default branch (`origin/HEAD`, else
+`main` / `master`). Override it with `Space+rb` (or `:ReviewBase <branch>`, with
+branch-name completion); an empty value clears back to auto-detect.
+
 | Key        | Action                                     |
 | ---------- | ------------------------------------------ |
 | `Space+rr` | Mark file / folder (recursive) approved    |
 | `Space+rj` | Mark file / folder rejected (flag)         |
 | `Space+ru` | Clear decision (untriage)                  |
 | `Space+rt` | Toggle review mode on / off                |
+| `Space+rb` | Set the target branch (empty = auto-detect) |
 | `Space+rd` | Toggle inline diff of current file vs base |
 | `Space+rR` | Refresh review status                      |
 
@@ -392,6 +397,11 @@ scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI munging).
 | `Ctrl+T`               | Toggle the side terminal                              |
 | `Ctrl+G`               | Toggle lazygit (works in normal & terminal mode)      |
 | `Ctrl+N` (in terminal) | Enter terminal-normal mode (then `gf` jumps to a ref) |
+
+**lazygit copy-to-clipboard:** `Ctrl+O` copies the selected item — branch name in
+the branches panel, commit SHA in the commits panel, path in the files panel. In
+the commits panel `y` opens a menu to pick which attribute (hash / subject /
+author / …).
 
 ### Terminal tabs
 
