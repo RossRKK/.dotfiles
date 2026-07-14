@@ -12,14 +12,17 @@ return {
         -- same-named files in different folders.
         lualine_c = {
           { "filename", path = 1 },
-          -- Review-mode status: the base being reviewed against and which comment
-          -- categories are shown. Empty (hidden) while review mode is off.
+          -- Review-mode status: triage contributes the base being reviewed
+          -- against; nitpick contributes a comment bubble + shown categories.
+          -- Empty (hidden) while review mode is off.
           {
             function()
-              return require("review").statusline()
+              local triage = require("triage").statusline()
+              local nitpick = package.loaded["nitpick"] and require("nitpick").statusline() or ""
+              return vim.trim(triage .. (nitpick ~= "" and ("  " .. nitpick) or ""))
             end,
             cond = function()
-              return package.loaded["review"] ~= nil and require("review").enabled
+              return package.loaded["triage"] ~= nil and require("triage").enabled
             end,
           },
         },
