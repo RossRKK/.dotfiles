@@ -11,7 +11,7 @@ return {
         local gs = require("gitsigns")
         -- Review mode rebases the sign column onto the branch merge-base; make
         -- sure buffers that attach after that base was chosen inherit it.
-        local base = require("review.gitsigns").current
+        local base = require("triage.gitsigns").current
         if base then
           pcall(gs.change_base, base, true)
         end
@@ -27,7 +27,7 @@ return {
         -- Inline diff vs HEAD (deleted lines as virtual text, changed lines
         -- highlighted word-level in the buffer) instead of a side-by-side split,
         -- so the fixed window layout stays put. Toggle, since the overlay is
-        -- persistent. Same gitsigns machinery as review's <leader>rd, but against
+        -- persistent. Same gitsigns machinery as triage's <leader>rd, but against
         -- HEAD (gitsigns' default base) rather than the review base.
         map("<leader>gd", function()
           gs.toggle_deleted()

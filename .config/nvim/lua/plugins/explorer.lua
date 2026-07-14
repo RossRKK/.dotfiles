@@ -85,15 +85,18 @@ return {
             hide_dotfiles = false,
             hide_gitignored = false,
           },
-          -- neo-tree resolves components per source, so the branch-review glyph
-          -- component is registered on filesystem (not globally) and referenced
-          -- from this source's renderers below -- document_symbols keeps its own.
+          -- neo-tree resolves components per source, so the triage glyph and the
+          -- nitpick comment marker are registered on filesystem (not globally) and
+          -- referenced from this source's renderers below -- document_symbols keeps
+          -- its own.
           components = {
-            review_status = require("review.adapter").status_component,
+            triage_status = require("triage.adapter").status_component,
+            nitpick_marker = require("nitpick.adapter").marker_component,
           },
           renderers = {
-            -- Default filesystem renderers with `review_status` inserted just
-            -- before the name, so the triage glyph sits at the front of the row.
+            -- Default filesystem renderers with `triage_status` and the
+            -- `nitpick_marker` inserted just before the name, so the triage glyph
+            -- and comment bubble sit at the front of the row.
             directory = {
               { "indent" },
               { "icon" },
@@ -101,7 +104,8 @@ return {
               {
                 "container",
                 content = {
-                  { "review_status", zindex = 10 },
+                  { "triage_status", zindex = 10 },
+                  { "nitpick_marker", zindex = 10 },
                   { "name", zindex = 10 },
                   { "clipboard", zindex = 10 },
                   { "diagnostics", errors_only = true, zindex = 20, align = "right", hide_when_expanded = true },
@@ -115,7 +119,8 @@ return {
               {
                 "container",
                 content = {
-                  { "review_status", zindex = 10 },
+                  { "triage_status", zindex = 10 },
+                  { "nitpick_marker", zindex = 10 },
                   { "name", zindex = 10 },
                   { "clipboard", zindex = 10 },
                   { "bufnr", zindex = 10 },
@@ -229,8 +234,17 @@ return {
         end,
       })
 
-      -- Branch review mode: commands, keymaps, gitsigns base, explorer colours.
-      require("review").setup()
+      -- Branch review mode. Two plugins, wired together here (the coupling is
+      -- config, not baked into either): triage owns the per-file status, gitsigns
+      -- base and explorer glyph; nitpick owns inline GitHub PR comments. The one
+      -- review-mode toggle drives both (triage's on_toggle → nitpick.set_shown),
+      -- and nitpick borrows triage's verdict as its submit event.
+      require("triage").setup({
+        on_toggle = function(on)
+          require("nitpick").set_shown(on)
+        end,
+      })
+      require("nitpick").setup({ verdict = require("triage").verdict })
     end,
   },
 }
