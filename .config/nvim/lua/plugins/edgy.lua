@@ -23,10 +23,35 @@ return {
     end,
     ---@type Edgy.Config
     opts = {
+      -- Arrow-key resizing for edge windows, on top of edgy's own <C-w></>/+/-.
+      -- These merge into edgy's default keys (deep-extend), so both sets work;
+      -- edgy's win:resize sticks against winfixwidth where :resize wouldn't.
+      -- Convention: Right/Up grow, Left/Down shrink.
+      keys = {
+        ["<C-Right>"] = function(win)
+          win:resize("width", 2)
+        end,
+        ["<C-Left>"] = function(win)
+          win:resize("width", -2)
+        end,
+        ["<C-Up>"] = function(win)
+          win:resize("height", 2)
+        end,
+        ["<C-Down>"] = function(win)
+          win:resize("height", -2)
+        end,
+      },
       -- Default minimum sizes for each edge; individual views can override.
       options = {
         left = { size = 35 },
-        right = { size = 0.4 }, -- ~40% width, biased toward the code like before
+        -- ~40% width, biased toward the code -- but never below 80 columns, so the
+        -- terminal always fits a standard 80-col line. edgy re-runs this on every
+        -- VimResized; returning an absolute count (>= 1) overrides the fraction path.
+        -- The 40% floor only yields below 80 under ~200 total columns, where the
+        -- editor gives up the difference instead.
+        right = { size = function()
+          return math.max(80, math.floor(vim.o.columns * 0.4))
+        end },
       },
       left = {
         -- The file tree, taking most of the column height. git_status shares this

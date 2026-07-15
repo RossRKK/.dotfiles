@@ -94,10 +94,16 @@ below work while focused inside an edge window (explorer, outline, terminal):
 
 | Key                     | Action                                  |
 | ----------------------- | --------------------------------------- |
-| `Ctrl+Left`/`Ctrl+Right`| Grow / shrink the edge's width          |
-| `Ctrl+Up`/`Ctrl+Down`   | Grow / shrink height (stacked panels)   |
-| `]w` / `[w`             | Next / prev window in the edgebar       |
-| `Q`                     | Close the whole edgebar                 |
+| `Ctrl+Right` / `Ctrl+Left` | Grow / shrink the edge's width       |
+| `Ctrl+Up` / `Ctrl+Down`    | Grow / shrink height (stacked panels)|
+| `Ctrl+w =`                 | Reset edge sizes to their defaults   |
+| `]w` / `[w`                | Next / prev window in the edgebar    |
+| `Q`                        | Close the whole edgebar              |
+
+Widen the explorer with `Ctrl+Right` while focused inside it — this is the way to
+fit long/nested names now that neo-tree's `e` (auto-expand-width) is unbound; it
+fought edgy, which owns the panel width (default 40%, floored at 80 columns).
+(`Ctrl+w >`/`<`/`+`/`-` also work — edgy's built-in equivalents.)
 
 Notifications use the snacks notifier (toasts, top-right); `Space+n` opens the
 scrollback history of everything that was notified.
@@ -405,7 +411,6 @@ are inside the tree; `?` shows the full, live list.
 | `C` / `z`       | Collapse this node / all nodes       |
 | `.` / `<BS>`    | Set tree root here / go up a level   |
 | `R`             | Refresh the tree                     |
-| `e`             | Toggle auto-expand width (fit long / nested names; press again to snap back) |
 
 **Search & filter**
 

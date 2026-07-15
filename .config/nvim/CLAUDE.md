@@ -26,7 +26,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | ------------------- | ----------------------------------------------------------- |
 | `review_spec.lua`   | `review.verdict` rollup, `status`/`folder` path lookups      |
 | `terms_spec.lua`    | side-terminal slot table: show/new/move/toggle               |
-| `ide_spec.lua`      | side-terminal width, the 80-column floor, explorer geometry  |
+| `ide_spec.lua`      | side-terminal width, explorer geometry                       |
 | `comments_spec.lua` | `rebuild_marked` decorator set over comments + drafts        |
 
 `tests/minimal_init.lua` loads this config plus plenary, and deliberately does
