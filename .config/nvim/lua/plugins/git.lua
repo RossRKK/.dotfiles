@@ -1,5 +1,35 @@
 return {
   {
+    -- A second snacks fragment (config lives in terminal.lua); lazy merges `keys`
+    -- across fragments, so this PR map sits with the other <leader>g git maps.
+    -- Resolve the current branch's PR via snacks, then :edit its gh:// uri: the
+    -- first read of a gh:// buffer trips snacks' bootstrap BufReadCmd, which
+    -- renders the PR in the current window. In-buffer keymaps drive the actions
+    -- (<cr> action menu, c/i/a/o). (Snacks.gh.open, the documented one-shot, isn't
+    -- implemented in this version; the picker's "Open in buffer" jump is flaky.)
+    "folke/snacks.nvim",
+    keys = {
+      {
+        "<leader>gP",
+        function()
+          -- current_pr() spawns gh via snacks' async runtime, so it must run in an
+          -- async coroutine; the buffer edit then goes back on the main loop.
+          require("snacks.picker.util.async").new(function()
+            local pr = require("snacks.gh.api").current_pr()
+            vim.schedule(function()
+              if not pr then
+                vim.notify("gh: no open PR for the current branch", vim.log.levels.WARN)
+                return
+              end
+              vim.cmd.edit(pr.uri)
+            end)
+          end)
+        end,
+        desc = "Open current branch's PR in buffer (gh)",
+      },
+    },
+  },
+  {
     "lewis6991/gitsigns.nvim",
     event = { "BufReadPre", "BufNewFile" },
     opts = {
