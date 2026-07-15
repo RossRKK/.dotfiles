@@ -57,19 +57,8 @@ return {
       vim.keymap.set({ "n", "t" }, "<C-g>", function()
         Snacks.lazygit()
       end, { desc = "Open lazygit" })
-
-      -- <leader>gP floats `gh pr view` for the current branch's PR. gh resolves
-      -- the branch->PR itself; --comments so the discussion is included. Pager is
-      -- forced off (the float is the scrollback) and errors (no PR, no gh auth)
-      -- stay on screen so you can read them.
-      -- Normal mode only: a <leader> (space) map in terminal mode makes every
-      -- space in the shell wait timeoutlen for the rest of the mapping.
-      vim.keymap.set("n", "<leader>gP", function()
-        Snacks.terminal("gh pr view --comments; echo; read -n1 -s", {
-          env = { GH_PAGER = "cat" },
-          win = { title = " gh pr view ", position = "float" },
-        })
-      end, { desc = "View PR for current branch (gh)" })
+      -- <leader>gP (PR for the current branch) lives in git.lua with the other
+      -- <leader>g git maps.
     end,
   },
 }
