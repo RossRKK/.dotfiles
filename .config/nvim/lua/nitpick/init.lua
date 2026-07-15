@@ -1125,6 +1125,64 @@ end
 --- confirmation. On success every draft is cleared, so continuing the review
 --- starts a fresh batch. Submitting with no drafts sends a bare verdict (e.g. a
 --- plain approve).
+--- The line numbers GitHub will accept a review comment on, per repo-relative
+--- path and side: `right` (head-side — added and context lines) and `left`
+--- (base-side — deleted and context lines). A comment whose (path, line, side)
+--- isn't one of these 422s the whole review, so submit validates against this
+--- first. Parses `gh pr diff`; returns nil if that call fails, and the caller
+--- then skips validation and lets GitHub arbitrate as before.
+---@param root string
+---@param number integer
+---@return table<string, { right: table<integer, boolean>, left: table<integer, boolean> }>?
+local function pr_diff_lines(root, number)
+  local obj = sh({ "gh", "pr", "diff", tostring(number) }, root)
+  if obj.code ~= 0 then
+    return nil
+  end
+  -- Walk the unified diff, tracking head/base line counters per hunk header
+  -- (@@ -base,_ +head,_ @@) and marking each line the API can anchor to.
+  local files, cur, rline, lline = {}, nil, nil, nil
+  for line in (obj.stdout .. "\n"):gmatch("(.-)\n") do
+    local newpath = line:match("^%+%+%+ b/(.*)")
+    if newpath then
+      cur = { right = {}, left = {} }
+      files[newpath] = cur
+    elseif not line:match("^%-%-%- ") then -- ignore the old-path header
+      local base, head = line:match("^@@ %-(%d+),?%d* %+(%d+),?%d* @@")
+      if base then
+        lline, rline = tonumber(base), tonumber(head)
+      elseif cur and rline then
+        local sign = line:sub(1, 1)
+        if sign == "+" then
+          cur.right[rline] = true
+          rline = rline + 1
+        elseif sign == "-" then
+          cur.left[lline] = true
+          lline = lline + 1
+        elseif sign == " " then
+          cur.right[rline], cur.left[lline] = true, true
+          rline, lline = rline + 1, lline + 1
+        end
+      end
+    end
+  end
+  return files
+end
+
+--- Fold off-diff drafts into one block for the review body: each as its
+--- `path:line` location, a blank line, then the comment. So a note GitHub won't
+--- anchor inline still reads as "this line, this comment". Entries divided by a
+--- horizontal rule.
+---@param offdiff { path: string, line: integer, body: string }[]
+---@return string
+local function fold_offdiff(offdiff)
+  local parts = {}
+  for _, o in ipairs(offdiff) do
+    parts[#parts + 1] = ("%s:%d\n\n%s"):format(o.path, o.line, o.body)
+  end
+  return table.concat(parts, "\n\n---\n\n")
+end
+
 function M.submit()
   local root = current_root()
   if not root then
@@ -1133,17 +1191,9 @@ function M.submit()
   end
   ensure_drafts(root)
 
-  -- Build the comments array and the verdict up front (both sync).
-  local comments = {}
-  for rel, list in pairs(M.drafts) do
-    for _, d in ipairs(list) do
-      local c = { path = rel, line = d.line, side = d.side or "RIGHT", body = d.body }
-      if d.start_line then
-        c.start_line = d.start_line
-        c.start_side = d.side or "RIGHT"
-      end
-      comments[#comments + 1] = c
-    end
+  local draft_count = 0
+  for _, list in pairs(M.drafts) do
+    draft_count = draft_count + #list
   end
   run(function()
     -- The review event. An injected status source (opts.verdict, wired to
@@ -1152,7 +1202,7 @@ function M.submit()
     local verdict
     if M.opts.verdict then
       verdict = M.opts.verdict()
-      if not verdict and #comments == 0 then
+      if not verdict and draft_count == 0 then
         vim.notify("review: nothing to submit", vim.log.levels.INFO)
         return
       end
@@ -1174,15 +1224,75 @@ function M.submit()
       return
     end
 
-    local title = ("Submit as %s · %d comment(s) · summary optional"):format(verdict, #comments)
+    -- Partition drafts into those GitHub will anchor inline and those off the
+    -- diff. Off-diff ones can't be line comments (one would 422 the whole batch),
+    -- so we fold them into the review summary instead — but that drops their
+    -- inline anchor, so we confirm below and let the reviewer back out to move
+    -- them first. A nil diff (fetch failed) skips validation: treat all as inline
+    -- and let GitHub arbitrate, the pre-change behaviour.
+    local diff_lines = pr_diff_lines(root, pr.number)
+    local inline, offdiff = {}, {}
+    for rel, list in pairs(M.drafts) do
+      for _, d in ipairs(list) do
+        local side = d.side or "RIGHT"
+        local set = diff_lines
+          and diff_lines[rel]
+          and (side == "LEFT" and diff_lines[rel].left or diff_lines[rel].right)
+        local ok = diff_lines == nil
+          or (set ~= nil and set[d.line] and (not d.start_line or set[d.start_line]))
+        if ok then
+          local c = { path = rel, line = d.line, side = side, body = d.body }
+          if d.start_line then
+            c.start_line = d.start_line
+            c.start_side = side
+          end
+          inline[#inline + 1] = c
+        else
+          offdiff[#offdiff + 1] = { path = rel, line = d.line, body = d.body }
+        end
+      end
+    end
+
+    -- Warn before turning inline comments into summary text: it's a real change
+    -- in where they land, so name them and let the reviewer cancel to move them.
+    if #offdiff > 0 then
+      local names = {}
+      for _, o in ipairs(offdiff) do
+        names[#names + 1] = ("%s:%d"):format(o.path, o.line)
+      end
+      local idx = pick({ "Fold into summary and submit", "Cancel (move them first)" }, {
+        prompt = ("%d comment(s) aren't on the diff — they'll be folded into the review summary and lose their inline anchor: %s"):format(
+          #offdiff,
+          table.concat(names, ", ")
+        ),
+      })
+      if idx ~= 1 then
+        return
+      end
+    end
+
+    local title = ("Submit as %s · %d inline + %d folded · summary optional"):format(
+      verdict,
+      #inline,
+      #offdiff
+    )
     open_input(title, nil, function(body, close)
       run(function()
         local payload = { commit_id = pr.head, event = verdict }
-        if #comments > 0 then
-          payload.comments = comments
+        if #inline > 0 then
+          payload.comments = inline
         end
+        -- Body = typed summary, then the folded off-diff block, each present only
+        -- if non-empty.
+        local sections = {}
         if body ~= "" then
-          payload.body = body
+          sections[#sections + 1] = body
+        end
+        if #offdiff > 0 then
+          sections[#sections + 1] = fold_offdiff(offdiff)
+        end
+        if #sections > 0 then
+          payload.body = table.concat(sections, "\n\n")
         elseif verdict == "APPROVE" then
           payload.body = "LGTM" -- a bare approval shouldn't go out wordless
         end
@@ -1197,12 +1307,13 @@ function M.submit()
         }, root, vim.json.encode(payload))
 
         if obj.code == 0 then
-          -- One bad anchor line 422s the whole review, so a success means every
-          -- draft landed — safe to clear them all.
+          -- Success means every draft landed (inline or folded) — clear them all.
           close()
           M.drafts = {}
           save_drafts(root)
-          vim.notify(("review: submitted %s (%d comment(s))"):format(verdict, #comments))
+          vim.notify(
+            ("review: submitted %s (%d inline, %d folded)"):format(verdict, #inline, #offdiff)
+          )
           fetch_render()
         else
           -- Keep the float open so the typed summary isn't lost on a failure.
