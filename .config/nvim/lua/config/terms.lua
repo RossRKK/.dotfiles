@@ -1,59 +1,97 @@
 -- tmux-style tab switching for the vertical side terminal.
 --
--- One terminal occupies the side slot at a time; the others stay alive but
+-- One terminal is visible in the side slot at a time; the others stay alive but
 -- hidden. Switching is done from terminal-normal mode (enter it with <C-\><C-n>,
 -- or the <C-n> map): <C-b>{1-9} switches to (creating on demand) a terminal,
 -- <C-b>c opens the next free slot, <C-b>& kills the current terminal (tmux
 -- kill-window), and <C-b>.{1-9} renumbers the current terminal to another slot
 -- (tmux move-window). <C-t> toggles the side slot from anywhere.
 --
--- Slots (1..9) are ours. M.slots is the sole slot->terminal mapping (each value
--- a Snacks.win we created with snacks.terminal.open), so renumbering is a swap in
--- a table we own -- we never rely on snacks' own cmd-keyed terminal cache.
--- Everything else here (the tab strip) keys off the Snacks.win object.
+-- Model (the tmux-pane model): a SINGLE side window (M.win) lives in the right
+-- slot, and switching tabs swaps which terminal buffer that window shows --
+-- nvim_win_set_buf, never close+reopen. The window's size therefore never
+-- changes on a switch, so the pty never gets a SIGWINCH and a full-screen TUI
+-- (Claude Code) never repaints into a stale geometry -- which is what produced
+-- the doubled/off-by-one rows the old hide/show-per-terminal approach caused
+-- (each show recreated a window, and edgy resized it from default -> 0.4 mid
+-- render). We own the window and spawn terminals directly with jobstart rather
+-- than going through snacks.terminal, whose fixbuf autocmd fights a buffer swap.
+--
+-- Slots (1..9) are ours. M.slots is the sole slot->buffer mapping. Renumbering is
+-- a swap in a table we own. Everything else (the tab strip) keys off the buffer.
 
 local M = {}
 
 local BASE = 1 -- slot 1 is the primary side terminal (<C-t>)
 local MAX = 9
 
+-- ft the side window carries so edgy positions/sizes it in the right edgebar
+-- (see lua/plugins/edgy.lua) and term_col_width() can find it.
+local FT = "snacks_terminal"
+
 M.current = BASE -- slot currently shown
-M.slots = {} -- slot (1..9) -> Terminal
+M.slots = {} -- slot (1..9) -> { buf = <bufnr> }
+M.win = nil -- the single side window (shared viewport), or nil when closed
 
-local function snacks_term()
-  return require("snacks.terminal")
+-- The side window if it still exists, else nil (and forget the stale handle).
+local function viewport()
+  if M.win and vim.api.nvim_win_is_valid(M.win) then
+    return M.win
+  end
+  M.win = nil
+  return nil
 end
 
--- Create a fresh side terminal. We hold the returned Snacks.win in M.slots
--- ourselves and drive it with show()/hide(); snacks' own cmd-keyed cache is
--- bypassed via .open() (a brand-new instance every call), so all nine slots stay
--- independent even though they share cmd/cwd. interactive = false keeps snacks
--- from auto-inserting or popping an error notify when kill() tears a shell down.
--- Placement and sizing (right edge) are edgy's job -- see lua/plugins/edgy.lua.
-local function new_side_term()
-  return snacks_term().open(nil, {
-    interactive = false,
-    win = {
-      position = "right",
-      -- Runs at the end of Snacks.win:show().
-      on_win = function(self)
-        -- Suppress snacks' per-window winbar (it defaults to "id: term_title" for
-        -- split terminals); config/terms.lua's top tab strip already titles this
-        -- region, and edgy's own title is disabled for it too.
-        vim.wo[self.win].winbar = ""
-        -- The side terminal is full-height (nothing above it), so <C-k> nav is
-        -- useless here; pass it through to the running app (e.g. Claude Code).
-        vim.keymap.set("t", "<C-k>", "<C-k>", { buffer = self.buf })
-      end,
-    },
-  })
+-- Apply the terminal look to the side window. Window-local, so it's set once on
+-- the shared window and persists across every buffer swap. winbar is blanked
+-- because config/terms.lua's top tab strip already titles this region (edgy's
+-- own title is disabled for it too, see edgy.lua).
+local function style_window(win)
+  vim.wo[win].number = false
+  vim.wo[win].relativenumber = false
+  vim.wo[win].signcolumn = "no"
+  vim.wo[win].cursorline = false
+  vim.wo[win].winbar = ""
 end
 
--- Kill a terminal's shell. Snacks' win:close() never wipes a live terminal
--- buffer, so delete the buffer directly: that stops the job and fires TermClose,
--- which setup_exit uses to free the slot and surface another tab.
+-- Open the shared side window at the far right carrying `buf`. edgy adopts it via
+-- the FT + relative=="" filter and owns its final placement/width. Called only
+-- when no side window exists (first open, or after <C-t> closed it) -- never on a
+-- plain tab switch, which is the whole point.
+local function open_viewport(buf)
+  vim.cmd("botright vsplit")
+  local win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(win, buf)
+  style_window(win)
+  M.win = win
+  return win
+end
+
+-- A fresh terminal buffer, tagged with FT *before* it is ever shown so edgy
+-- adopts the window into the right edgebar the moment the buffer enters it
+-- (edgy filters on filetype; setting it afterwards would leave the window a plain
+-- middle split). No job yet -- start_job does that once the buffer is on screen.
+local function make_term_buf()
+  local buf = vim.api.nvim_create_buf(false, false)
+  vim.bo[buf].filetype = FT
+  return buf
+end
+
+-- Start the shell in `buf`, which must already be shown in the current window:
+-- jobstart({term=true}) attaches to the current buffer and sizes the pty to the
+-- current window. Re-assert FT (jobstart can reset it) and pass <C-k> through --
+-- the side terminal is full-height, so <C-k> window-nav is useless here and the
+-- running app (e.g. Claude Code) should get the key instead.
+local function start_job(buf)
+  vim.fn.jobstart(vim.o.shell, { term = true })
+  vim.bo[buf].filetype = FT
+  vim.keymap.set("t", "<C-k>", "<C-k>", { buffer = buf })
+end
+
+-- Kill a terminal's shell by deleting its buffer: that stops the job and fires
+-- TermClose, which setup_exit uses to free the slot and surface another tab.
 local function shutdown(term)
-  if term.buf and vim.api.nvim_buf_is_valid(term.buf) then
+  if term and term.buf and vim.api.nvim_buf_is_valid(term.buf) then
     vim.api.nvim_buf_delete(term.buf, { force = true })
   end
 end
@@ -76,14 +114,6 @@ local function managed()
   return out
 end
 
-local function open_managed()
-  for _, e in ipairs(managed()) do
-    if e.term:win_valid() then
-      return e.slot, e.term
-    end
-  end
-end
-
 local function slot_of_buf(buf)
   for _, e in ipairs(managed()) do
     if e.term.buf == buf then
@@ -92,15 +122,33 @@ local function slot_of_buf(buf)
   end
 end
 
+-- The slot/terminal currently shown in the side window (nil if none).
+local function shown()
+  local win = viewport()
+  if not win then
+    return nil
+  end
+  return slot_of_buf(vim.api.nvim_win_get_buf(win))
+end
+
 -- The slot/terminal a command should act on: the focused terminal if there is
 -- one, else whatever occupies the side slot.
 local function current_target()
-  local buf = vim.api.nvim_get_current_buf()
-  local slot, term = slot_of_buf(buf)
+  local slot, term = slot_of_buf(vim.api.nvim_get_current_buf())
   if slot then
     return slot, term
   end
-  return open_managed()
+  return shown()
+end
+
+-- The first surviving managed terminal (used to pick a replacement when the shown
+-- one is killed/exits).
+local function first_alive()
+  for _, e in ipairs(managed()) do
+    if vim.api.nvim_buf_is_valid(e.term.buf) then
+      return e.slot, e.term
+    end
+  end
 end
 
 local function read_file(path)
@@ -120,8 +168,6 @@ local function term_procs(term)
   if not term or not term.buf or not vim.api.nvim_buf_is_valid(term.buf) then
     return nil
   end
-  -- The terminal's job id lives on the buffer (set by termopen), not on the
-  -- Snacks.win object.
   local ok, jid = pcall(function()
     return vim.b[term.buf].terminal_job_id
   end)
@@ -142,33 +188,31 @@ local function term_procs(term)
   return pid, tpgid
 end
 
--- Show the terminal in `slot`, creating it if the slot is empty. Any other
--- managed terminal occupying the side slot is hidden (not killed) so it stays a
--- tab. `opts.insert` (default true) controls whether we land in terminal mode.
+-- Show the terminal in `slot`, creating it if the slot is empty. Opens the shared
+-- side window only if it isn't already open; otherwise just swaps its buffer.
+-- `opts.insert` (default true) controls whether we land in terminal mode.
 function M.show(slot, opts)
   opts = opts or {}
   slot = clamp(slot)
 
-  for _, e in ipairs(managed()) do
-    if e.slot ~= slot and e.term:win_valid() then
-      e.term:hide()
-    end
-  end
-
+  local win = viewport()
   local term = M.slots[slot]
-  if not term then
-    -- new_side_term() opens the split immediately (position, width, on_win all
-    -- baked into its opts), so the freshly created terminal is already shown.
-    term = new_side_term()
-    M.slots[slot] = term
-  end
+  local have_buf = term and vim.api.nvim_buf_is_valid(term.buf)
+  local buf = have_buf and term.buf or make_term_buf()
 
-  if term:win_valid() then
-    if term.win and vim.api.nvim_win_is_valid(term.win) then
-      vim.api.nvim_set_current_win(term.win)
-    end
+  if not win then
+    -- No side window yet: open one carrying `buf` (edgy adopts it via FT).
+    win = open_viewport(buf)
   else
-    term:show()
+    -- Reuse the side window: just swap its buffer. Same window, same size, so no
+    -- resize -- which is the whole point (no SIGWINCH, no torn redraw).
+    vim.api.nvim_win_set_buf(win, buf)
+  end
+  vim.api.nvim_set_current_win(win)
+
+  if not have_buf then
+    start_job(buf) -- buf is on screen now, so the pty sizes to the side window
+    M.slots[slot] = { buf = buf }
   end
 
   M.current = slot
@@ -180,11 +224,13 @@ function M.show(slot, opts)
   end)
 end
 
--- <C-t>: toggle the side slot — hide it if open, else re-show the current tab.
+-- <C-t>: toggle the side slot — close the window if open (buffers stay alive),
+-- else re-open showing the current tab.
 function M.toggle()
-  local _, open = open_managed()
-  if open then
-    open:hide()
+  local win = viewport()
+  if win then
+    pcall(vim.api.nvim_win_close, win, false)
+    M.win = nil
   else
     M.show(M.current or BASE)
   end
@@ -202,24 +248,38 @@ function M.new()
 end
 
 -- <C-b>&: kill the current side terminal (tmux kill-window). Unlike <C-t>, which
--- only hides the tab, this shuts the shell down; the TermClose handler
--- (setup_exit) then frees the slot and shows another open tab if one remains.
+-- only hides the window, this shuts the shell down. If the killed terminal is the
+-- one on screen we bring another tab into the viewport BEFORE deleting its buffer
+-- -- deleting the shown buffer would briefly leave a non-terminal buffer in the
+-- window, which edgy would eject. TermClose (setup_exit) is a no-op afterward
+-- since we've already freed the slot.
 function M.kill()
-  local _, term = current_target()
-  if term then
-    shutdown(term)
+  local slot, term = current_target()
+  if not slot or not term then
+    return
   end
+  M.slots[slot] = nil
+  local win = viewport()
+  if win and vim.api.nvim_win_get_buf(win) == term.buf then
+    local nxt = first_alive()
+    if nxt then
+      M.show(nxt)
+    else
+      pcall(vim.api.nvim_win_close, win, true)
+      M.win = nil
+    end
+  end
+  shutdown(term)
 end
 
 -- <C-b>.{1-9}: renumber the shown side terminal to `dest` (tmux move-window).
 -- If `dest` is occupied the two terminals swap slots so neither is clobbered;
 -- otherwise the source slot is freed. The shown window/buffer are untouched --
--- only the slot (hence tab label and switch key) changes. Purely a swap in
--- M.slots; snacks' own terminal cache is never consulted, so ids can't drift.
+-- only the slot (hence tab label and switch key) changes.
 function M.move(dest)
   dest = clamp(dest)
   local source, term = current_target()
-  if not term or source == dest then
+  if not source or not term or source == dest then
     return
   end
   M.slots[source], M.slots[dest] = M.slots[dest], term
@@ -262,11 +322,9 @@ end
 
 -- Live text width of the side terminal window (0 if it's currently hidden).
 local function term_col_width()
-  for _, w in ipairs(vim.api.nvim_list_wins()) do
-    local b = vim.api.nvim_win_get_buf(w)
-    if vim.bo[b].filetype == "snacks_terminal" and vim.api.nvim_win_get_config(w).relative == "" then
-      return vim.api.nvim_win_get_width(w)
-    end
+  local win = viewport()
+  if win and vim.bo[vim.api.nvim_win_get_buf(win)].filetype == FT then
+    return vim.api.nvim_win_get_width(win)
   end
   return 0
 end
@@ -361,26 +419,33 @@ function M.setup_keymaps()
   )
 end
 
--- When a managed terminal's shell exits, free its slot and show another open tab
--- if one remains; if it was the last, the side panel just closes. Called once
--- from terminal.lua.
+-- When a managed terminal's shell exits, free its slot and — if it was the one on
+-- screen — swap another open tab into the shared window; if it was the last, the
+-- side window is closed. Called once from terminal.lua. A kill via M.kill has
+-- already freed the slot, so this is then a no-op for that buffer.
 function M.setup_exit()
   vim.api.nvim_create_autocmd("TermClose", {
     group = vim.api.nvim_create_augroup("TermExit", { clear = true }),
     callback = function(args)
-      local slot, term = slot_of_buf(args.buf)
+      local slot = slot_of_buf(args.buf)
       if not slot then
         return
       end
       M.slots[slot] = nil
-      -- Deferred: let snacks finish closing the exited terminal's window
-      -- before we swap another managed terminal into the side slot.
       vim.schedule(function()
-        for _, e in ipairs(managed()) do
-          if vim.api.nvim_buf_is_valid(e.term.buf) then
-            M.show(e.slot)
-            return
+        local win = viewport()
+        if win and vim.api.nvim_win_get_buf(win) == args.buf then
+          local nxt = first_alive()
+          if nxt then
+            M.show(nxt)
+          else
+            pcall(vim.api.nvim_win_close, win, true)
+            M.win = nil
           end
+        end
+        -- Clean up the dead buffer ("[Process exited]").
+        if vim.api.nvim_buf_is_valid(args.buf) then
+          pcall(vim.api.nvim_buf_delete, args.buf, { force = true })
         end
       end)
     end,
