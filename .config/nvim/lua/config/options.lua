@@ -34,7 +34,6 @@ opt.confirm = true -- prompt to save on :q of a dirty buffer, rather than errori
 opt.termguicolors = true
 opt.mouse = "a"
 
-opt.undofile = true
 opt.swapfile = false
 
 opt.autoread = true
@@ -61,10 +60,24 @@ vim.diagnostic.config({
 
 -- Fixed RPC socket for external tooling (an MCP server that reads buffers /
 -- diagnostics / review state), stable across restarts — unlike the per-instance
--- $NVIM path, which tmux keeps stale after an nvim restart. We run one nvim, so
--- reclaim a socket left by a previous run before binding.
-local rpc_socket = vim.fs.joinpath(vim.env.XDG_RUNTIME_DIR or "/tmp", "nvim.sock")
-if vim.uv.fs_stat(rpc_socket) then
-  os.remove(rpc_socket)
+-- $NVIM path, which tmux keeps stale after an nvim restart.
+--
+-- Only the "main" nvim may claim it: a nested instance (spawned inside our own
+-- terminal, e.g. `git commit` — $NVIM is set there) must not, or it would
+-- delete the outer session's live socket and steal the path. And a socket file
+-- on disk is only reclaimed when nothing answers on it (a leftover from a
+-- crashed/killed run), not when another live nvim owns it.
+if not vim.env.NVIM then
+  local rpc_socket = vim.fs.joinpath(vim.env.XDG_RUNTIME_DIR or "/tmp", "nvim.sock")
+  if vim.uv.fs_stat(rpc_socket) then
+    local ok, chan = pcall(vim.fn.sockconnect, "pipe", rpc_socket, { rpc = true })
+    if ok and chan > 0 then
+      pcall(vim.fn.chanclose, chan) -- someone's alive on it: leave it theirs
+    else
+      os.remove(rpc_socket) -- stale leftover: reclaim
+      pcall(vim.fn.serverstart, rpc_socket)
+    end
+  else
+    pcall(vim.fn.serverstart, rpc_socket)
+  end
 end
-pcall(vim.fn.serverstart, rpc_socket)

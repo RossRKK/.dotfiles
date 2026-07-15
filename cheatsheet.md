@@ -50,7 +50,7 @@
 | `p` / `P`         | Paste below / above                    |
 | `u` / `Ctrl+R`    | Undo / redo                            |
 | `Ctrl+S`          | Save                                   |
-| `Space+rf`        | Reload file from disk                  |
+| `Space+R`         | Reload file from disk                  |
 | `.`               | Repeat last change                     |
 
 ### Surround (nvim-surround)
