@@ -18,25 +18,24 @@ cd ~/.config/nvim && make test
 ```
 
 It runs headless via plenary's busted harness and exits non-zero on failure.
-A single file: `make test FILE=tests/fishmonger_spec.lua`.
+A single file: `make test FILE=tests/ide_spec.lua`.
 
 Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 
-| Spec                  | Covers                                                    |
-| --------------------- | -------------------------------------------------------- |
-| `fishmonger_spec.lua` | side-terminal slot table: show/new/move/toggle           |
-| `ide_spec.lua`        | side-terminal width, explorer geometry                   |
+| Spec             | Covers                                    |
+| ---------------- | ----------------------------------------- |
+| `ide_spec.lua`   | side-terminal width, explorer geometry    |
 
-Branch review mode now lives in two external plugins (see `lua/plugins/review.lua`),
-each with its own test suite: [triage.nvim](https://github.com/RossRKK/triage.nvim)
-(per-file status + verdict rollup) and [nitpick.nvim](https://github.com/RossRKK/nitpick.nvim)
-(inline GitHub comments). They're developed locally under `~/dev` via lazy's
-`dev` path.
+The side-terminal and branch-review logic now live in external plugins, each
+with its own test suite (developed locally under `~/dev` via lazy's `dev` path):
+[fishmonger.nvim](https://github.com/RossRKK/fishmonger.nvim) (the side terminal),
+[triage.nvim](https://github.com/RossRKK/triage.nvim) (per-file review status +
+verdict rollup), and [nitpick.nvim](https://github.com/RossRKK/nitpick.nvim)
+(inline GitHub comments).
 
 `tests/minimal_init.lua` loads this config plus plenary, and deliberately does
 **not** load lazy.nvim — no plugin `config()` runs. A spec that needs a plugin
-object fakes it: `fishmonger_spec.lua` stubs `vim.fn.jobstart` to a no-op, since
-the real side terminal wants a pty the headless harness can't give it.
+object fakes it (keeping the real arity of any stubbed `vim.*` function).
 
 Two traps when writing specs:
 
@@ -54,17 +53,16 @@ purpose — mocking it would test the mock.
 - `lua/config/` — options, keymaps, autocmds, and the IDE-mode machinery.
   `ide.lua` is the single source of truth for "IDE mode vs text-editor mode"
   and the window geometry that follows.
-- `lua/fishmonger/` — the tmux-style side-terminal tab manager, kept as a
-  self-contained module (its own default width + filetype, wired in
-  `plugins/terminal.lua`) so it can graduate to its own repo like triage/nitpick.
-- `lua/plugins/` — one file per plugin, lazy.nvim specs. Branch review mode is
-  two external plugins wired together in `review.lua` (triage.nvim + nitpick.nvim,
-  developed under `~/dev`); their neo-tree glyphs are registered in `explorer.lua`.
+- `lua/plugins/` — one file per plugin, lazy.nvim specs. Three of our own live
+  as external plugins under `~/dev` (lazy `dev` path), each declared in a small
+  spec here: `fishmonger.lua` (the side terminal, wired into the snacks terminal
+  in `terminal.lua`), and `review.lua` (branch review mode = triage.nvim +
+  nitpick.nvim, whose neo-tree glyphs are registered in `explorer.lua`).
 
-The side terminal runs shells directly in an nvim terminal buffer. There is no
-tmux backend; `fishmonger` reimplements tmux's window semantics (`<C-b>` prefix,
-hidden-but-alive tabs, `move-window`) natively, and draws its tab strip as a
-window-local winbar on its own side window.
+The side terminal (fishmonger.nvim) runs shells directly in an nvim terminal
+buffer. There is no tmux backend; it reimplements tmux's window semantics
+(`<C-b>` prefix, hidden-but-alive tabs, `move-window`) natively over snacks, and
+draws its tab strip as a window-local winbar on its own side window.
 
 ## Conventions
 
