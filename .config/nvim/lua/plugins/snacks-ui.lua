@@ -3,6 +3,9 @@
 --
 -- - notifier: replaces the native vim.notify with a toast UI + scrollback history.
 -- - scope: indent/treesitter scope text objects (ii/ai select the current scope).
+-- - quickfile: renders a file passed on the command line before the rest of the
+--   plugins load -- the text-editor-mode path (`nvim somefile`), where startup
+--   latency is most visible.
 -- - gh pickers: browse GitHub issues / PRs via the gh CLI (already authed).
 
 return {
@@ -10,6 +13,7 @@ return {
   ---@type snacks.Config
   opts = {
     notifier = { enabled = true },
+    quickfile = { enabled = true },
     -- Default keys: ii/ai select the current scope; [i / ]i jump to its top /
     -- bottom edge. The jumps shadow the [i / ]i builtins (echo the first line
     -- containing the keyword under the cursor) -- an accepted trade-off here.
