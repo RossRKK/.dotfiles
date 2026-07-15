@@ -13,9 +13,6 @@ map("t", "<C-k>", "<C-\\><C-n><C-w>k", { desc = "Move to upper window" })
 -- Exit to terminal-normal mode (then gf jumps to a file:line ref under the cursor)
 map("t", "<C-n>", "<C-\\><C-n>", { desc = "Terminal: enter normal mode" })
 
--- Better escape
-map("i", "jk", "<Esc>", { desc = "Escape insert mode" })
-
 -- Clear search highlight
 map("n", "<Esc>", "<cmd>nohlsearch<cr>")
 

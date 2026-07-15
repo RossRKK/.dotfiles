@@ -25,7 +25,6 @@
 | `i`       | Insert before cursor   |
 | `a`       | Insert after cursor    |
 | `o` / `O` | New line below / above |
-| `jk`      | Exit insert mode       |
 | `v`       | Visual mode            |
 | `V`       | Visual line mode       |
 | `Ctrl+Q`  | Visual block mode      |
