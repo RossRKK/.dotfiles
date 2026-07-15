@@ -264,7 +264,9 @@ end
 local function term_col_width()
   for _, w in ipairs(vim.api.nvim_list_wins()) do
     local b = vim.api.nvim_win_get_buf(w)
-    if vim.bo[b].filetype == "snacks_terminal" and vim.api.nvim_win_get_config(w).relative == "" then
+    if
+      vim.bo[b].filetype == "snacks_terminal" and vim.api.nvim_win_get_config(w).relative == ""
+    then
       return vim.api.nvim_win_get_width(w)
     end
   end
