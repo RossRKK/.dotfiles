@@ -43,8 +43,22 @@ return {
       -- side-terminal toggle) so lazygit is reachable wherever the cursor is.
       -- Snacks.lazygit() floats lazygit, auto-configured for the colorscheme, and
       -- runs checktime on close to reload files it changed; a second press hides it.
+      -- WinLeave hides the float rather than leaving it open behind the
+      -- editor when focus moves away (e.g. clicking another window).
+      -- WinLeave has no window-scoped autocmd pattern (unlike WinClosed), so
+      -- the callback checks nvim_get_current_win() itself.
       vim.keymap.set({ "n", "t" }, "<C-g>", function()
-        Snacks.lazygit()
+        Snacks.lazygit({
+          win = {
+            on_win = function(self)
+              self:on("WinLeave", function()
+                if vim.api.nvim_get_current_win() == self.win then
+                  self:hide()
+                end
+              end)
+            end,
+          },
+        })
       end, { desc = "Open lazygit" })
       -- <leader>gP (PR for the current branch) lives in git.lua with the other
       -- <leader>g git maps.
