@@ -1,4 +1,4 @@
--- Slot bookkeeping in config/terms.lua: which terminal occupies the side panel,
+-- Slot bookkeeping in fishmonger/init.lua: which terminal occupies the side panel,
 -- which stay alive but hidden, and how renumbering moves them around.
 --
 -- The module owns a single side window (terms.win) and swaps terminal buffers
@@ -9,7 +9,7 @@
 
 local assert = require("luassert")
 
---- A fresh config.terms with a single empty window and no slot state.
+--- A fresh fishmonger with a single empty window and no slot state.
 --- jobstart is stubbed so spawn() never launches a real shell.
 local function fresh_terms()
   -- Keep jobstart's real arity: a nullary stub retrains lua_ls's inferred
@@ -18,8 +18,8 @@ local function fresh_terms()
     return 1
   end
   pcall(vim.cmd, "only") -- collapse leftover split windows from a prior test
-  package.loaded["config.terms"] = nil
-  return require("config.terms")
+  package.loaded["fishmonger"] = nil
+  return require("fishmonger")
 end
 
 --- The occupied slots, sorted.

@@ -2,11 +2,12 @@
 --
 -- Two neo-tree sources are used: `filesystem` (the tree) and `document_symbols`
 -- (an outline of the focused file, driven by the LSP's documentSymbol request).
--- The branch-review UI paints its triage glyphs on the filesystem tree via a
--- renderer component behind review/adapter; see lua/review/.
+-- The branch-review UI paints its triage/nitpick glyphs on the filesystem tree
+-- via renderer components (registered below); those come from the triage.nvim /
+-- nitpick.nvim plugins, wired in lua/plugins/review.lua.
 --
 -- Window routing (which window a file opens into, the side-terminal geometry) is
--- shared with config/ide.lua and config/terms.lua, which key off the "neo-tree"
+-- shared with config/ide.lua and fishmonger, which key off the "neo-tree"
 -- filetype -- keep those in sync if this moves off neo-tree.
 
 return {
@@ -43,7 +44,7 @@ return {
         -- Keep focus in the editor when neo-tree closes a window, and don't let
         -- opening a directory hijack the current window (the VimEnter handler
         -- below places the tree as a side panel beside a real editor window).
-        open_files_do_not_replace_types = { "terminal", "snacks_terminal", "trouble", "qf" },
+        open_files_do_not_replace_types = { "terminal", "fishmonger", "trouble", "qf" },
         enable_git_status = true,
         default_component_configs = {
           git_status = {
@@ -239,17 +240,9 @@ return {
         end,
       })
 
-      -- Branch review mode. Two plugins, wired together here (the coupling is
-      -- config, not baked into either): triage owns the per-file status, gitsigns
-      -- base and explorer glyph; nitpick owns inline GitHub PR comments. The one
-      -- review-mode toggle drives both (triage's on_toggle → nitpick.set_shown),
-      -- and nitpick borrows triage's verdict as its submit event.
-      require("triage").setup({
-        on_toggle = function(on)
-          require("nitpick").set_shown(on)
-        end,
-      })
-      require("nitpick").setup({ verdict = require("triage").verdict })
+      -- Branch review mode (triage.nvim + nitpick.nvim) is declared and wired in
+      -- plugins/review.lua. Their neo-tree glyphs are registered above as the
+      -- triage_status / nitpick_marker components.
     end,
   },
 }

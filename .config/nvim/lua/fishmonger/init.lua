@@ -1,4 +1,4 @@
--- tmux-style tab switching for the vertical side terminal.
+-- fishmonger.nvim — tmux-style tab switching for the vertical side terminal.
 --
 -- One terminal is visible in the side slot at a time; the others stay alive but
 -- hidden. Switching is done from terminal-normal mode (enter it with <C-\><C-n>,
@@ -25,9 +25,27 @@ local M = {}
 local BASE = 1 -- slot 1 is the primary side terminal (<C-t>)
 local MAX = 9
 
--- ft the side window carries so edgy positions/sizes it in the right edgebar
--- (see lua/plugins/edgy.lua) and term_col_width() can find it.
-local FT = "snacks_terminal"
+-- Defaults, overridable via M.setup(). fishmonger owns its own geometry so it
+-- works standalone, but stays adoptable by an external layout manager: the
+-- window carries `filetype` as a stable identity a manager like edgy can filter
+-- on to take over placement/sizing (see lua/plugins/edgy.lua in this config).
+local config = {
+  -- Side-window width. A number is columns; a function is re-evaluated on open
+  -- and VimResized (so it can track the screen). Default: ~40% biased toward
+  -- the editor, but never below 80 so a standard 80-col line always fits.
+  width = function()
+    return math.max(80, math.floor(vim.o.columns * 0.4))
+  end,
+  -- Filetype tagged on every terminal buffer/window. fishmonger's own identity;
+  -- an external layout manager can filter on it to adopt the window.
+  filetype = "fishmonger",
+}
+
+-- Resolve the configured width to a column count.
+local function want_width()
+  local w = config.width
+  return type(w) == "function" and w() or w
+end
 
 M.current = BASE -- slot currently shown
 M.slots = {} -- slot (1..9) -> { buf = <bufnr> }
@@ -42,49 +60,63 @@ local function viewport()
   return nil
 end
 
+-- The tab strip is a window-local winbar (see M.winbar). It's set on the side
+-- window and must stay set: a full-screen TUI never repaints into a changed
+-- geometry because the winbar is constant (present before any pty job starts,
+-- never toggled). It IS re-asserted rather than "set once", because an adopting
+-- layout manager (edgy) blanks a panel's winbar synchronously on every buffer
+-- swap; apply_winbar re-establishes it after the swap (see M.show). Re-asserting
+-- the same value is inert for the pty -- it changes no window geometry.
+local function apply_winbar(win)
+  vim.wo[win].winbar = "%!v:lua.fishmonger_winbar()"
+end
+
 -- Apply the terminal look to the side window. Window-local, so it's set once on
--- the shared window and persists across every buffer swap. winbar is blanked
--- because config/terms.lua's top tab strip already titles this region (edgy's
--- own title is disabled for it too, see edgy.lua).
+-- the shared window and persists across every buffer swap.
 local function style_window(win)
   vim.wo[win].number = false
   vim.wo[win].relativenumber = false
   vim.wo[win].signcolumn = "no"
   vim.wo[win].cursorline = false
-  vim.wo[win].winbar = ""
+  apply_winbar(win)
 end
 
--- Open the shared side window at the far right carrying `buf`. edgy adopts it via
--- the FT + relative=="" filter and owns its final placement/width. Called only
--- when no side window exists (first open, or after <C-t> closed it) -- never on a
--- plain tab switch, which is the whole point.
+-- Open the shared side window at the far right carrying `buf`, sized to the
+-- configured width and pinned with winfixwidth so it holds. An external layout
+-- manager (edgy, filtering on config.filetype) may still adopt and re-govern it;
+-- fishmonger's own width is the standalone default. Called only when no side
+-- window exists (first open, or after <C-t> closed it) -- never on a plain tab
+-- switch, which is the whole point.
 local function open_viewport(buf)
   vim.cmd("botright vsplit")
   local win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(win, buf)
   style_window(win)
+  pcall(vim.api.nvim_win_set_width, win, want_width())
+  vim.wo[win].winfixwidth = true
   M.win = win
   return win
 end
 
--- A fresh terminal buffer, tagged with FT *before* it is ever shown so edgy
--- adopts the window into the right edgebar the moment the buffer enters it
--- (edgy filters on filetype; setting it afterwards would leave the window a plain
--- middle split). No job yet -- start_job does that once the buffer is on screen.
+-- A fresh terminal buffer, tagged with config.filetype *before* it is ever shown
+-- so an adopting layout manager (edgy filters on filetype) picks the window up
+-- the moment the buffer enters it; setting it afterwards would leave the window
+-- a plain middle split until then. No job yet -- start_job does that once the
+-- buffer is on screen.
 local function make_term_buf()
   local buf = vim.api.nvim_create_buf(false, false)
-  vim.bo[buf].filetype = FT
+  vim.bo[buf].filetype = config.filetype
   return buf
 end
 
 -- Start the shell in `buf`, which must already be shown in the current window:
 -- jobstart({term=true}) attaches to the current buffer and sizes the pty to the
--- current window. Re-assert FT (jobstart can reset it) and pass <C-k> through --
--- the side terminal is full-height, so <C-k> window-nav is useless here and the
--- running app (e.g. Claude Code) should get the key instead.
+-- current window. Re-assert the filetype (jobstart can reset it) and pass <C-k>
+-- through -- the side terminal is full-height, so <C-k> window-nav is useless
+-- here and the running app (e.g. Claude Code) should get the key instead.
 local function start_job(buf)
   vim.fn.jobstart(vim.o.shell, { term = true })
-  vim.bo[buf].filetype = FT
+  vim.bo[buf].filetype = config.filetype
   vim.keymap.set("t", "<C-k>", "<C-k>", { buffer = buf })
 end
 
@@ -217,7 +249,12 @@ function M.show(slot, opts)
 
   M.current = slot
   vim.schedule(function()
-    pcall(vim.cmd, "redrawtabline")
+    -- Re-assert the winbar: an adopting layout manager (edgy) blanks it
+    -- synchronously on the buffer swap above, so restore it after that settles.
+    if viewport() then
+      apply_winbar(win)
+    end
+    pcall(vim.cmd, "redrawstatus")
     if opts.insert ~= false then
       vim.cmd("startinsert")
     end
@@ -320,46 +357,23 @@ local function label(slot, term)
   return string.format(" %d:%s ", slot, truncate(name or "term", 24))
 end
 
--- Live text width of the side terminal window (0 if it's currently hidden).
-local function term_col_width()
-  local win = viewport()
-  if win and vim.bo[vim.api.nvim_win_get_buf(win)].filetype == FT then
-    return vim.api.nvim_win_get_width(win)
+-- The tmux-style tab strip, as a window-local winbar on the side window. Because
+-- it's the winbar of fishmonger's own window it spans exactly that window -- no
+-- screen-column math, and no commandeering the global tabline. The active tab is
+-- highlighted; the trailing TabLineFill extends to the window's right edge. Each
+-- label is a mouse-click target routing to fishmonger_tab_click.
+function M.winbar()
+  local tabs = {}
+  for _, e in ipairs(managed()) do
+    local lbl = label(e.slot, e.term)
+    local hl = (e.slot == M.current) and "%#TabLineSel#" or "%#TabLine#"
+    tabs[#tabs + 1] = string.format("%%%d@v:lua.fishmonger_tab_click@%s%s%%X", e.slot, hl, lbl)
   end
-  return 0
+  return table.concat(tabs) .. "%#TabLineFill#"
 end
 
--- Top bar carrying just the terminal tab strip, right-aligned over the terminal
--- region (edgy's right edgebar). The explorer and editor regions are left blank
--- here -- their titles come from edgy's panel bars and the winbar. Rendered in
--- nvim's top tabline (see M.enable_tabline) rather than a winbar on the terminal
--- window, so it doesn't steal a pty row / destabilise the terminal's rendering.
-function M.tabline()
-  local cols = vim.o.columns
-  local rw = term_col_width() -- terminal text region (0 if hidden)
-
-  -- Terminal tabs, left-aligned within the terminal region, active one highlighted.
-  local tabs, used = {}, 0
-  if rw > 0 then
-    for _, e in ipairs(managed()) do
-      local lbl = label(e.slot, e.term)
-      used = used + vim.fn.strchars(lbl)
-      local hl = (e.slot == M.current) and "%#TabLineSel#" or "%#TabLine#"
-      tabs[#tabs + 1] = string.format("%%%d@v:lua.__snacks_term_tab_click@%s%s%%X", e.slot, hl, lbl)
-    end
-  end
-  local strip = table.concat(tabs)
-  if used < rw then
-    strip = strip .. "%#TabLineFill#" .. string.rep(" ", rw - used)
-  end
-
-  -- Pad the editor+explorer region (everything left of the terminal) with blank.
-  local pad = math.max(0, cols - rw)
-  return "%#TabLineFill#" .. string.rep(" ", pad) .. strip
-end
-
-_G.__snacks_term_tabline = M.tabline
-_G.__snacks_term_tab_click = function(slot)
+_G.fishmonger_winbar = M.winbar
+_G.fishmonger_tab_click = function(slot)
   -- Defer so nvim's own mouse-click/window handling finishes before we juggle
   -- terminal windows (a synchronous show() here races it and scrambles the layout).
   vim.schedule(function()
@@ -367,16 +381,31 @@ _G.__snacks_term_tab_click = function(slot)
   end)
 end
 
--- Turn on the top tab strip. term_title changes arrive via TermRequest (and the
--- constant redraws of a live terminal), so redraw the tabline on those.
-function M.enable_tabline()
-  vim.o.showtabline = 2
-  vim.o.tabline = "%!v:lua.__snacks_term_tabline()"
-  local grp = vim.api.nvim_create_augroup("TermTabline", { clear = true })
+-- Merge caller options and install fishmonger's global autocmds. Idempotent.
+-- The winbar itself is per-window (set in style_window), so there is no global
+-- tabline to turn on: this only wires the repaint-on-title-change and the
+-- width-follows-screen behaviour.
+function M.setup(opts)
+  config = vim.tbl_extend("force", config, opts or {})
+
+  local grp = vim.api.nvim_create_augroup("Fishmonger", { clear = true })
+  -- term_title changes arrive via TermRequest (Claude Code updates it live,
+  -- including its input-needed marker); repaint the winbar on those.
   vim.api.nvim_create_autocmd("TermRequest", {
     group = grp,
     callback = function()
-      pcall(vim.cmd, "redrawtabline")
+      pcall(vim.cmd, "redrawstatus")
+    end,
+  })
+  -- Re-evaluate a function width when the screen resizes so the side window keeps
+  -- its share. winfixwidth pins it against incidental splits, not VimResized.
+  vim.api.nvim_create_autocmd("VimResized", {
+    group = grp,
+    callback = function()
+      local win = viewport()
+      if win then
+        pcall(vim.api.nvim_win_set_width, win, want_width())
+      end
     end,
   })
 end

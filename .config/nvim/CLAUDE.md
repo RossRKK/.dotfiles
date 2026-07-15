@@ -18,21 +18,25 @@ cd ~/.config/nvim && make test
 ```
 
 It runs headless via plenary's busted harness and exits non-zero on failure.
-A single file: `make test FILE=tests/terms_spec.lua`.
+A single file: `make test FILE=tests/fishmonger_spec.lua`.
 
 Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 
-| Spec                | Covers                                                      |
-| ------------------- | ----------------------------------------------------------- |
-| `review_spec.lua`   | `review.verdict` rollup, `status`/`folder` path lookups      |
-| `terms_spec.lua`    | side-terminal slot table: show/new/move/toggle               |
-| `ide_spec.lua`      | side-terminal width, explorer geometry                       |
-| `comments_spec.lua` | `rebuild_marked` decorator set over comments + drafts        |
+| Spec                  | Covers                                                    |
+| --------------------- | -------------------------------------------------------- |
+| `fishmonger_spec.lua` | side-terminal slot table: show/new/move/toggle           |
+| `ide_spec.lua`        | side-terminal width, explorer geometry                   |
+
+Branch review mode now lives in two external plugins (see `lua/plugins/review.lua`),
+each with its own test suite: [triage.nvim](https://github.com/RossRKK/triage.nvim)
+(per-file status + verdict rollup) and [nitpick.nvim](https://github.com/RossRKK/nitpick.nvim)
+(inline GitHub comments). They're developed locally under `~/dev` via lazy's
+`dev` path.
 
 `tests/minimal_init.lua` loads this config plus plenary, and deliberately does
 **not** load lazy.nvim — no plugin `config()` runs. A spec that needs a plugin
-object fakes it: `terms_spec.lua` preloads `package.loaded["toggleterm.terminal"]`
-with a stub Terminal, since the real one wants a pty.
+object fakes it: `fishmonger_spec.lua` stubs `vim.fn.jobstart` to a no-op, since
+the real side terminal wants a pty the headless harness can't give it.
 
 Two traps when writing specs:
 
@@ -43,22 +47,24 @@ Two traps when writing specs:
   reports every real call site as passing too many arguments.
 
 Anything needing a live pty, a git repo, or the GitHub API is left untested on
-purpose — mocking it would test the mock. That's why `thread_at_cursor` and the
-`gh` paths in `review/comments.lua` have no spec.
+purpose — mocking it would test the mock.
 
 ## Layout
 
 - `lua/config/` — options, keymaps, autocmds, and the IDE-mode machinery.
   `ide.lua` is the single source of truth for "IDE mode vs text-editor mode"
-  and the window geometry that follows; `terms.lua` owns the tmux-style tab
-  strip over the side terminal.
-- `lua/plugins/` — one file per plugin, lazy.nvim specs.
-- `lua/review/` — a PR review mode: triage state on the tree (`init.lua`) plus
-  inline GitHub line comments and drafts (`comments.lua`).
+  and the window geometry that follows.
+- `lua/fishmonger/` — the tmux-style side-terminal tab manager, kept as a
+  self-contained module (its own default width + filetype, wired in
+  `plugins/terminal.lua`) so it can graduate to its own repo like triage/nitpick.
+- `lua/plugins/` — one file per plugin, lazy.nvim specs. Branch review mode is
+  two external plugins wired together in `review.lua` (triage.nvim + nitpick.nvim,
+  developed under `~/dev`); their neo-tree glyphs are registered in `explorer.lua`.
 
 The side terminal runs shells directly in an nvim terminal buffer. There is no
-tmux backend; `terms.lua` reimplements tmux's window semantics (`<C-b>` prefix,
-hidden-but-alive tabs, `move-window`) natively.
+tmux backend; `fishmonger` reimplements tmux's window semantics (`<C-b>` prefix,
+hidden-but-alive tabs, `move-window`) natively, and draws its tab strip as a
+window-local winbar on its own side window.
 
 ## Conventions
 
