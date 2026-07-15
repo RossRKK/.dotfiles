@@ -40,16 +40,6 @@ return {
         end,
       })
 
-      -- Focusing a terminal buffer switches it to terminal (insert) mode.
-      -- vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter" }, {
-      --   pattern = "term://*",
-      --   callback = function()
-      --     vim.schedule(function()
-      --       vim.cmd("startinsert")
-      --     end)
-      --   end,
-      -- })
-
       -- <C-g> works from normal and terminal mode (pairs with the <C-t>
       -- side-terminal toggle) so lazygit is reachable wherever the cursor is.
       -- Snacks.lazygit() floats lazygit, auto-configured for the colorscheme, and
