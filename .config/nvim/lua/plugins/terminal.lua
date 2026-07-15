@@ -47,6 +47,8 @@ return {
       vim.keymap.set({ "n", "t" }, "<C-g>", function()
         Snacks.lazygit()
       end, { desc = "Open lazygit" })
+      -- <leader>gP (PR for the current branch) lives in git.lua with the other
+      -- <leader>g git maps.
     end,
   },
 }

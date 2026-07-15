@@ -1,52 +1,23 @@
 -- Slot bookkeeping in config/terms.lua: which terminal occupies the side panel,
 -- which stay alive but hidden, and how renumbering moves them around.
 --
--- snacks.terminal is faked: the real terminal spawns a pty and owns a window,
--- neither of which exists headlessly. Everything under test is our own slot
--- table, and the only Snacks.win surface terms.lua touches is
--- .open()/win_valid/show/hide/.buf (plus buffer deletion on kill).
+-- The module owns a single side window (terms.win) and swaps terminal buffers
+-- into it (the tmux-pane model). Headlessly there's no pty, so vim.fn.jobstart is
+-- faked to a no-op: the buffer spawn() creates then stays an ordinary buffer,
+-- which is all the slot table and slot_of_buf need. The real window management
+-- (a botright vsplit and buffer swaps) runs for real -- it works headlessly.
 
 local assert = require("luassert")
 
--- Fake Snacks.win terminals. Each gets a real (scratch) buffer so slot_of_buf and
--- the kill() path -- which deletes the buffer with nvim_buf_delete -- behave like
--- the real thing. slot_of_buf(nvim_get_current_buf()) still won't match a fake
--- (the test never focuses one), so every command resolves through open_managed(),
--- the same path taken when <C-b> is pressed from the editor.
-local FakeWin = {}
-FakeWin.__index = FakeWin
-
-function FakeWin.new()
-  local buf = vim.api.nvim_create_buf(false, true)
-  return setmetatable({ buf = buf, win = -1, shown = true }, FakeWin)
-end
-
--- Real Snacks.win:win_valid() checks only the window handle, but a killed
--- terminal has its buffer wiped (which closes the window), so folding buffer
--- validity in here lets the kill test observe the shutdown without a live pty.
-function FakeWin:win_valid()
-  return self.shown and self.buf ~= nil and vim.api.nvim_buf_is_valid(self.buf)
-end
-
-function FakeWin:show()
-  self.shown = true
-  return self
-end
-
-function FakeWin:hide()
-  self.shown = false
-  return self
-end
-
---- A fresh config.terms with the snacks.terminal fake installed and no slot
---- state. .open() returns an already-shown terminal, mirroring the real module
---- (it opens the split and starts the job before returning).
+--- A fresh config.terms with a single empty window and no slot state.
+--- jobstart is stubbed so spawn() never launches a real shell.
 local function fresh_terms()
-  package.loaded["snacks.terminal"] = {
-    open = function()
-      return FakeWin.new()
-    end,
-  }
+  -- Keep jobstart's real arity: a nullary stub retrains lua_ls's inferred
+  -- signature for the whole config (as the vim.notify stub below notes).
+  vim.fn.jobstart = function(cmd, opts) ---@diagnostic disable-line: duplicate-set-field, unused-local
+    return 1
+  end
+  pcall(vim.cmd, "only") -- collapse leftover split windows from a prior test
   package.loaded["config.terms"] = nil
   return require("config.terms")
 end
@@ -61,13 +32,24 @@ local function slots_of(terms)
   return out
 end
 
---- The slot whose terminal is currently open, or nil if the panel is hidden.
+--- The slot whose buffer is currently in the side window, or nil if the panel is
+--- hidden (no window). This is what "shown" means in the single-window model.
 local function open_slot(terms)
+  if not (terms.win and vim.api.nvim_win_is_valid(terms.win)) then
+    return nil
+  end
+  local buf = vim.api.nvim_win_get_buf(terms.win)
   for slot, term in pairs(terms.slots) do
-    if term:win_valid() then
+    if term.buf == buf then
       return slot
     end
   end
+end
+
+--- Whether a slot's terminal buffer is still alive (the tab survives a switch).
+local function alive(terms, slot)
+  local term = terms.slots[slot]
+  return term ~= nil and vim.api.nvim_buf_is_valid(term.buf)
 end
 
 describe("terms.show", function()
@@ -89,19 +71,28 @@ describe("terms.show", function()
     local first = terms.slots[1]
     terms.show(1)
     assert.equals(first, terms.slots[1])
+    assert.equals(1, open_slot(terms))
   end)
 
-  -- tmux-window semantics: switching away hides the old terminal rather than
-  -- killing it, so its tab (and scrollback) survives the switch.
-  it("hides the previous terminal but keeps it as a tab", function()
+  -- tmux-window semantics: switching away swaps the old terminal's buffer out of
+  -- the side window rather than killing it, so its tab (and scrollback) survives.
+  it("keeps the previous terminal as a hidden tab when switching", function()
     terms.show(1)
-    local first = terms.slots[1]
     terms.show(2)
 
     assert.same({ 1, 2 }, slots_of(terms))
-    assert.is_false(first:win_valid())
+    assert.is_true(alive(terms, 1)) -- slot 1 lives on, just not shown
     assert.equals(2, open_slot(terms))
     assert.equals(2, terms.current)
+  end)
+
+  -- The window is never recreated on a switch: same handle before and after.
+  it("swaps the buffer in place without recreating the window", function()
+    terms.show(1)
+    local win = terms.win
+    terms.show(2)
+    assert.equals(win, terms.win)
+    assert.equals(terms.slots[2].buf, vim.api.nvim_win_get_buf(terms.win))
   end)
 
   it("clamps a slot below the first one", function()
@@ -180,8 +171,8 @@ describe("terms.move", function()
     assert.same({ 4 }, slots_of(terms))
     assert.equals(term, terms.slots[4])
     assert.equals(4, terms.current)
-    -- The window/buffer are untouched: only the slot label changed.
-    assert.is_true(term:win_valid())
+    -- The window/buffer are untouched: the same buffer is still on screen.
+    assert.equals(4, open_slot(terms))
   end)
 
   -- A destination that is already taken must not clobber its terminal.
@@ -196,6 +187,8 @@ describe("terms.move", function()
     assert.equals(shown, terms.slots[2])
     assert.equals(hidden, terms.slots[1])
     assert.equals(2, terms.current)
+    -- The on-screen buffer didn't change, only its slot label did.
+    assert.equals(2, open_slot(terms))
   end)
 
   it("does nothing when the destination is the current slot", function()
@@ -228,17 +221,28 @@ describe("terms.kill", function()
     terms = fresh_terms()
   end)
 
-  -- kill() shuts the terminal's shell down by wiping its buffer; freeing the slot
-  -- is then TermClose's job (see terms.new "fills a hole"), so here we only assert
-  -- the buffer was deleted (which in the real module fires TermClose).
-  it("shuts down the open terminal", function()
+  -- kill() frees the slot and deletes the shell's buffer. When it's the last one
+  -- the side window closes too.
+  it("shuts down the open terminal and closes the last window", function()
     terms.show(1)
-    local term = terms.slots[1]
-    local buf = term.buf
+    local buf = terms.slots[1].buf
 
     terms.kill()
+    assert.same({}, slots_of(terms))
     assert.is_false(vim.api.nvim_buf_is_valid(buf))
-    assert.is_false(term:win_valid())
+    assert.is_nil(open_slot(terms))
+  end)
+
+  -- Killing the shown terminal when others remain surfaces another tab in the
+  -- side window rather than closing it.
+  it("surfaces another tab when one remains", function()
+    terms.show(1)
+    terms.show(2) -- slot 2 shown, slot 1 hidden
+    terms.kill() -- kills slot 2
+
+    assert.same({ 1 }, slots_of(terms))
+    assert.equals(1, open_slot(terms))
+    assert.equals(1, terms.current)
   end)
 
   it("does nothing when no terminal is open", function()
@@ -261,6 +265,7 @@ describe("terms.toggle", function()
     assert.is_nil(open_slot(terms))
     assert.same({ 1 }, slots_of(terms))
     assert.equals(1, terms.current)
+    assert.is_true(alive(terms, 1)) -- buffer kept, just no window
   end)
 
   it("re-shows the current tab rather than slot 1", function()
