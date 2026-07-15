@@ -222,10 +222,13 @@ return {
       vim.api.nvim_create_autocmd("VimEnter", {
         nested = true,
         callback = function(data)
-          if vim.fn.argc() ~= 1 or vim.fn.isdirectory(data.file) ~= 1 then
+          -- config.ide is the single owner of the "opened on a directory"
+          -- detection (same check the terminal auto-open uses).
+          local dir = require("config.ide").dir()
+          if not dir then
             return
           end
-          vim.cmd.cd(vim.fn.fnameescape(data.file))
+          vim.cmd.cd(vim.fn.fnameescape(dir))
           vim.cmd.enew() -- empty editor window
           pcall(vim.api.nvim_buf_delete, data.buf, { force = true }) -- drop the dir buffer
           -- Capture the editor window now and restore into it explicitly: if

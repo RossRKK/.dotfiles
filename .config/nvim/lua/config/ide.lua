@@ -16,11 +16,23 @@ local M = {}
 
 -- Captured once at module load, which happens during startup plugin config —
 -- before explorer.lua's VimEnter `cd`s into the directory (after which the
--- relative argv would no longer resolve to a directory).
-local ide_mode = vim.fn.argc() == 1 and vim.fn.isdirectory(vim.fn.argv(0)) == 1
+-- relative argv would no longer resolve to a directory). The absolute form is
+-- resolved at the same instant for the same reason. This is the single place
+-- that inspects argv: everything else (explorer auto-open, venv discovery)
+-- asks this module.
+local arg = vim.fn.argv(0)
+local ide_dir = (vim.fn.argc() == 1 and type(arg) == "string" and vim.fn.isdirectory(arg) == 1)
+    and vim.fn.fnamemodify(arg, ":p")
+  or nil
 
 function M.is_ide_mode()
-  return ide_mode
+  return ide_dir ~= nil
+end
+
+--- The directory nvim was opened on (absolute), or nil outside IDE mode.
+---@return string?
+function M.dir()
+  return ide_dir
 end
 
 return M

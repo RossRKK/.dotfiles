@@ -5,11 +5,9 @@ local M = {}
 -- config resolves this at startup, before explorer.lua cd's into that dir, so
 -- getcwd() would still be the launch dir (e.g. ~) and miss the repo's .venv.
 function M.python()
-  local start = vim.fn.getcwd()
-  local arg = vim.fn.argv(0)
-  if type(arg) == "string" and arg ~= "" and vim.fn.isdirectory(arg) == 1 then
-    start = vim.fn.fnamemodify(arg, ":p")
-  end
+  -- config.ide resolves the directory argument once at startup (see its notes
+  -- on why argv must be read before the VimEnter cd).
+  local start = require("config.ide").dir() or vim.fn.getcwd()
   local venv = vim.fs.find(".venv", {
     upward = true,
     path = start,

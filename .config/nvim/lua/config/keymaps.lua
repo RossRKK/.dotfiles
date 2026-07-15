@@ -19,8 +19,9 @@ map("n", "<Esc>", "<cmd>nohlsearch<cr>")
 -- Save
 map({ "n", "i" }, "<C-s>", "<cmd>w<cr>", { desc = "Save file" })
 
--- Reload current file from disk (checks for on-disk changes)
-map("n", "<leader>rf", "<cmd>checktime<cr>", { desc = "Reload file from disk" })
+-- Reload current file from disk (checks for on-disk changes). Not under
+-- <leader>r: that prefix is the review namespace (triage/nitpick).
+map("n", "<leader>R", "<cmd>checktime<cr>", { desc = "Reload file from disk" })
 
 -- Buffer tabs
 map("n", "<S-l>", "<cmd>bnext<cr>", { desc = "Next buffer" })
