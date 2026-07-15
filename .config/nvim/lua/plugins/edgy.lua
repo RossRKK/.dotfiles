@@ -3,7 +3,7 @@
 -- the WinResized enforcer, and the manual outline-stacking splits.
 --
 -- Layout: explorer + outline on the LEFT, the side terminal on the RIGHT, the
--- editor in the middle. The terminal's tmux-style tab manager (config/terms.lua)
+-- editor in the middle. The terminal's tmux-style tab manager (fishmonger)
 -- is unchanged -- it only ever shows one terminal window at a time, which edgy
 -- just positions in the right edgebar.
 
@@ -79,17 +79,16 @@ return {
         },
       },
       right = {
-        -- The snacks side terminal. Exclude floats so lazygit (a float) is never
-        -- pulled into the edgebar. winbar=false suppresses edgy's title bar here:
-        -- config/terms.lua already draws the tmux-style tab strip over this region
-        -- in the top tabline, so an edgy title would just duplicate it.
+        -- The fishmonger side terminal. Exclude floats so lazygit (a float) is
+        -- never pulled into the edgebar. No `title`/`winbar` here: fishmonger
+        -- draws its own tmux-style tab strip as the window's winbar and
+        -- re-asserts it after each buffer swap (edgy blanks a panel's winbar on
+        -- swap), so edgy only needs to adopt and size this window.
         {
-          ft = "snacks_terminal",
-          title = "Terminal",
+          ft = "fishmonger",
           filter = function(_, win)
             return vim.api.nvim_win_get_config(win).relative == ""
           end,
-          wo = { winbar = false },
         },
       },
     },

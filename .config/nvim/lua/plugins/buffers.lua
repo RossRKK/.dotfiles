@@ -10,7 +10,7 @@ return {
       -- Keep a few around even if idle, so cycling with <S-l>/<S-h> isn't empty.
       minimumBufferNum = 4,
       -- Don't retire special/tool buffers.
-      ignoredFiletypes = { "snacks_terminal", "neo-tree", "gitcommit", "help", "qf" },
+      ignoredFiletypes = { "fishmonger", "neo-tree", "gitcommit", "help", "qf" },
       -- A brief notice when one is closed, so the behaviour isn't invisible.
       notificationOnAutoClose = true,
     },
