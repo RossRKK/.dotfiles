@@ -15,7 +15,10 @@ return {
 
       -- fishmonger owns its own default width; edgy (see edgy.lua) adopts the
       -- window via the "fishmonger" filetype and re-governs sizing in this config.
-      require("fishmonger").setup()
+      -- shell: bare "fish" (jobstart resolves it via $PATH) rather than a
+      -- hardcoded path, so this works whether fish lives at /usr/bin,
+      -- /opt/homebrew/bin, or elsewhere.
+      require("fishmonger").setup({ shell = "fish" })
       -- Tab keymaps for the side terminal (<C-b>{1-9}, etc).
       require("fishmonger").setup_keymaps()
       require("fishmonger").setup_exit()
