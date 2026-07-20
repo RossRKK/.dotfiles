@@ -1,5 +1,17 @@
 quitOnTopLevelReturn: false
 customCommands:
+  - key: "n"
+    context: "localBranches"
+    description: "New branch, replacing the selected branch's prefix with rkk/"
+    prompts:
+      - type: "input"
+        title: "Branch name"
+        key: "Name"
+        initialValue: >-
+          rkk/{{ runCommand (printf "sh -c %s" (printf "echo %s | sed -E 's#^[^/]+/##'" .SelectedLocalBranch.Name | quote)) }}
+    command: >-
+      git checkout -b "{{.Form.Name}}"
+    loadingText: "Creating branch..."
   - key: "p"
     context: "commits"
     description: "Export selected commit(s) to a single squashed patch"
