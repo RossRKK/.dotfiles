@@ -19,12 +19,15 @@ return {
         "helm_ls",
       },
       automatic_installation = true,
-      -- rust_analyzer is installed in mason but owned/started by rustaceanvim
-      -- (see rust.lua). Without this exclude, mason-lspconfig's automatic_enable
-      -- would vim.lsp.enable() it too, attaching a second rust-analyzer to every
-      -- Rust buffer -- which shows up as doubled inlay hints (": String: String").
+      -- automatic_enable vim.lsp.enable()s every mason-installed server, so any
+      -- server we don't want started must be listed here even if it's absent from
+      -- ensure_installed (dropping it from ensure_installed doesn't uninstall it):
+      --   rust_analyzer -- owned/started by rustaceanvim (see rust.lua); without
+      --     the exclude a second one attaches, doubling inlay hints (": String: String").
+      --   pyright -- leftover mason package from before the basedpyright swap; without
+      --     the exclude it attaches alongside basedpyright and doubles gr references.
       automatic_enable = {
-        exclude = { "rust_analyzer" },
+        exclude = { "rust_analyzer", "pyright" },
       },
     },
   },
