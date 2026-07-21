@@ -79,6 +79,11 @@ return {
             -- (winfixwidth) and snaps it straight back -- the two fight and the
             -- panel flickers. Unbind it; width is edgy's job now.
             ["e"] = "none",
+            -- neo-tree's default <C-r> = clear_clipboard is a filesystem-only
+            -- command, but window.mappings apply to every source, so the
+            -- document_symbols / git_status sources error on it each startup.
+            -- Unbind it (unused).
+            ["<C-r>"] = "none",
           },
         },
         filesystem = {
