@@ -360,6 +360,7 @@ alongside them.
 
 | Key        | Action                                                    |
 | ---------- | --------------------------------------------------------- |
+| `]r` / `[r` | Jump to next / prev PR comment                           |
 | `Space+rc` | Draft a comment on the line (or visual range)             |
 | `Space+re` | Edit the comment / draft on the line (asks if several)    |
 | `Space+ra` | Reply to the comment thread on the line (posts now)       |
