@@ -74,11 +74,11 @@ return {
             -- gY absolute -- a natural pair.
             ["gy"] = copy_path(":."),
             ["gY"] = copy_path(""),
-            -- neo-tree's default `e` (toggle_auto_expand_width) resizes the tree
-            -- window to fit the longest name, but edgy owns this panel's width
-            -- (winfixwidth) and snaps it straight back -- the two fight and the
-            -- panel flickers. Unbind it; width is edgy's job now.
-            ["e"] = "none",
+            -- `e` toggles neo-tree's auto-expand-width (fit the longest name).
+            -- edgy owns the panel width, but its size now live-tracks the window
+            -- (see edgy.lua left size), so it follows the expand instead of
+            -- snapping back -- no more flicker.
+            ["e"] = "toggle_auto_expand_width",
             -- neo-tree's default <C-r> = clear_clipboard is a filesystem-only
             -- command, but window.mappings apply to every source, so the
             -- document_symbols / git_status sources error on it each startup.
