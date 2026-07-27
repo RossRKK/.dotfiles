@@ -1,3 +1,8 @@
+-- On NixOS, Mason can't run the pre-compiled binaries it downloads. Tools and
+-- LSP servers are installed via Nix (home-manager) instead, so we skip Mason's
+-- ensure_installed / automatic_installation on that platform.
+local is_nixos = vim.fn.filereadable("/etc/NIXOS") == 1
+
 return {
   {
     "williamboman/mason.nvim",
@@ -7,7 +12,7 @@ return {
     "williamboman/mason-lspconfig.nvim",
     dependencies = { "williamboman/mason.nvim" },
     opts = {
-      ensure_installed = {
+      ensure_installed = is_nixos and {} or {
         "basedpyright",
         "ts_ls",
         "svelte",
@@ -18,7 +23,7 @@ return {
         "marksman",
         "helm_ls",
       },
-      automatic_installation = true,
+      automatic_installation = not is_nixos,
       -- automatic_enable vim.lsp.enable()s every mason-installed server, so any
       -- server we don't want started must be listed here even if it's absent from
       -- ensure_installed (dropping it from ensure_installed doesn't uninstall it):
@@ -38,7 +43,7 @@ return {
     "WhoIsSethDaniel/mason-tool-installer.nvim",
     dependencies = { "williamboman/mason.nvim" },
     opts = {
-      ensure_installed = {
+      ensure_installed = is_nixos and {} or {
         "tree-sitter-cli",
         -- Formatters used by conform.lua. rustfmt (rust toolchain) and terraform
         -- (terraform CLI) aren't mason packages, so they're expected on PATH.
