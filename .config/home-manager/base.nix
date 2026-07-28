@@ -46,6 +46,22 @@
     btop
     claude-code
 
+    # Runtimes
+    python3
+    uv
+    nodejs
+    cargo
+    rustc
+    rustfmt
+    rust-analyzer
+    clippy
+
+    # CLI tools
+    ripgrep
+    fd
+    imagemagick
+    terraform
+
     # LSP servers (used by neovim via lspconfig; installed here so Mason doesn't
     # try to download pre-compiled binaries that won't run on NixOS)
     basedpyright
