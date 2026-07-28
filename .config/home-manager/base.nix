@@ -13,14 +13,28 @@
     options = [ "--cmd cd" ];
   };
 
-  home.shellAliases = {
-    dotfiles = "git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME";
-  };
-
   home.sessionVariables = {
     EDITOR = "nvim";
     CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1";
   };
+
+  xdg.configFile."nvim".source =
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.config/nvim";
+
+  xdg.configFile."lazygit".source =
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.config/lazygit";
+
+  xdg.configFile."starship.toml".source =
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.config/starship.toml";
+
+  xdg.configFile."nix/nix.conf".source =
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.config/nix/nix.conf";
+
+  home.file.".tmux.conf".source =
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.tmux.conf";
+
+  home.file.".local/bin/clipboard-copy".source =
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.local/bin/clipboard-copy";
 
   home.packages = with pkgs; [
     home-manager
