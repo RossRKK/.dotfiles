@@ -1,6 +1,6 @@
 # dotfiles
 
-Configuration managed via [home-manager](https://github.com/nix-community/home-manager) with a bare git repo for dotfiles not owned by home-manager.
+Configuration managed via [home-manager](https://github.com/nix-community/home-manager). Clone this repo to `~/.dotfiles` and run home-manager to symlink everything into place.
 
 ## Profiles
 
@@ -11,21 +11,9 @@ Configuration managed via [home-manager](https://github.com/nix-community/home-m
 
 ## Bootstrap: NixOS (personal)
 
-Nix is already present. Clone the repo and check out files, then run home-manager.
-
 ```bash
-git clone --bare git@github.com:RossRKK/.dotfiles.git ~/.dotfiles
-alias dotfiles='git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
-dotfiles checkout
-dotfiles config status.showUntrackedFiles no
-```
-
-> If checkout fails due to conflicts, remove the files it mentions and retry.
-
-Bootstrap home-manager (first time only):
-
-```bash
-nix run home-manager -- switch --flake ~/.config/home-manager#rossrkk@personal
+git clone git@github.com:RossRKK/.dotfiles.git ~/.dotfiles
+nix run home-manager -- switch --flake ~/.dotfiles/.config/home-manager#rossrkk@personal
 ```
 
 After that use the `hms` alias. To apply system config changes:
@@ -42,21 +30,18 @@ nrs
 sh <(curl -L https://nixos.org/nix/install) --daemon
 ```
 
-### 2. Clone and check out dotfiles
+### 2. Clone dotfiles and enable flakes
 
 ```bash
-git clone --bare git@github.com:RossRKK/.dotfiles.git ~/.dotfiles
-alias dotfiles='git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
-dotfiles checkout
-dotfiles config status.showUntrackedFiles no
+git clone git@github.com:RossRKK/.dotfiles.git ~/.dotfiles
+mkdir -p ~/.config/nix
+ln -s ~/.dotfiles/.config/nix/nix.conf ~/.config/nix/nix.conf
 ```
-
-> `~/.config/nix/nix.conf` will be checked out here, enabling flakes for the next step.
 
 ### 3. Bootstrap home-manager
 
 ```bash
-nix run home-manager -- switch --flake ~/.config/home-manager#rosskelso@work
+nix run home-manager -- switch --flake ~/.dotfiles/.config/home-manager#rosskelso@work
 ```
 
 After that use the `hms` alias.
@@ -67,9 +52,11 @@ Nerd fonts need to be installed on the Windows side for your terminal emulator. 
 
 ## Usage
 
+Edit any config file directly in `~/.dotfiles` — changes are live immediately. To commit:
+
 ```bash
-dotfiles status
-dotfiles add ~/.config/nvim/lua/plugins/foo.lua
-dotfiles commit -m "add foo plugin"
-dotfiles push
+cd ~/.dotfiles
+git add .config/nvim/lua/plugins/foo.lua
+git commit -m "add foo plugin"
+git push
 ```
