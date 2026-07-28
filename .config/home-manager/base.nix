@@ -26,6 +26,7 @@
     home-manager
     git
     lazygit
+    gh
     tmux
     htop
     btop
