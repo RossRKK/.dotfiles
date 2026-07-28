@@ -16,9 +16,14 @@
         config.allowUnfree = true;
       };
     in {
-      homeConfigurations.rossrkk = home-manager.lib.homeManagerConfiguration {
+      homeConfigurations."rossrkk@personal" = home-manager.lib.homeManagerConfiguration {
         inherit pkgs;
-        modules = [ ./home.nix ];
+        modules = [ ./hosts/personal.nix ];
+      };
+
+      homeConfigurations."rosskelso@work" = home-manager.lib.homeManagerConfiguration {
+        inherit pkgs;
+        modules = [ ./hosts/work.nix ];
       };
     };
 }

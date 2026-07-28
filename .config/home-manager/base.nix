@@ -1,25 +1,34 @@
 { config, pkgs, ... }:
 
 {
-  home.username = "rossrkk";
-  home.homeDirectory = "/home/rossrkk";
-  home.stateVersion = "26.05";
+  programs.fish = {
+    enable = true;
+    interactiveShellInit = "fish_vi_key_bindings";
+  };
+
+  programs.starship.enable = true;
+
+  programs.zoxide = {
+    enable = true;
+    options = [ "--cmd cd" ];
+  };
+
+  home.shellAliases = {
+    dotfiles = "git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME";
+  };
+
+  home.sessionVariables = {
+    EDITOR = "nvim";
+    CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1";
+  };
 
   home.packages = with pkgs; [
     git
     lazygit
-    fish
-    starship
-    ghostty
-    nerd-fonts._0xproto
-    zoxide
     tmux
     htop
     btop
     claude-code
-    solaar
-    discord
-
 
     # LSP servers (used by neovim via lspconfig; installed here so Mason doesn't
     # try to download pre-compiled binaries that won't run on NixOS)
