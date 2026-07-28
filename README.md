@@ -39,6 +39,12 @@ dotfiles config status.showUntrackedFiles no
 
 > If checkout fails due to conflicts, back up or remove the existing files it mentions, then run it again.
 
+## Apply home-manager changes
+
+```bash
+home-manager switch --flake ~/.config/home-manager#rossrkk
+```
+
 ## Usage
 
 ```bash

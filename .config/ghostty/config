@@ -4,9 +4,17 @@
 # Launch fish explicitly. The graphical session exports a stale SHELL=/bin/bash
 # (from before `chsh` to fish), which Ghostty would otherwise inherit. Pinning
 # the command here makes it independent of $SHELL.
-command = /usr/bin/fish -l
+command = /usr/bin/env fish -l
+
+theme = TokyoNight Night
 
 keybind = shift+enter=text:\x1b\r
+keybind = ctrl+v=paste_from_clipboard
+
+keybind = ctrl+shift+t=new_tab
+keybind = ctrl+tab=next_tab
+keybind = ctrl+shift+tab=previous_tab
+keybind = ctrl+shift+w=close_tab
 
 # Font. Without this Ghostty falls back to its bundled default (JetBrains Mono),
 # which also renders programming ligatures (>=, ->, != as single glyphs).
@@ -17,6 +25,10 @@ font-family = 0xProto Nerd Font Propo
 font-feature = -calt
 font-feature = -liga
 font-feature = -dlig
+
+# Use the upright face for italics instead of 0xProto's cursive variant.
+font-style-italic = Regular
+font-style-bold-italic = Bold
 
 # Slow down mouse-wheel scrolling (default is 3 = fast). Lower = slower;
 # try 0.5 if 1 is still too quick.
