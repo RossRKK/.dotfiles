@@ -23,6 +23,7 @@
   };
 
   home.packages = with pkgs; [
+    home-manager
     git
     lazygit
     tmux
