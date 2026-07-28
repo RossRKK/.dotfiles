@@ -7,6 +7,7 @@
 
   home.packages = with pkgs; [
     git
+    lazygit
     fish
     starship
     ghostty
@@ -16,6 +17,9 @@
     htop
     btop
     claude-code
+    solaar
+    discord
+
 
     # LSP servers (used by neovim via lspconfig; installed here so Mason doesn't
     # try to download pre-compiled binaries that won't run on NixOS)
