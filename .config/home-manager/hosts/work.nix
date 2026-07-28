@@ -6,7 +6,7 @@
   ];
 
   home.shellAliases = {
-    hms = "home-manager switch --flake ~/.config/home-manager#rosskelso@work";
+    hms = "home-manager switch --flake ~/.dotfiles/.config/home-manager#rosskelso@work";
   };
 
   home.username = "rosskelso";
