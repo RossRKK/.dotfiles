@@ -88,21 +88,22 @@
 
 The IDE layout is pinned by [edgy](https://github.com/folke/edgy.nvim): explorer +
 outline on the **left**, the side terminal on the **right**, the editor in the
-middle. Edge windows are sized by edgy, not resized like normal splits. Keys
-below work while focused inside an edge window (explorer, outline, terminal):
+middle. edgy sets each panel's *opening* size, then tracks whatever you resize
+it to — so drags, `Ctrl+w` splits, and the arrow keys below all stick (after a
+brief warm-up on open). Keys work while focused inside an edge window (explorer,
+outline, terminal):
 
 | Key                     | Action                                  |
 | ----------------------- | --------------------------------------- |
 | `Ctrl+Right` / `Ctrl+Left` | Grow / shrink the edge's width       |
 | `Ctrl+Up` / `Ctrl+Down`    | Grow / shrink height (stacked panels)|
-| `Ctrl+w =`                 | Reset edge sizes to their defaults   |
+| `Space+wr`                 | Reset all panels to opening sizes    |
 | `]w` / `[w`                | Next / prev window in the edgebar    |
 | `Q`                        | Close the whole edgebar              |
 
-Widen the explorer with `Ctrl+Right` while focused inside it — this is the way to
-fit long/nested names now that neo-tree's `e` (auto-expand-width) is unbound; it
-fought edgy, which owns the panel width (default 40%, floored at 80 columns).
-(`Ctrl+w >`/`<`/`+`/`-` also work — edgy's built-in equivalents.)
+Because edgy follows resizes now, neo-tree's `e` (auto-expand-width, fit the
+longest name) works again — it no longer fights the panel width. `Space+wr`
+switches auto-expand back off as it resets.
 
 Notifications use the snacks notifier (toasts, top-right); `Space+n` opens the
 scrollback history of everything that was notified.
@@ -409,6 +410,7 @@ are inside the tree; `?` shows the full, live list.
 | `w`             | Open via the window picker           |
 | `P`             | Toggle a floating preview of the file |
 | `C` / `z`       | Collapse this node / all nodes       |
+| `e`             | Toggle auto-expand width (fit longest name) |
 | `.` / `<BS>`    | Set tree root here / go up a level   |
 | `R`             | Refresh the tree                     |
 
