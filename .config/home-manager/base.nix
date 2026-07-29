@@ -3,7 +3,10 @@
 {
   programs.fish = {
     enable = true;
-    interactiveShellInit = "fish_vi_key_bindings";
+    interactiveShellInit = ''
+      fish_vi_key_bindings
+      any-nix-shell fish --info-right | source
+    '';
   };
 
   programs.starship.enable = true;
@@ -57,6 +60,7 @@
     clippy
 
     # CLI tools
+    any-nix-shell
     ripgrep
     fd
     imagemagick
