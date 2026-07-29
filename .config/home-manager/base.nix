@@ -46,8 +46,8 @@
     btop
     claude-code
 
-    # LSP servers (used by neovim via lspconfig; installed here so Mason doesn't
-    # try to download pre-compiled binaries that won't run on NixOS)
+    # LSP servers (used by neovim via lspconfig; nvim has no Mason — everything
+    # it needs comes from Nix and is found on PATH)
     basedpyright
     typescript-language-server
     svelte-language-server
