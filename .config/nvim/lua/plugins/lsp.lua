@@ -1,65 +1,10 @@
--- On NixOS, Mason can't run the pre-compiled binaries it downloads. Tools and
--- LSP servers are installed via Nix (home-manager) instead, so we skip Mason's
--- ensure_installed / automatic_installation on that platform.
-local is_nixos = vim.fn.filereadable("/etc/NIXOS") == 1
-
+-- No Mason: LSP servers, formatters, and CLI tools are installed via Nix
+-- (home-manager base.nix) and found on PATH. Servers are enabled explicitly in
+-- the lspconfig block below.
 return {
-  {
-    "williamboman/mason.nvim",
-    opts = {},
-  },
-  {
-    "williamboman/mason-lspconfig.nvim",
-    dependencies = { "williamboman/mason.nvim" },
-    opts = {
-      ensure_installed = is_nixos and {} or {
-        "basedpyright",
-        "ts_ls",
-        "svelte",
-        "lua_ls",
-        "yamlls",
-        "jsonls",
-        "terraformls",
-        "marksman",
-        "helm_ls",
-      },
-      automatic_installation = not is_nixos,
-      -- automatic_enable vim.lsp.enable()s every mason-installed server, so any
-      -- server we don't want started must be listed here even if it's absent from
-      -- ensure_installed (dropping it from ensure_installed doesn't uninstall it):
-      --   rust_analyzer -- owned/started by rustaceanvim (see rust.lua); without
-      --     the exclude a second one attaches, doubling inlay hints (": String: String").
-      --   pyright -- leftover mason package from before the basedpyright swap; without
-      --     the exclude it attaches alongside basedpyright and doubles gr references.
-      automatic_enable = {
-        exclude = { "rust_analyzer", "pyright" },
-      },
-    },
-  },
-  {
-    -- Auto-install CLI tools (not LSP servers) into mason's bin, which mason puts
-    -- on nvim's PATH. Here: the tree-sitter CLI that nvim-treesitter's main branch
-    -- shells out to for building parsers, so a fresh machine bootstraps itself.
-    "WhoIsSethDaniel/mason-tool-installer.nvim",
-    dependencies = { "williamboman/mason.nvim" },
-    opts = {
-      ensure_installed = is_nixos and {} or {
-        "tree-sitter-cli",
-        -- Formatters used by conform.lua. rustfmt (rust toolchain) and terraform
-        -- (terraform CLI) aren't mason packages, so they're expected on PATH.
-        "stylua", -- lua
-        "prettierd", -- js/ts/svelte/json/yaml/css/html/markdown
-        "ruff", -- python (format + import sort)
-        "shfmt", -- sh/bash
-        "gdtoolkit", -- gdscript (provides the gdformat bin)
-      },
-    },
-  },
   {
     "neovim/nvim-lspconfig",
     dependencies = {
-      "williamboman/mason.nvim",
-      "williamboman/mason-lspconfig.nvim",
       "hrsh7th/cmp-nvim-lsp",
     },
     config = function()
@@ -96,11 +41,11 @@ return {
         marksman = {},
         -- Helm templates get filetype "helm" (via vim-helm, see helm.lua), so
         -- yamlls skips them and helm_ls handles the Go-template YAML instead.
-        -- helm_ls shells out to yaml-language-server (already installed above)
-        -- for the embedded YAML, finding it on mason's PATH.
+        -- helm_ls shells out to yaml-language-server for the embedded YAML,
+        -- finding it on PATH (installed via Nix alongside the other servers).
         helm_ls = {},
-        -- Not in mason's ensure_installed above: the GDScript server *is* the
-        -- Godot editor, which hosts it on 127.0.0.1:6005 (override with
+        -- No binary to install: the GDScript server *is* the Godot editor,
+        -- which hosts it on 127.0.0.1:6005 (override with
         -- $GDScript_Port). lspconfig's lsp/gdscript.lua supplies the
         -- vim.lsp.rpc.connect cmd and project.godot root marker. Opening a .gd
         -- file with Godot closed logs a connection error and leaves the buffer
