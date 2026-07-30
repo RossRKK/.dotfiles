@@ -23,41 +23,19 @@ map({ "n", "i" }, "<C-s>", "<cmd>w<cr>", { desc = "Save file" })
 -- <leader>r: that prefix is the review namespace (triage/nitpick).
 map("n", "<leader>R", "<cmd>checktime<cr>", { desc = "Reload file from disk" })
 
--- Buffer tabs
-map("n", "<S-l>", "<cmd>bnext<cr>", { desc = "Next buffer" })
-map("n", "<S-h>", "<cmd>bprevious<cr>", { desc = "Prev buffer" })
+-- Buffer tabs. Switching routes to the main window first (single-main-buffer
+-- layout: cycling from the terminal or explorer must not replace that window's
+-- buffer).
+local goto_main_window = require("config.windows").goto_main_window
+map("n", "<S-l>", function()
+  goto_main_window()
+  vim.cmd("bnext")
+end, { desc = "Next buffer" })
+map("n", "<S-h>", function()
+  goto_main_window()
+  vim.cmd("bprevious")
+end, { desc = "Prev buffer" })
 map("n", "<leader>x", "<cmd>bp|bdelete #<cr>", { desc = "Close buffer" })
-
--- A window is a "main" editor window only if it positively holds an ordinary,
--- listed file buffer. This is an allowlist on purpose: anything else — the
--- terminal, the neo-tree explorer, and every floating/scratch menu (Lazy's
--- update UI, help peeks, quickfix) — is not a target, without having to name it.
-local function is_editor_window(win)
-  -- Floating windows (Lazy, notifications, help peeks) are never editor targets.
-  if vim.api.nvim_win_get_config(win).relative ~= "" then
-    return false
-  end
-  local buf = vim.api.nvim_win_get_buf(win)
-  return vim.bo[buf].buftype == "" and vim.bo[buf].buflisted
-end
-
--- Ensure the current window is a main editor window before opening a file, so a
--- file never opens over the terminal or the explorer. Reuses an existing editor
--- window if there is one. Never splits: splitting the terminal (or a diagnostic
--- float) to make a window just leaves a stray, wrong-width split. If no editor
--- window exists at all, we fall through and open in the current window.
-local function goto_main_window()
-  if is_editor_window(vim.api.nvim_get_current_win()) then
-    return
-  end
-  vim.cmd("stopinsert") -- no-op unless we're in terminal insert mode
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if is_editor_window(win) then
-      vim.api.nvim_set_current_win(win)
-      return
-    end
-  end
-end
 
 -- Parse a `path[:line[:col]]` reference (e.g. printed in the terminal, or a path
 -- in a diff/log) and resolve it to a real file on disk. Best-effort: returns

@@ -1,6 +1,6 @@
--- No Mason: LSP servers, formatters, and CLI tools are installed via Nix
--- (home-manager base.nix) and found on PATH. Servers are enabled explicitly in
--- the lspconfig block below.
+-- No Mason: LSP servers, formatters, CLI tools, and debug adapters are
+-- installed via Nix (home-manager base.nix) and found on PATH. Servers are
+-- enabled explicitly in the lspconfig block below.
 return {
   {
     "neovim/nvim-lspconfig",
