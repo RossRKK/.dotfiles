@@ -1,5 +1,22 @@
 return {
   {
+    -- Tab bar showing one tab per open buffer; cycle with <S-l>/<S-h>.
+    "akinsho/bufferline.nvim",
+    dependencies = { "nvim-tree/nvim-web-devicons" },
+    event = "VeryLazy",
+    opts = {
+      options = {
+        diagnostics = "nvim_lsp",
+        -- Route clicks to the main window: single-main-buffer layout, so a
+        -- click while the terminal/explorer is focused must not replace it.
+        left_mouse_command = function(bufnr)
+          require("config.windows").goto_main_window()
+          vim.cmd("buffer " .. bufnr)
+        end,
+      },
+    },
+  },
+  {
     -- Buffer "garbage collection": auto-close buffers left untouched for a while
     -- so hidden buffers stop piling up. Never closes unsaved or currently-visible
     -- buffers (plugin defaults), so it only reaps genuinely-idle ones.

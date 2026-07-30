@@ -4,18 +4,44 @@ return {
     dependencies = {
       "rcarriga/nvim-dap-ui",
       "nvim-neotest/nvim-nio",
-      "williamboman/mason.nvim",
-      "jay-babu/mason-nvim-dap.nvim",
     },
     config = function()
       local dap = require("dap")
       local dapui = require("dapui")
 
-      require("mason-nvim-dap").setup({
-        ensure_installed = { "python", "codelldb", "js" },
-        automatic_installation = true,
-        handlers = {},
-      })
+      -- Adapter binaries come from Nix (base.nix), not mason: codelldb and
+      -- js-debug are on PATH. Rust debugging doesn't use the codelldb adapter
+      -- defined here -- rustaceanvim discovers codelldb itself (see <F5>) --
+      -- but c/cpp sessions started via plain dap.continue() do.
+      dap.adapters.codelldb = {
+        type = "server",
+        port = "${port}",
+        executable = {
+          command = "codelldb",
+          args = { "--port", "${port}" },
+        },
+      }
+
+      dap.adapters["pwa-node"] = {
+        type = "server",
+        host = "localhost",
+        port = "${port}",
+        executable = {
+          command = "js-debug",
+          args = { "${port}" },
+        },
+      }
+      for _, ft in ipairs({ "javascript", "typescript" }) do
+        dap.configurations[ft] = {
+          {
+            type = "pwa-node",
+            request = "launch",
+            name = "Launch file",
+            program = "${file}",
+            cwd = "${workspaceFolder}",
+          },
+        }
+      end
 
       -- Python: debug with the uv .venv interpreter so project packages
       -- (hwdescription, system modules) import under the debugger.

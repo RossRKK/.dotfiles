@@ -15,8 +15,8 @@ return {
           },
         },
       },
-      -- Formatter CLIs are auto-installed via mason-tool-installer (see lsp.lua),
-      -- except rustfmt (rust toolchain) and terraform (terraform CLI), expected
+      -- Formatter CLIs are installed via Nix (home-manager base.nix), except
+      -- rustfmt (rust toolchain) and terraform (terraform CLI), expected
       -- on PATH. Any filetype not listed falls back to the LSP formatter.
       formatters_by_ft = {
         lua = { "stylua" },

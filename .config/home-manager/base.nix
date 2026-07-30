@@ -58,6 +58,11 @@
     marksman
     helm-ls
 
+    # Debug adapters (nvim-dap; debugpy is not here because the python adapter
+    # runs debugpy out of each project's venv, see dap.lua)
+    vscode-js-debug # provides js-debug (pwa-node adapter)
+    vscode-extensions.vadimcn.vscode-lldb.adapter # provides codelldb (used by rustaceanvim)
+
     # Formatters and CLI tools (same reason)
     gcc # tree-sitter CLI calls cc to compile parsers
     tree-sitter
