@@ -1,9 +1,19 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
+let
+  # Single source of truth for where this repo is checked out.
+  dotfilesDir = "${config.home.homeDirectory}/.dotfiles";
+
+  # Symlink a path (relative to the repo root) into the Nix store's view.
+  link = path: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/${path}";
+in
 {
   programs.fish = {
     enable = true;
-    interactiveShellInit = "fish_vi_key_bindings";
+    interactiveShellInit = ''
+      fish_vi_key_bindings
+      any-nix-shell fish --info-right | source
+    '';
   };
 
   programs.starship.enable = true;
@@ -18,23 +28,19 @@
     CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1";
   };
 
-  xdg.configFile."nvim".source =
-    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.config/nvim";
+  # Each key maps to `.config/<key>` in the repo.
+  xdg.configFile = lib.genAttrs [
+    "nvim"
+    "lazygit"
+    "starship.toml"
+    "nix/nix.conf"
+  ] (name: { source = link ".config/${name}"; });
 
-  xdg.configFile."lazygit".source =
-    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.config/lazygit";
-
-  xdg.configFile."starship.toml".source =
-    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.config/starship.toml";
-
-  xdg.configFile."nix/nix.conf".source =
-    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.config/nix/nix.conf";
-
-  home.file.".tmux.conf".source =
-    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.tmux.conf";
-
-  home.file.".local/bin/clipboard-copy".source =
-    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/.local/bin/clipboard-copy";
+  # Each key is also its path relative to the repo root.
+  home.file = lib.genAttrs [
+    ".tmux.conf"
+    ".local/bin/clipboard-copy"
+  ] (path: { source = link path; });
 
   home.packages = with pkgs; [
     home-manager
@@ -46,8 +52,25 @@
     btop
     claude-code
 
-    # LSP servers (used by neovim via lspconfig; nvim has no Mason — everything
-    # it needs comes from Nix and is found on PATH)
+    # Runtimes
+    python3
+    uv
+    nodejs
+    cargo
+    rustc
+    rustfmt
+    rust-analyzer
+    clippy
+
+    # CLI tools
+    any-nix-shell
+    ripgrep
+    fd
+    imagemagick
+    terraform
+
+    # LSP servers (used by neovim via lspconfig; installed here so Mason doesn't
+    # try to download pre-compiled binaries that won't run on NixOS)
     basedpyright
     typescript-language-server
     svelte-language-server
