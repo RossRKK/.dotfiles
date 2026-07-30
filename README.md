@@ -50,6 +50,24 @@ After that use the `hms` alias.
 
 Nerd fonts need to be installed on the Windows side for your terminal emulator. Install **0xProto Nerd Font Propo** from [nerdfonts.com](https://www.nerdfonts.com/font-downloads).
 
+## Updating packages
+
+Update all flake inputs to pull in newer package versions, then apply:
+
+```bash
+nix flake update ~/.dotfiles/.config/home-manager
+hms
+```
+
+To update a single input only (e.g. `nixpkgs`):
+
+```bash
+nix flake update nixpkgs --flake ~/.dotfiles/.config/home-manager
+hms
+```
+
+Commit the updated `flake.lock` afterwards.
+
 ## Usage
 
 Edit any config file directly in `~/.dotfiles` — changes are live immediately. To commit:
