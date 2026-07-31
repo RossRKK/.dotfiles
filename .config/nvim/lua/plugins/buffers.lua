@@ -13,6 +13,18 @@ return {
           require("config.windows").goto_main_window()
           vim.cmd("buffer " .. bufnr)
         end,
+        -- The default close command is `bdelete!`, which lets Vim drop the
+        -- replacement buffer into whatever window it likes — hijacking the
+        -- explorer/terminal and wrecking the layout. Snacks.bufdelete switches
+        -- each window showing the buffer first, preserving the layout.
+        close_command = function(bufnr)
+          require("config.windows").goto_main_window()
+          require("snacks").bufdelete(bufnr)
+        end,
+        right_mouse_command = function(bufnr)
+          require("config.windows").goto_main_window()
+          require("snacks").bufdelete(bufnr)
+        end,
       },
     },
   },
