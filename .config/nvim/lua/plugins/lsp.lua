@@ -51,6 +51,43 @@ return {
         -- file with Godot closed logs a connection error and leaves the buffer
         -- on treesitter highlighting alone -- that's expected, not a misconfig.
         gdscript = {},
+        -- nixd evaluates the flake at the workspace root so option names
+        -- (programs.fish.*, etc.) complete and hover with docs. The option
+        -- exprs are built in before_init from whatever root nixd resolved
+        -- (nearest flake.nix), so the same config works in the dotfiles
+        -- home-manager flake, a NixOS repo, or any other flake:
+        --   home-manager -> the homeConfigurations attr for the current
+        --     $USER (usernames differ per machine, so this is unique)
+        --   nixos -> nixosConfigurations."<hostname>"
+        -- Whichever attr a given flake doesn't export just fails its eval
+        -- quietly; the other still provides completion. The "path:" fetcher
+        -- reads the directory as-is, so uncommitted (even untracked) files
+        -- are seen, at the cost of copying the dir to the store per eval.
+        nixd = {
+          before_init = function(params, config)
+            local root = params.rootPath
+            if not root or not vim.uv.fs_stat(root .. "/flake.nix") then
+              return
+            end
+            local flake = ('(builtins.getFlake "path:%s")'):format(root)
+            config.settings = vim.tbl_deep_extend("force", config.settings or {}, {
+              nixd = {
+                options = {
+                  ["home-manager"] = {
+                    expr = ('(let f = %s; '
+                      .. 'name = builtins.head (builtins.filter '
+                      .. '(n: builtins.match "%s@.*" n != null) '
+                      .. '(builtins.attrNames f.homeConfigurations)); '
+                      .. 'in f.homeConfigurations.${name}.options)'):format(flake, vim.env.USER),
+                  },
+                  nixos = {
+                    expr = ('%s.nixosConfigurations."%s".options'):format(flake, vim.fn.hostname()),
+                  },
+                },
+              },
+            })
+          end,
+        },
         lua_ls = {
           settings = {
             Lua = {

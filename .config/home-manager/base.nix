@@ -1,4 +1,9 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   # Single source of truth for where this repo is checked out.
@@ -29,18 +34,28 @@ in
   };
 
   # Each key maps to `.config/<key>` in the repo.
-  xdg.configFile = lib.genAttrs [
-    "nvim"
-    "lazygit"
-    "starship.toml"
-    "nix/nix.conf"
-  ] (name: { source = link ".config/${name}"; });
+  xdg.configFile =
+    lib.genAttrs
+      [
+        "nvim"
+        "lazygit"
+        "starship.toml"
+        "nix/nix.conf"
+      ]
+      (name: {
+        source = link ".config/${name}";
+      });
 
   # Each key is also its path relative to the repo root.
-  home.file = lib.genAttrs [
-    ".tmux.conf"
-    ".local/bin/clipboard-copy"
-  ] (path: { source = link path; });
+  home.file =
+    lib.genAttrs
+      [
+        ".tmux.conf"
+        ".local/bin/clipboard-copy"
+      ]
+      (path: {
+        source = link path;
+      });
 
   home.packages = with pkgs; [
     home-manager
@@ -80,6 +95,7 @@ in
     terraform-ls
     marksman
     helm-ls
+    nixd
 
     # Debug adapters (nvim-dap; debugpy is not here because the python adapter
     # runs debugpy out of each project's venv, see dap.lua)
@@ -94,5 +110,6 @@ in
     ruff
     shfmt
     gdtoolkit_4 # provides gdformat / gdlint
+    nixfmt # official nixfmt (RFC 166)
   ];
 }
