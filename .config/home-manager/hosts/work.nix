@@ -5,6 +5,13 @@
     ../base.nix
   ];
 
+  # WSL has no systemd user session ssh-agent, so start one per shell if needed.
+  programs.fish.interactiveShellInit = ''
+    if test -z "$SSH_AUTH_SOCK"
+        eval (ssh-agent -c) > /dev/null
+    end
+  '';
+
   home.shellAliases = {
     hms = "home-manager switch --flake ~/.dotfiles/.config/home-manager#rosskelso@work";
   };
