@@ -5,6 +5,8 @@
     ../base.nix
   ];
 
+  programs.git.settings.user.email = "ross.kelso@oxionics.com";
+
   # WSL has no systemd user session ssh-agent, so start one per shell if needed.
   programs.fish.interactiveShellInit = ''
     if test -z "$SSH_AUTH_SOCK"

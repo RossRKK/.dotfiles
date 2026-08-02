@@ -23,6 +23,27 @@ in
 
   programs.starship.enable = true;
 
+  programs.git = {
+    enable = true;
+    lfs.enable = true;
+    signing = {
+      format = "ssh";
+      # SSH keys are managed outside nix; same path on both hosts.
+      key = "~/.ssh/id_ed25519.pub";
+      signByDefault = true;
+    };
+    settings = {
+      user.name = "Ross Kelso";
+      # user.email is set per-host (personal vs. work).
+      merge.ff = "only";
+    };
+  };
+
+  programs.gh = {
+    enable = true;
+    gitCredentialHelper.enable = true;
+  };
+
   programs.zoxide = {
     enable = true;
     options = [ "--cmd cd" ];
@@ -59,9 +80,7 @@ in
 
   home.packages = with pkgs; [
     home-manager
-    git
     lazygit
-    gh
     tmux
     htop
     btop
