@@ -6,7 +6,6 @@
   };
 
   home.packages = with pkgs; [
-    solaar
     (symlinkJoin {
       name = "discord";
       paths = [ discord ];
