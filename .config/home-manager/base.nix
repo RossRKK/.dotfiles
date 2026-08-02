@@ -96,6 +96,7 @@ in
   home.packages = with pkgs; [
     home-manager
     lazygit
+    jjui # TUI for jujutsu (jj), wired to <leader>jj in nvim
     tmux
     htop
     btop

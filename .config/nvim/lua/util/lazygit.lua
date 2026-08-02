@@ -1,8 +1,8 @@
 local M = {}
 
 -- The lazygit float we last opened (a snacks.win). snacks keeps one terminal
--- per cwd alive; tracking the current one lets the picker hide it before it
--- opens (see M.pick).
+-- per cwd alive; tracking the current one lets us hide whatever is up (e.g.
+-- util.vcs hides both TUIs before popping the project picker).
 local term = nil
 
 -- Float lazygit at `cwd` (nil = snacks' default: the current file's repo, else
@@ -15,7 +15,7 @@ local term = nil
 -- window-scoped autocmd pattern (unlike WinClosed), so the callback checks
 -- nvim_get_current_win() itself.
 ---@param cwd? string
-local function float(cwd)
+function M.float(cwd)
   term = Snacks.lazygit({
     cwd = cwd,
     win = {
@@ -30,38 +30,23 @@ local function float(cwd)
   })
 end
 
--- <C-g>: lazygit for the current repo, toggled. If any lazygit float is already
--- open -- including one the <C-S-g> picker opened for another repo -- close it,
--- so <C-g> is a reliable "close whatever lazygit is up" for muscle memory.
-function M.open()
+-- Hide the current lazygit float if one is up; returns whether it did.
+function M.hide()
   if term and term:win_valid() then
     term:hide()
-    return
+    return true
   end
-  float()
+  return false
 end
 
--- <C-S-g>: pick a project (~/dev subdirs + recent git roots) and open lazygit
--- there, for driving a repo other than nvim's cwd -- e.g. picking between the
--- repos in a polyrepo tree.
-function M.pick()
-  -- Hide any open float first: WinLeave doesn't reliably fire when the picker
-  -- grabs focus, so an existing lazygit would otherwise linger over the picker.
-  if term and term:win_valid() then
-    term:hide()
+-- lazygit for the current repo, toggled. If any lazygit float is already open --
+-- including one the picker opened for another repo -- close it, so this is a
+-- reliable "close whatever lazygit is up" for muscle memory.
+function M.open()
+  if M.hide() then
+    return
   end
-  Snacks.picker.projects({
-    confirm = function(picker, item)
-      picker:close()
-      if item and item.file then
-        -- schedule so the picker window is fully torn down before the lazygit
-        -- terminal float takes focus.
-        vim.schedule(function()
-          float(item.file)
-        end)
-      end
-    end,
-  })
+  M.float()
 end
 
 return M

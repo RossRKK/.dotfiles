@@ -43,15 +43,19 @@ return {
       })
 
       -- <C-g> works from normal and terminal mode (pairs with the <C-t>
-      -- side-terminal toggle) so lazygit is reachable wherever the cursor is;
-      -- a second press hides it. <C-S-g> instead pops a project picker to drive
-      -- a repo other than nvim's cwd (e.g. within a polyrepo tree).
+      -- side-terminal toggle) so the git TUI is reachable wherever the cursor
+      -- is; a second press hides it. It dispatches on the repo under the cursor:
+      -- jjui in a jj repo, lazygit otherwise (see util.vcs). A leader map can't
+      -- serve here -- <space> in a terminal would stutter waiting for the chord,
+      -- breaking legitimate space presses -- so the git TUI stays on a ctrl key.
+      -- <C-S-g> instead pops a project picker to drive a repo other than nvim's
+      -- cwd (e.g. within a polyrepo tree), dispatching per chosen repo.
       vim.keymap.set({ "n", "t" }, "<C-g>", function()
-        require("util.lazygit").open()
-      end, { desc = "Open lazygit (current repo)" })
+        require("util.vcs").open()
+      end, { desc = "Open git TUI (lazygit / jjui)" })
       vim.keymap.set({ "n", "t" }, "<C-S-g>", function()
-        require("util.lazygit").pick()
-      end, { desc = "Open lazygit in a picked project" })
+        require("util.vcs").pick()
+      end, { desc = "Open git TUI in a picked project" })
       -- <leader>gP (PR for the current branch) lives in git.lua with the other
       -- <leader>g git maps.
     end,
