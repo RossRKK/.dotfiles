@@ -6,6 +6,7 @@
   ];
 
   programs.git.settings.user.email = "ross.kelso@oxionics.com";
+  programs.jujutsu.settings.user.email = "ross.kelso@oxionics.com";
 
   # WSL has no systemd user session ssh-agent, so start one per shell if needed.
   programs.fish.interactiveShellInit = ''

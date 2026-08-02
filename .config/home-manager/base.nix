@@ -39,6 +39,21 @@ in
     };
   };
 
+  programs.jujutsu = {
+    enable = true;
+    settings = {
+      user.name = "Ross Kelso";
+      # user.email is set per-host (personal vs. work), same as git.
+      ui.default-command = "log";
+      # Reuse the same SSH signing key as git.
+      signing = {
+        behavior = "own";
+        backend = "ssh";
+        key = "~/.ssh/id_ed25519.pub";
+      };
+    };
+  };
+
   programs.gh = {
     enable = true;
     gitCredentialHelper.enable = true;
