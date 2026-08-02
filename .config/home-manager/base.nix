@@ -45,6 +45,11 @@ in
       user.name = "Ross Kelso";
       # user.email is set per-host (personal vs. work), same as git.
       ui.default-command = "log";
+      # Git-style conflict markers (<<< === >>>) so nvim's git-conflict.nvim
+      # (see .config/nvim/lua/plugins/git.lua) can parse and resolve conflicts
+      # in place. jj's native markers are 3+ sided and git-conflict can't read
+      # them; N-sided conflicts still fall back to jj's diff format.
+      ui.conflict-marker-style = "git";
       # Reuse the same SSH signing key as git.
       signing = {
         behavior = "own";
@@ -75,6 +80,7 @@ in
       [
         "nvim"
         "lazygit"
+        "jjui"
         "starship.toml"
         "nix/nix.conf"
       ]
@@ -96,7 +102,7 @@ in
   home.packages = with pkgs; [
     home-manager
     lazygit
-    jjui # TUI for jujutsu (jj), wired to <leader>jj in nvim
+    jjui # TUI for jujutsu (jj), wired to <C-g> in nvim (jj repos; lazygit else)
     tmux
     htop
     btop
