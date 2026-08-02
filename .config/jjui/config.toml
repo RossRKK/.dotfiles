@@ -1,0 +1,5 @@
+[preview]
+# Open the preview pane on startup instead of waiting for `p`.
+show_at_start = true
+# position         = "auto"  # auto | right | bottom
+# width_percentage = 50.0
