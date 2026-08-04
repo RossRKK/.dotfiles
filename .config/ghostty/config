@@ -11,6 +11,11 @@ theme = TokyoNight Night
 keybind = shift+enter=text:\x1b\r
 keybind = ctrl+v=paste_from_clipboard
 
+# Vim-like yank: pressing `y` with an active selection copies it to the
+# clipboard. The `performable:` prefix means that when there's no selection
+# the action can't be performed, so the `y` falls through and types normally.
+keybind = performable:y=copy_to_clipboard
+
 keybind = ctrl+shift+t=new_tab
 keybind = ctrl+tab=next_tab
 keybind = ctrl+shift+tab=previous_tab
