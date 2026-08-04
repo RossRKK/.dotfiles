@@ -36,6 +36,7 @@ in
       user.name = "Ross Kelso";
       # user.email is set per-host (personal vs. work).
       merge.ff = "only";
+      init.defaultBranch = "main";
     };
   };
 
