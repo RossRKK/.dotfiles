@@ -113,11 +113,10 @@ in
     python3
     uv
     nodejs
-    cargo
-    rustc
-    rustfmt
-    rust-analyzer
-    clippy
+    # rustup rather than nixpkgs rustc/cargo so per-project rust-toolchain.toml
+    # pins (e.g. liboi's nightly + rust-src) are respected; it also proxies
+    # rustfmt/clippy/rust-analyzer, which would collide if installed directly
+    rustup
 
     # CLI tools
     any-nix-shell
