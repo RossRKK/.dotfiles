@@ -74,6 +74,19 @@ in
     CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1";
   };
 
+  # Install nvim plugins at the commits pinned in lazy-lock.json as part of
+  # the switch, so a fresh machine gets a fully working nvim with no
+  # first-launch bootstrap. Runs after linkGeneration so ~/.config/nvim
+  # exists; a no-op when everything already matches the lockfile. Non-fatal:
+  # if it fails (e.g. offline), lazy installs whatever is missing on the next
+  # nvim launch, as before.
+  home.activation.restoreNvimPlugins = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+    (
+      export PATH="${lib.makeBinPath [ pkgs.neovim pkgs.git ]}:$PATH"
+      run nvim --headless "+Lazy! restore" +qa
+    ) || verboseEcho "Lazy restore failed; nvim will bootstrap missing plugins on first launch"
+  '';
+
   # Each key maps to `.config/<key>` in the repo.
   xdg.configFile =
     lib.genAttrs
