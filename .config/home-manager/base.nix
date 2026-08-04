@@ -101,6 +101,7 @@ in
 
   home.packages = with pkgs; [
     home-manager
+    neovim
     lazygit
     jjui # TUI for jujutsu (jj), wired to <C-g> in nvim (jj repos; lazygit else)
     tmux
