@@ -21,6 +21,27 @@
 
   home.packages = with pkgs; [
     ansible
+    poethepoet
+
+    # Infra tooling ("cluster access" set)
+    (google-cloud-sdk.withExtraComponents [
+      google-cloud-sdk.components.gke-gcloud-auth-plugin
+    ])
+    kubectl
+    k9s
+    atmos
+    yq-go
+    jq
+
+    # Infra tooling ("infra engineering" set)
+    opentofu
+    sops
+    kubernetes-helm
+    kustomize
+    kubeconform
+    k3d
+    go-task
+    step-cli
   ];
 
   home.username = "rosskelso";

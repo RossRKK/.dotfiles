@@ -151,6 +151,7 @@ in
     prettierd
     ruff
     shfmt
+    shellcheck
     gdtoolkit_4 # provides gdformat / gdlint
     nixfmt # official nixfmt (RFC 166)
   ];
