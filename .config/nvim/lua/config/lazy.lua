@@ -17,6 +17,12 @@ require("lazy").setup("plugins", {
   -- GitHub repo instead when it isn't -- so the config works on a fresh machine
   -- without the local checkouts, and uses them when you have them.
   dev = { path = vim.fn.expand("~/dev"), fallback = true },
+  -- Don't clone missing plugins at startup: installs are a deliberate,
+  -- switch-time step (the `Lazy! restore` activation hook in base.nix, which
+  -- also records new specs in lazy-lock.json). A newly added spec stays
+  -- uninstalled until the next `hms` -- or a manual :Lazy restore, e.g. on a
+  -- machine not managed by home-manager.
+  install = { missing = false },
   -- image.nvim ships a rockspec depending on the `magick` luarock, which lazy's
   -- rocks support would keep trying (and failing) to build via hererocks. We use
   -- image.nvim's magick_cli processor, so no luarock is needed -- disable rocks.
