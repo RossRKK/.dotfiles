@@ -498,6 +498,7 @@ scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI munging).
 | `Ctrl+G`               | Toggle the git TUI — jjui in a jj repo, else lazygit  |
 | `Ctrl+Shift+G`         | Open the git TUI in a picked project                  |
 | `Ctrl+N` (in terminal) | Enter terminal-normal mode (then `gf` jumps to a ref) |
+| `<leader>y` (visual, side terminal) | Yank the selection joined into one line — for wrapped commands in Claude Code output (pty soft-wraps in shell output join automatically on any yank) |
 
 **lazygit copy-to-clipboard:** `Ctrl+O` copies the selected item — branch name in
 the branches panel, commit SHA in the commits panel, path in the files panel. In
