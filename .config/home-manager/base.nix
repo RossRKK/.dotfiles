@@ -103,6 +103,7 @@ in
   programs.fd.enable = true;
 
   home.sessionVariables = {
+    EDITOR = "nvim";
     CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1";
   };
 
@@ -132,6 +133,11 @@ in
       });
 
   home.packages = with pkgs; [
+    # Plain package on purpose (see comment above programs.lazygit): the
+    # programs.neovim wrapper would generate an init.lua that collides with
+    # the symlinked ~/.config/nvim.
+    neovim
+
     # tmux stays a plain package: programs.tmux always generates its own
     # ~/.config/tmux/tmux.conf, which the symlinked ~/.tmux.conf would shadow.
     tmux
