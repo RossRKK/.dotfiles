@@ -11,6 +11,7 @@
 - [Branch review](#branch-review) — review mode · PR comments
 - [File explorer](#file-explorer) — neo-tree keys · git glyphs · review indicators
 - [Terminal](#terminal) — side terminal · tabs
+- [Fish](#fish) — fzf.fish pickers · autopair
 - [tmux](#tmux)
 - [dotfiles](#dotfiles)
 
@@ -517,6 +518,32 @@ titled tab strip shows across the top when the side terminal is open.
 | `Ctrl+B &`    | Kill the current tab                              |
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
 | `Ctrl+T`      | Toggle the side terminal                          |
+
+---
+
+## Fish
+
+### fzf.fish — fuzzy pickers
+
+Fuzzy-search pickers ([fzf.fish](https://github.com/PatrickF1/fzf.fish)) that
+insert the selection into the command line. Inside any picker: type to filter,
+`Tab` multi-selects, `Enter` inserts, `Esc` cancels; a preview pane shows file
+contents / diffs / values.
+
+| Key          | Search                                        |
+| ------------ | --------------------------------------------- |
+| `Ctrl+R`     | Command history                               |
+| `Ctrl+Alt+F` | Files & directories (recursive from cwd)      |
+| `Ctrl+Alt+L` | Git log (preview shows the commit)            |
+| `Ctrl+Alt+S` | Git status (preview shows the diff)           |
+| `Ctrl+V`     | Shell variables (preview shows the value)     |
+| `Ctrl+Alt+P` | Processes (inserts the PID)                   |
+
+### autopair
+
+Typing `(` `[` `{` `"` `'` auto-inserts the closer and leaves the cursor
+between; backspace deletes an empty pair, and typing the closer skips over an
+existing one.
 
 ---
 

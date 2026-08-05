@@ -19,6 +19,16 @@ in
       fish_vi_key_bindings
       any-nix-shell fish --info-right | source
     '';
+    plugins = [
+      {
+        name = "fzf-fish";
+        src = pkgs.fishPlugins.fzf-fish.src;
+      }
+      {
+        name = "autopair";
+        src = pkgs.fishPlugins.autopair.src;
+      }
+    ];
   };
 
   programs.starship.enable = true;
@@ -70,27 +80,31 @@ in
     options = [ "--cmd cd" ];
   };
 
-  home.sessionVariables = {
-    EDITOR = "nvim";
-    CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1";
+  programs.fzf = {
+    enable = true;
+    # The fzf.fish plugin (programs.fish.plugins) provides its own richer
+    # bindings; the stock integration would fight it over Ctrl+R.
+    enableFishIntegration = false;
   };
 
-  # Install nvim plugins at the commits pinned in lazy-lock.json as part of
-  # the switch, so a fresh machine gets a fully working nvim with no
-  # first-launch bootstrap. Both steps are needed: `install` clones missing
-  # plugins (at their locked commits -- and it must be explicit, since
-  # lazy.lua sets `install.missing = false`), while `restore` re-pins
-  # already-installed ones after the lockfile changes (e.g. a git pull).
-  # Runs after linkGeneration so ~/.config/nvim exists; a no-op when
-  # everything already matches the lockfile. Non-fatal: if it fails (e.g.
-  # offline), nvim still runs with whatever is already installed, and the
-  # next switch retries.
-  home.activation.restoreNvimPlugins = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-    (
-      export PATH="${lib.makeBinPath [ pkgs.neovim pkgs.git ]}:$PATH"
-      run nvim --headless "+Lazy! install" "+Lazy! restore" +qa
-    ) || verboseEcho "Lazy install/restore failed; retrying on the next switch"
-  '';
+  programs.home-manager.enable = true;
+
+  # These modules only write config files when their `settings` options are
+  # set, so plain `enable` just installs the package and the out-of-store
+  # symlinks below (lazygit, jjui) stay authoritative. Neovim deliberately
+  # stays a plain package: programs.neovim's wrapper always generates an
+  # init.lua, which collides with the symlinked ~/.config/nvim.
+  programs.lazygit.enable = true;
+  programs.jjui.enable = true; # TUI for jujutsu (jj), wired to <C-g> in nvim (jj repos; lazygit else)
+  programs.htop.enable = true;
+  programs.btop.enable = true;
+  programs.claude-code.enable = true;
+  programs.ripgrep.enable = true;
+  programs.fd.enable = true;
+
+  home.sessionVariables = {
+    CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1";
+  };
 
   # Each key maps to `.config/<key>` in the repo.
   xdg.configFile =
@@ -118,14 +132,9 @@ in
       });
 
   home.packages = with pkgs; [
-    home-manager
-    neovim
-    lazygit
-    jjui # TUI for jujutsu (jj), wired to <C-g> in nvim (jj repos; lazygit else)
+    # tmux stays a plain package: programs.tmux always generates its own
+    # ~/.config/tmux/tmux.conf, which the symlinked ~/.tmux.conf would shadow.
     tmux
-    htop
-    btop
-    claude-code
 
     # Runtimes
     python3
@@ -138,8 +147,6 @@ in
 
     # CLI tools
     any-nix-shell
-    ripgrep
-    fd
     imagemagick
     terraform
 
