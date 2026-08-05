@@ -17,6 +17,10 @@ in
     enable = true;
     interactiveShellInit = ''
       fish_vi_key_bindings
+      # fish 4 applies the key-binding switch with `set --no-event`, so the
+      # call above never fires autopair's --on-variable rebind handler and it
+      # ends up with no bindings in insert mode; re-run it explicitly.
+      _autopair_fish_key_bindings
       any-nix-shell fish --info-right | source
     '';
     plugins = [
