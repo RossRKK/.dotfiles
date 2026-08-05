@@ -105,6 +105,14 @@ in
   programs.claude-code.enable = true;
   programs.ripgrep.enable = true;
   programs.fd.enable = true;
+  programs.uv = {
+    enable = true;
+    # Always use uv-managed (python-build-standalone) interpreters: they load
+    # through nix-ld, so manylinux wheels (grpcio etc.) find libstdc++ via
+    # programs.nix-ld.libraries. The nixpkgs python bypasses nix-ld and needs
+    # a global LD_LIBRARY_PATH hack to import those wheels.
+    settings.python-preference = "only-managed";
+  };
 
   home.sessionVariables = {
     EDITOR = "nvim";
@@ -148,7 +156,6 @@ in
 
     # Runtimes
     python3
-    uv
     nodejs
     # rustup rather than nixpkgs rustc/cargo so per-project rust-toolchain.toml
     # pins (e.g. liboi's nightly + rust-src) are respected; it also proxies
