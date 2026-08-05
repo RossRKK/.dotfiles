@@ -157,6 +157,7 @@ in
 
     # CLI tools
     any-nix-shell
+    gnumake # plugin test suites (fishmonger.nvim etc.) drive nvim via make test
     imagemagick
     terraform
 
