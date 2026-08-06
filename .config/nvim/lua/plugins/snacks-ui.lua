@@ -7,6 +7,9 @@
 --   plugins load -- the text-editor-mode path (`nvim somefile`), where startup
 --   latency is most visible.
 -- - gh pickers: browse GitHub issues / PRs via the gh CLI (already authed).
+-- - scratch: persistent scratch buffers, keyed per project + filetype, in a
+--   floating window. `<leader>.` toggles the default one; `<leader>S` picks
+--   among all of them (including other projects').
 
 return {
   "folke/snacks.nvim",
@@ -18,8 +21,11 @@ return {
     -- bottom edge. The jumps shadow the [i / ]i builtins (echo the first line
     -- containing the keyword under the cursor) -- an accepted trade-off here.
     scope = { enabled = true },
+    scratch = { enabled = true },
   },
   keys = {
+    { "<leader>.", function() Snacks.scratch() end, desc = "Toggle scratch buffer" },
+    { "<leader>S", function() Snacks.scratch.select() end, desc = "Select scratch buffer" },
     { "<leader>n", function() Snacks.notifier.show_history() end, desc = "Notification history" },
     { "<leader>ghi", function() Snacks.picker.gh_issue() end, desc = "GitHub issues" },
     { "<leader>ghp", function() Snacks.picker.gh_pr() end, desc = "GitHub PRs" },
