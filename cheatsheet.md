@@ -84,6 +84,8 @@
 | `:vert res 80`        | Resize vertical split to 80 columns         |
 | `Shift+L` / `Shift+H` | Next / prev buffer                          |
 | `Space+x`             | Close buffer                                |
+| `Space+.`             | Toggle scratch buffer (per project)         |
+| `Space+S`             | Pick among all scratch buffers              |
 
 ### Layout (edgy)
 
