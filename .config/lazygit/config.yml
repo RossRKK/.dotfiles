@@ -12,6 +12,16 @@ customCommands:
     command: >-
       git checkout -b "{{.Form.Name}}"
     loadingText: "Creating branch..."
+  - key: "n"
+    context: "worktrees"
+    description: "New worktree in ~ (branch rkk/<name>)"
+    prompts:
+      - type: "input"
+        title: "Worktree name (created at ~/<name>, branch rkk/<name>)"
+        key: "Name"
+    command: >-
+      git worktree add ~/"{{.Form.Name}}" -b "rkk/{{.Form.Name}}"
+    loadingText: "Creating worktree..."
   - key: "p"
     context: "commits"
     description: "Export selected commit(s) to a single squashed patch"
