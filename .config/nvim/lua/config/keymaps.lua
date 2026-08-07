@@ -13,6 +13,23 @@ map("t", "<C-k>", "<C-\\><C-n><C-w>k", { desc = "Move to upper window" })
 -- Exit to terminal-normal mode (then gf jumps to a file:line ref under the cursor)
 map("t", "<C-n>", "<C-\\><C-n>", { desc = "Terminal: enter normal mode" })
 
+-- Delete/change never touch the unnamed register (= system clipboard here,
+-- clipboard=unnamedplus): without an explicit register they go to the black
+-- hole "_. Register semantics are preserved — `"ad`/`"+x` still cut into that
+-- register — so this is a strict change of default, not a lost feature; yank
+-- becomes the only implicit way text enters a register. Visual p is left
+-- native on purpose: pasting over a selection still yanks the replaced text,
+-- keeping the swap trick available.
+local function blackhole(key)
+  return function()
+    local reg = vim.v.register ~= '"' and vim.v.register or "_"
+    return '"' .. reg .. key
+  end
+end
+for _, key in ipairs({ "d", "D", "c", "C", "x", "X" }) do
+  map({ "n", "x" }, key, blackhole(key), { expr = true, desc = key .. " without yanking" })
+end
+
 -- Clear search highlight
 map("n", "<Esc>", "<cmd>nohlsearch<cr>")
 
