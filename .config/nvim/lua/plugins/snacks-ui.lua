@@ -24,10 +24,56 @@ return {
     scratch = { enabled = true },
   },
   keys = {
-    { "<leader>.", function() Snacks.scratch() end, desc = "Toggle scratch buffer" },
-    { "<leader>S", function() Snacks.scratch.select() end, desc = "Select scratch buffer" },
-    { "<leader>n", function() Snacks.notifier.show_history() end, desc = "Notification history" },
-    { "<leader>ghi", function() Snacks.picker.gh_issue() end, desc = "GitHub issues" },
-    { "<leader>ghp", function() Snacks.picker.gh_pr() end, desc = "GitHub PRs" },
+    -- Toggle scratch buffer. Mapped in terminal mode too, so it works from the
+    -- side terminal -- which rules out <leader>: a terminal-mode <Space>
+    -- mapping would make every space wait out timeoutlen before reaching the
+    -- shell. Ctrl+/ is one of the few Ctrl+punctuation chords with a legacy
+    -- terminal encoding (it arrives as <C-_>); Ctrl+. only exists under the
+    -- kitty keyboard protocol, which Windows Terminal doesn't speak. Both
+    -- spellings are mapped so it also works in CSI-u terminals like ghostty.
+    {
+      "<C-/>",
+      function()
+        Snacks.scratch()
+      end,
+      mode = { "n", "t" },
+      desc = "Toggle scratch buffer",
+    },
+    {
+      "<C-_>",
+      function()
+        Snacks.scratch()
+      end,
+      mode = { "n", "t" },
+      desc = "Toggle scratch buffer",
+    },
+    {
+      "<leader>S",
+      function()
+        Snacks.scratch.select()
+      end,
+      desc = "Select scratch buffer",
+    },
+    {
+      "<leader>n",
+      function()
+        Snacks.notifier.show_history()
+      end,
+      desc = "Notification history",
+    },
+    {
+      "<leader>ghi",
+      function()
+        Snacks.picker.gh_issue()
+      end,
+      desc = "GitHub issues",
+    },
+    {
+      "<leader>ghp",
+      function()
+        Snacks.picker.gh_pr()
+      end,
+      desc = "GitHub PRs",
+    },
   },
 }
