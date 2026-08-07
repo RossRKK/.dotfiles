@@ -11,8 +11,6 @@ truncation_length = 32
 
 [kubernetes]
 disabled = false
-# Only show when KUBECONFIG is explicitly set.
-detect_env_vars = ["KUBECONFIG"]
 # Default format has a trailing " in " — drop it.
 format = '[$symbol$context( \($namespace\))]($style) '
 
