@@ -54,6 +54,11 @@
 | `Space+R`         | Reload file from disk                  |
 | `.`               | Repeat last change                     |
 
+Delete/change (`d D c C x X`) never write the unnamed register / clipboard —
+only yanks do. To actually cut, name a register: `"+d` cuts to the clipboard,
+`"ad` to register a. Exception: `p` over a visual selection still yanks the
+replaced text (the swap trick).
+
 ### Surround (nvim-surround)
 
 | Key             | Action                                        |
