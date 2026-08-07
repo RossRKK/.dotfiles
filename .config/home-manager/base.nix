@@ -13,6 +13,9 @@ let
   link = path: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/${path}";
 in
 {
+  # Home for repo-tracked scripts (clipboard-copy, nvim-dev — see home.file).
+  home.sessionPath = [ "$HOME/.local/bin" ];
+
   programs.fish = {
     enable = true;
     interactiveShellInit = ''
@@ -139,6 +142,7 @@ in
       [
         ".tmux.conf"
         ".local/bin/clipboard-copy"
+        ".local/bin/nvim-dev"
       ]
       (path: {
         source = link path;
@@ -149,6 +153,9 @@ in
     # programs.neovim wrapper would generate an init.lua that collides with
     # the symlinked ~/.config/nvim.
     neovim
+    # The nix neovim wrapper puts wl-copy on its own PATH; install it user-wide
+    # too so locally-built nvim (e.g. ~/dev/neovim) gets a clipboard provider.
+    wl-clipboard
 
     # tmux stays a plain package: programs.tmux always generates its own
     # ~/.config/tmux/tmux.conf, which the symlinked ~/.tmux.conf would shadow.
@@ -164,6 +171,7 @@ in
 
     # CLI tools
     any-nix-shell
+    gcx # Grafana Cloud CLI
     gnumake # plugin test suites (fishmonger.nvim etc.) drive nvim via make test
     imagemagick
     terraform
@@ -188,6 +196,8 @@ in
 
     # Formatters and CLI tools (same reason)
     gcc # tree-sitter CLI calls cc to compile parsers
+    lld
+    llvm
     tree-sitter
     stylua
     prettierd

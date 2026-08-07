@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+# Run the locally-built neovim from ~/dev/neovim. The build is never
+# `make install`ed, so VIMRUNTIME must point at the repo's runtime dir or the
+# binary looks in its /usr/local install prefix and finds nothing (no clipboard
+# provider, no vim.* lua modules).
+VIMRUNTIME="$HOME/dev/neovim/runtime" exec "$HOME/dev/neovim/build/bin/nvim" "$@"
