@@ -32,6 +32,7 @@
         overlays = [ (final: prev: {
           atmos = pkgs-unstable.atmos;
           poethepoet = pkgs-unstable.poethepoet;
+          opentofu = pkgs-unstable.opentofu;
         }) ];
       };
     in {
