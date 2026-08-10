@@ -54,10 +54,12 @@
 | `Space+R`         | Reload file from disk                  |
 | `.`               | Repeat last change                     |
 
-Delete/change (`d D c C x X`) never write the unnamed register / clipboard —
-only yanks do. To actually cut, name a register: `"+d` cuts to the clipboard,
-`"ad` to register a. Exception: `p` over a visual selection still yanks the
-replaced text (the swap trick).
+Delete/change (`d D c C x X`) never write the clipboard — only yanks do. To
+actually cut, name a register: `"ad` cuts to register a. (Clipboard is special:
+with `clipboard=unnamedplus`, `"+d` can't be told apart from a plain delete, so
+it also blackholes — yank to reach the clipboard, or use `"*` for the primary
+selection.) Exception: `p` over a visual selection still yanks the replaced
+text (the swap trick).
 
 ### Surround (nvim-surround)
 

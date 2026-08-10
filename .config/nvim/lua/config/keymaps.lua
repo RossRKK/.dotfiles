@@ -13,16 +13,24 @@ map("t", "<C-k>", "<C-\\><C-n><C-w>k", { desc = "Move to upper window" })
 -- Exit to terminal-normal mode (then gf jumps to a file:line ref under the cursor)
 map("t", "<C-n>", "<C-\\><C-n>", { desc = "Terminal: enter normal mode" })
 
--- Delete/change never touch the unnamed register (= system clipboard here,
--- clipboard=unnamedplus): without an explicit register they go to the black
--- hole "_. Register semantics are preserved — `"ad`/`"+x` still cut into that
--- register — so this is a strict change of default, not a lost feature; yank
--- becomes the only implicit way text enters a register. Visual p is left
+-- Delete/change never touch the clipboard: without an explicit register they
+-- go to the black hole "_. With clipboard=unnamedplus the *default* register
+-- reports as '+' (the clipboard), not the unnamed '"', so both must count as
+-- "no register given" — otherwise every bare d/x/c looks explicit and cuts to
+-- the clipboard, which is the bug this guards against. A genuinely named
+-- register is still honoured (`"ad` cuts to a, `"*x` to the primary
+-- selection); yank stays the only implicit way text enters the clipboard.
+-- Note: because unnamedplus collapses bare `d` and `"+d` onto the same
+-- v:register ('+'), `"+d` can't be told from a plain delete and so also
+-- blackholes — use `"*` (or yank) to reach the clipboard. Visual p is left
 -- native on purpose: pasting over a selection still yanks the replaced text,
 -- keeping the swap trick available.
 local function blackhole(key)
   return function()
-    local reg = vim.v.register ~= '"' and vim.v.register or "_"
+    local reg = vim.v.register
+    if reg == '"' or reg == "+" then
+      reg = "_"
+    end
     return '"' .. reg .. key
   end
 end
