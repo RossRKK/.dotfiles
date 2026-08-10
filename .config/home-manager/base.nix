@@ -153,9 +153,6 @@ in
     # programs.neovim wrapper would generate an init.lua that collides with
     # the symlinked ~/.config/nvim.
     neovim
-    # The nix neovim wrapper puts wl-copy on its own PATH; install it user-wide
-    # too so locally-built nvim (e.g. ~/dev/neovim) gets a clipboard provider.
-    wl-clipboard
 
     # tmux stays a plain package: programs.tmux always generates its own
     # ~/.config/tmux/tmux.conf, which the symlinked ~/.tmux.conf would shadow.
@@ -206,5 +203,10 @@ in
     shellcheck
     gdtoolkit_4 # provides gdformat / gdlint
     nixfmt # official nixfmt (RFC 166)
+  ] ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+    # The nix neovim wrapper puts wl-copy on its own PATH; install it user-wide
+    # too so locally-built nvim (e.g. ~/dev/neovim) gets a clipboard provider.
+    # Wayland-only, so skip it on hosts (e.g. macOS) that can't build it.
+    wl-clipboard
   ];
 }

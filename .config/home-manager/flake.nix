@@ -21,23 +21,32 @@
 
   outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, plasma-manager, ... }:
     let
-      system = "x86_64-linux";
-      pkgs-unstable = import nixpkgs-unstable {
+      # Linux hosts (personal, work) take atmos/poethepoet/opentofu from
+      # unstable, see the nixpkgs-unstable input comment above.
+      pkgsLinux = system:
+        let
+          pkgs-unstable = import nixpkgs-unstable {
+            inherit system;
+            config.allowUnfree = true;
+          };
+        in
+        import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+          overlays = [ (final: prev: {
+            atmos = pkgs-unstable.atmos;
+            poethepoet = pkgs-unstable.poethepoet;
+            opentofu = pkgs-unstable.opentofu;
+          }) ];
+        };
+
+      pkgsDarwin = system: import nixpkgs {
         inherit system;
         config.allowUnfree = true;
-      };
-      pkgs = import nixpkgs {
-        inherit system;
-        config.allowUnfree = true;
-        overlays = [ (final: prev: {
-          atmos = pkgs-unstable.atmos;
-          poethepoet = pkgs-unstable.poethepoet;
-          opentofu = pkgs-unstable.opentofu;
-        }) ];
       };
     in {
       homeConfigurations."rossrkk@personal" = home-manager.lib.homeManagerConfiguration {
-        inherit pkgs;
+        pkgs = pkgsLinux "x86_64-linux";
         modules = [
           plasma-manager.homeModules.plasma-manager
           ./hosts/personal.nix
@@ -45,8 +54,14 @@
       };
 
       homeConfigurations."rosskelso@work" = home-manager.lib.homeManagerConfiguration {
-        inherit pkgs;
+        pkgs = pkgsLinux "x86_64-linux";
         modules = [ ./hosts/work.nix ];
+      };
+
+      # macOS (Apple Silicon), home-manager standalone — no nix-darwin.
+      homeConfigurations."rossrkk@aether" = home-manager.lib.homeManagerConfiguration {
+        pkgs = pkgsDarwin "aarch64-darwin";
+        modules = [ ./hosts/aether.nix ];
       };
     };
 }
