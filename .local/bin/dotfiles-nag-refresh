@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Refresh the cached data behind the login nag (see fish_greeting).
+#
+# Cheap by design: it compares the locked flake input revisions against the
+# tips of their tracked branches with `git ls-remote` (a network call, but no
+# nix evaluation or build), and asks git how far the local checkout has drifted
+# from its upstream. Results are written to a cache file that the greeting
+# reads synchronously, so the shell prompt never blocks on the network.
+set -uo pipefail
+
+dotfiles="$HOME/.dotfiles"
+flake="$dotfiles/.config/home-manager"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-nag"
+mkdir -p "$(dirname "$cache")"
+
+# --- flake inputs behind their upstream branch --------------------------------
+# For each github input in flake.lock, resolve the latest commit on its tracked
+# ref and compare to the locked rev. Inputs without an explicit ref track the
+# repo's default branch (HEAD).
+outdated=$(python3 - "$flake/flake.lock" <<'PY'
+import json, subprocess, sys
+
+with open(sys.argv[1]) as f:
+    nodes = json.load(f)["nodes"]
+
+outdated = 0
+for name, node in nodes.items():
+    locked = node.get("locked", {})
+    if locked.get("type") != "github":
+        continue
+    owner, repo = locked["owner"], locked["repo"]
+    ref = node.get("original", {}).get("ref", "HEAD")
+    try:
+        out = subprocess.run(
+            ["git", "ls-remote", f"https://github.com/{owner}/{repo}", ref],
+            capture_output=True, text=True, timeout=20,
+        ).stdout.split()
+    except Exception:
+        continue
+    if out and out[0] != locked.get("rev"):
+        outdated += 1
+
+print(outdated)
+PY
+)
+[ -z "$outdated" ] && outdated=0
+
+# --- local checkout drift vs. upstream ---------------------------------------
+ahead=0
+behind=0
+if git -C "$dotfiles" fetch --quiet 2>/dev/null; then
+    if counts=$(git -C "$dotfiles" rev-list --left-right --count '@{u}...HEAD' 2>/dev/null); then
+        behind=$(printf '%s' "$counts" | cut -f1)
+        ahead=$(printf '%s' "$counts" | cut -f2)
+    fi
+fi
+
+# Written atomically so the greeting never reads a half-updated file.
+tmp="$cache.tmp"
+{
+    printf 'outdated %s\n' "$outdated"
+    printf 'ahead %s\n' "$ahead"
+    printf 'behind %s\n' "$behind"
+} > "$tmp"
+mv "$tmp" "$cache"

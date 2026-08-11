@@ -36,6 +36,62 @@ in
         src = pkgs.fishPlugins.autopair.src;
       }
     ];
+    functions = {
+      # Login nag: how many flake inputs are behind upstream, and how far the
+      # local ~/.dotfiles checkout has drifted from its remote. Reads a cache
+      # written by dotfiles-nag-refresh so the prompt never blocks; refreshes
+      # in the background (disowned) when the cache is missing or older than 6h.
+      fish_greeting = ''
+        set -l cache "$HOME/.cache/dotfiles-nag"
+
+        # Kick off a background refresh if the cache is stale (>6h) or absent.
+        set -l stale 1
+        if test -f "$cache"
+          set -l age (math (date +%s) - (stat -c %Y "$cache"))
+          test "$age" -lt 21600; and set stale 0
+        end
+        if test "$stale" -eq 1
+          fish -c 'dotfiles-nag-refresh' >/dev/null 2>&1 &
+          disown
+        end
+
+        test -f "$cache"; or return
+
+        set -l outdated (grep '^outdated ' "$cache" | cut -d' ' -f2)
+        set -l ahead (grep '^ahead ' "$cache" | cut -d' ' -f2)
+        set -l behind (grep '^behind ' "$cache" | cut -d' ' -f2)
+
+        # A plural "s" unless n == 1. Kept in a variable because an *empty*
+        # command substitution spliced into a concatenated word makes fish
+        # drop the entire word (empty-list cartesian product).
+        function __nag_s
+          if test "$argv[1]" -eq 1
+            echo -n ""
+          else
+            echo -n s
+          end
+        end
+
+        set -l msgs
+        if test -n "$outdated"; and test "$outdated" -gt 0
+          set -l s (__nag_s $outdated)
+          set -a msgs (set_color yellow)"$outdated flake input$s behind upstream"(set_color normal)" — run "(set_color cyan)"nix flake update --flake ~/.dotfiles/.config/home-manager && hms"(set_color normal)
+        end
+        if test -n "$behind"; and test "$behind" -gt 0
+          set -l s (__nag_s $behind)
+          set -a msgs (set_color red)"~/.dotfiles is $behind commit$s behind"(set_color normal)
+        end
+        if test -n "$ahead"; and test "$ahead" -gt 0
+          set -l s (__nag_s $ahead)
+          set -a msgs (set_color blue)"~/.dotfiles is $ahead commit$s ahead"(set_color normal)" — run "(set_color cyan)"git -C ~/.dotfiles push"(set_color normal)
+        end
+        functions -e __nag_s
+
+        for m in $msgs
+          echo "  $m"
+        end
+      '';
+    };
   };
 
   programs.starship.enable = true;
@@ -143,6 +199,7 @@ in
         ".tmux.conf"
         ".local/bin/clipboard-copy"
         ".local/bin/nvim-dev"
+        ".local/bin/dotfiles-nag-refresh"
       ]
       (path: {
         source = link path;
