@@ -7,9 +7,10 @@ to `~/.dotfiles` and run home-manager to symlink everything into place.
 ## Profiles
 
 | Profile  | Flake target       | Use case                     |
-| -------- | ------------------ | ---------------------------- |
+| -------- | ------------------ | ----------------------------- |
 | personal | `rossrkk@personal` | NixOS + KDE Plasma (Wayland) |
 | work     | `rosskelso@work`   | WSL on Windows               |
+| aether   | `rossrkk@aether`   | macOS (Apple Silicon)        |
 
 ## Bootstrap: NixOS (personal)
 
@@ -47,6 +48,56 @@ After that use the `hms` alias.
 Nerd fonts need to be installed on the Windows side for your terminal emulator.
 Install **0xProto Nerd Font Propo** from
 [nerdfonts.com](https://www.nerdfonts.com/font-downloads).
+
+## Bootstrap: macOS (aether)
+
+### 1. Install Nix
+
+Use the [Determinate Systems installer](https://github.com/DeterminateSystems/nix-installer)
+or the official one:
+
+```bash
+sh <(curl -L https://nixos.org/nix/install) --daemon
+```
+
+### 2. Clone dotfiles
+
+```bash
+git clone git@github.com:RossRKK/.dotfiles.git ~/.dotfiles
+```
+
+### 3. Bootstrap home-manager
+
+```bash
+nix run home-manager -- switch --flake ~/.dotfiles/.config/home-manager#rossrkk@aether
+```
+
+After that use the `hms` alias.
+
+The Nix-built fish binary reports an empty `$__fish_sysconfdir`, so it never
+scans `/etc/fish/conf.d` — the usual place Nix's per-shell `PATH` setup (which
+puts `~/.local/state/nix/profile/bin`, where `home-manager`/`hms` live, on
+`PATH`) would be installed by the Nix installer. No machine-level fix needed:
+`hosts/aether.nix` sources it directly via `programs.fish.shellInit`, so a
+plain `home-manager switch` (step 3 above) is sufficient.
+
+### Set fish as the login shell
+
+`programs.fish.enable` installs and configures fish but doesn't change the
+account's default shell — that's a one-time, machine-level step:
+
+```bash
+echo /Users/rossrkk/.nix-profile/bin/fish | sudo tee -a /etc/shells
+chsh -s /Users/rossrkk/.nix-profile/bin/fish
+```
+
+### Pre-existing config
+
+A fresh Mac usually already has a Homebrew-installed shell setup (`~/.gitconfig`,
+`~/.zshrc`, etc.) from before it was managed by this repo. Where it conflicts —
+e.g. `~/.gitconfig` shadows the home-manager-managed `~/.config/git/config` —
+back the old file up (`mv ~/.gitconfig ~/.gitconfig.backup`) so home-manager's
+version wins.
 
 ## Updating packages
 
