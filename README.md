@@ -104,7 +104,7 @@ version wins.
 Update all flake inputs to pull in newer package versions, then apply:
 
 ```bash
-nix flake update ~/.dotfiles/.config/home-manager
+nix flake update --flake ~/.dotfiles/.config/home-manager
 hms
 ```
 
