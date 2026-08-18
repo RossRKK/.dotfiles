@@ -4,6 +4,25 @@ Configuration managed via
 [home-manager](https://github.com/nix-community/home-manager). Clone this repo
 to `~/.dotfiles` and run home-manager to symlink everything into place.
 
+## Layout
+
+Two kinds of thing live here, and they follow different rules:
+
+- **App config** (`.config/nvim`, `.config/ghostty`, `.tmux.conf`,
+  `.local/bin/…`) keeps the path it has in `$HOME`. home-manager symlinks these
+  by explicit path so the shape isn't load-bearing for it — but it means the
+  repo can still be checked out as a bare repo over `$HOME`, or stowed, on a
+  machine where home-manager isn't an option.
+- **The nix config itself** (`flake.nix`, `base.nix`, `hosts/`, `profiles/`)
+  sits at the repo root. Nothing symlinks it into place, so there's no `$HOME`
+  path for it to mirror — hence `--flake ~/.dotfiles#<target>`.
+
+Anything true of *a machine* rather than *me* — Steam, Discord, printing, the
+graphical stack — belongs in [chaos.nix](https://github.com/RossRKK/chaos.nix),
+the NixOS system config, not here. Some boilerplate is deliberately duplicated
+across the two: this repo has to stand alone on non-NixOS hosts (work's WSL,
+aether's macOS), where chaos.nix isn't in the picture at all.
+
 ## Profiles
 
 | Profile  | Flake target       | Use case                     |
@@ -16,7 +35,7 @@ to `~/.dotfiles` and run home-manager to symlink everything into place.
 
 ```bash
 git clone git@github.com:RossRKK/.dotfiles.git ~/.dotfiles
-nix run home-manager -- switch --flake ~/.dotfiles/.config/home-manager#rossrkk@personal
+nix run home-manager -- switch --flake ~/.dotfiles#rossrkk@personal
 ```
 
 ## Bootstrap: WSL (work)
@@ -38,7 +57,7 @@ ln -s ~/.dotfiles/.config/nix/nix.conf ~/.config/nix/nix.conf
 ### 3. Bootstrap home-manager
 
 ```bash
-nix run home-manager -- switch --flake ~/.dotfiles/.config/home-manager#rosskelso@work
+nix run home-manager -- switch --flake ~/.dotfiles#rosskelso@work
 ```
 
 After that use the `hms` alias.
@@ -69,7 +88,7 @@ git clone git@github.com:RossRKK/.dotfiles.git ~/.dotfiles
 ### 3. Bootstrap home-manager
 
 ```bash
-nix run home-manager -- switch --flake ~/.dotfiles/.config/home-manager#rossrkk@aether
+nix run home-manager -- switch --flake ~/.dotfiles#rossrkk@aether
 ```
 
 After that use the `hms` alias.
@@ -104,14 +123,14 @@ version wins.
 Update all flake inputs to pull in newer package versions, then apply:
 
 ```bash
-nix flake update --flake ~/.dotfiles/.config/home-manager
+nix flake update --flake ~/.dotfiles
 hms
 ```
 
 To update a single input only (e.g. `nixpkgs`):
 
 ```bash
-nix flake update nixpkgs --flake ~/.dotfiles/.config/home-manager
+nix flake update nixpkgs --flake ~/.dotfiles
 hms
 ```
 
