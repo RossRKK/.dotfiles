@@ -3,10 +3,11 @@
 ## Contents
 
 - [Editing](#editing) — modes · movement · editing · surround · search · splits & buffers
+- [Workspaces](#workspaces) — one project per tab · `Space+t`
 - [Navigation](#navigation) — `g` go-to · `]`/`[` next/prev · Flash jumps
 - [Find and lists](#find-and-lists) — `Space+f` find · `Space+l` Trouble
 - [Code and diagnostics](#code-and-diagnostics) — `Space+c` action · `Space+rn` rename · `Space+d` diagnostics · `Space+u` undo
-- [Tests and debugging](#tests-and-debugging) — `Space+t` neotest · dap debug
+- [Tests and debugging](#tests-and-debugging) — `Space+T` neotest · dap debug
 - [Git](#git) — `Space+g` hunks · merge conflicts
 - [Branch review](#branch-review) — review mode · PR comments
 - [File explorer](#file-explorer) — neo-tree keys · git glyphs · review indicators
@@ -89,7 +90,7 @@ text (the swap trick).
 | `:sp`                 | Horizontal split                            |
 | `Ctrl+H/L/J/K`        | Move between splits (works in terminal too) |
 | `:vert res 80`        | Resize vertical split to 80 columns         |
-| `Shift+L` / `Shift+H` | Next / prev buffer                          |
+| `Shift+L` / `Shift+H` | Next / prev buffer (within this workspace)  |
 | `Space+x`             | Close buffer                                |
 | `Space+.`             | Toggle scratch buffer (per project)         |
 | `Space+S`             | Pick among all scratch buffers              |
@@ -117,6 +118,50 @@ switches auto-expand back off as it resets.
 
 Notifications use the snacks notifier (toasts, top-right); `Space+n` opens the
 scrollback history of everything that was notified.
+
+---
+
+## Workspaces
+
+A **workspace** is one project in one nvim tabpage: its own explorer rooted at
+that project, its own side terminals, its own cwd. Opening a second project is
+`Space+tn` rather than a second nvim, and switching between them is Vim's own
+`gt` / `gT`.
+
+| Key         | Action                                                     |
+| ----------- | ---------------------------------------------------------- |
+| `Space+tn`  | New project tab — names one from zoxide's list             |
+| `Space+te`  | New project tab — browse the filesystem for one (float)    |
+| `Space+tt`  | Switch to an open project (picker; matches number or name) |
+| `Space+tx`  | Close this project tab (its terminals shut down with it)   |
+| `gt` / `gT` | Next / prev tab                                            |
+
+Tab labels sit at the **right end of the bufferline**, showing the project name —
+prefixed with the status glyph of each of that project's Claude Code terminals,
+so a background workspace waiting on you says so without switching to it. (The
+OS window title still tracks the workspace you're _in_.)
+
+Buffers are global in Vim, but the bufferline shows only those under the current
+tab's project, and `Shift+L`/`Shift+H` cycle that filtered list.
+
+The two openers are the fast path and the fallback. `Space+tn` ranks by
+**frecency** — the same zoxide database `z` uses in the shell — so a couple of
+letters of somewhere you work often lands it, but a directory you've never `cd`'d
+into isn't in there at all. `Space+te` browses instead — a file tree in a float
+over the editor, rooted at `~`: `l` / `h` / `Backspace` to move around, typing
+filters live, and `Enter` opens the highlighted directory as a workspace. That's
+the one for a fresh clone.
+
+Separately, `gw` in the **docked explorer** opens the node's directory as its own
+workspace tab — how a subdirectory of the current project, or a sibling repo you
+were looking at, becomes a workspace of its own.
+
+`nvim <dir>` still builds the first workspace exactly as before; the picker just
+builds subsequent ones the same way.
+
+> **Session restore is off** while this settles. persistence.nvim saves one
+> session per cwd, which has no meaning once several projects share one nvim, so
+> startup opens an empty editor instead of reopening the last files.
 
 ---
 
@@ -242,17 +287,19 @@ Undo is persisted to disk (`undofile`), so the tree survives restarts.
 
 ## Tests and debugging
 
-### Space+t — Tests (neotest)
+### Space+T — Tests (neotest)
+
+Shifted `T`: the unshifted `Space+t` is the workspace (project tab) namespace.
 
 | Key        | Action                       |
 | ---------- | ---------------------------- |
-| `Space+tr` | Run nearest test             |
-| `Space+tf` | Run all tests in the file    |
-| `Space+td` | Debug nearest test (via dap) |
-| `Space+tt` | Toggle the summary tree      |
-| `Space+to` | Show output of the last test |
-| `Space+tO` | Toggle the output panel      |
-| `Space+ts` | Stop a running test          |
+| `Space+Tr` | Run nearest test             |
+| `Space+Tf` | Run all tests in the file    |
+| `Space+Td` | Debug nearest test (via dap) |
+| `Space+Tt` | Toggle the summary tree      |
+| `Space+To` | Show output of the last test |
+| `Space+TO` | Toggle the output panel      |
+| `Space+Ts` | Stop a running test          |
 
 Pass/fail signs render in the gutter; driven by rust-analyzer runnables.
 
@@ -456,6 +503,9 @@ the filter after selecting, `C-Enter` selects and clears it.
 | `gy` | Path relative to the cwd        |
 | `gY` | Absolute path                   |
 
+`gw` (custom) opens the node's directory as its own
+[workspace](#workspaces) tab — the directory itself, or a file's parent.
+
 **Git, ordering & sources**
 
 | Key          | Action                                            |
@@ -520,6 +570,10 @@ tmux-style tabs in the side terminal: one fills the slot, the others stay alive
 but hidden. Switch from **terminal-normal mode** (enter it with `Ctrl+N`), then
 press the `Ctrl+B` binding. `Ctrl+T` toggles the terminal from anywhere. A
 titled tab strip shows across the top when the side terminal is open.
+
+Slots 1–9 are **per workspace** (see [Workspaces](#workspaces)): each project tab
+has its own nine, spawned in that project's directory, and closing the project
+tab with `Space+tx` shuts its shells down.
 
 | Key           | Action                                            |
 | ------------- | ------------------------------------------------- |

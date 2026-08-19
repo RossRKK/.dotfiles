@@ -19,6 +19,18 @@ return {
       vim.api.nvim_create_autocmd("User", {
         pattern = "FishmongerTabsChanged",
         callback = function(ev)
+          -- The event's own tabpage gets its bufferline label repainted (project
+          -- name + glyphs, see config.workspace.set_label) -- that's how a
+          -- background workspace surfaces "the agent here wants you".
+          require("config.workspace").set_label(ev.data.tab)
+
+          -- The OS title stays a report on the workspace you're IN, so the
+          -- terminal emulator's own tab keeps meaning "this window, right now".
+          -- Events from a background tabpage therefore only repaint the label
+          -- above; ev.data.tabs would be that other project's terminals.
+          if ev.data.tab ~= vim.api.nvim_get_current_tabpage() then
+            return
+          end
           local icons = {}
           for _, tab in ipairs(ev.data.tabs) do
             icons[#icons + 1] = require("fishmonger").title_icon(tab.title)

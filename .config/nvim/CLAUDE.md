@@ -52,7 +52,11 @@ purpose — mocking it would test the mock.
 
 - `lua/config/` — options, keymaps, autocmds, and the IDE-mode machinery.
   `ide.lua` is the single source of truth for "IDE mode vs text-editor mode"
-  and the window geometry that follows.
+  and the window geometry that follows. `workspace.lua` owns the "one project per
+  tabpage" model: it is the only place that builds the IDE layout, called both by
+  the startup handler in `plugins/explorer.lua` and by the `<leader>tn` picker, so
+  a workspace tab and the tab nvim started in are the same thing. The left column
+  itself lives in `util/sidebar.lua` for the same reason.
 - `lua/plugins/` — one file per plugin, lazy.nvim specs. Three of our own live
   as external plugins under `~/dev` (lazy `dev` path), each declared in a small
   spec here: `fishmonger.lua` (the side terminal, wired into the snacks terminal

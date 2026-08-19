@@ -51,16 +51,41 @@ map("n", "<leader>R", "<cmd>checktime<cr>", { desc = "Reload file from disk" })
 -- Buffer tabs. Switching routes to the main window first (single-main-buffer
 -- layout: cycling from the terminal or explorer must not replace that window's
 -- buffer).
+--
+-- BufferLineCycleNext rather than bnext: it walks the buffers bufferline is
+-- actually showing, which plugins/buffers.lua filters to the current workspace
+-- tabpage's project. Plain bnext walks Vim's global buffer list and would cycle
+-- into another project's files -- ones not even on the bar.
 local goto_main_window = require("config.windows").goto_main_window
 map("n", "<S-l>", function()
   goto_main_window()
-  vim.cmd("bnext")
+  vim.cmd("BufferLineCycleNext")
 end, { desc = "Next buffer" })
 map("n", "<S-h>", function()
   goto_main_window()
-  vim.cmd("bprevious")
+  vim.cmd("BufferLineCyclePrev")
 end, { desc = "Prev buffer" })
 map("n", "<leader>x", "<cmd>bp|bdelete #<cr>", { desc = "Close buffer" })
+
+-- Workspaces: one project per tabpage (see config/workspace.lua). Switching
+-- between them is Vim's own gt/gT -- only opening one, listing them, and closing
+-- one down are new. <leader>t is "tab"; the test namespace moved to <leader>T
+-- (neotest.lua) since these are reached far more often.
+map("n", "<leader>tn", function()
+  require("config.workspace").pick_new()
+end, { desc = "New project tab (zoxide)" })
+-- The same thing for a project zoxide has never seen (a fresh clone): browse to
+-- it instead of naming it.
+map("n", "<leader>te", function()
+  require("config.workspace").explore()
+end, { desc = "New project tab (browse)" })
+map("n", "<leader>tt", function()
+  require("config.workspace").pick()
+end, { desc = "Switch to open project tab" })
+-- :tabclose, but named alongside the others. fishmonger shuts that tabpage's
+-- terminals down with it (nothing could reach them afterwards), so this ends the
+-- workspace's shells too. Mirrors <leader>x for a buffer.
+map("n", "<leader>tx", "<cmd>tabclose<cr>", { desc = "Close project tab" })
 
 -- Parse a `path[:line[:col]]` reference (e.g. printed in the terminal, or a path
 -- in a diff/log) and resolve it to a real file on disk. Best-effort: returns
