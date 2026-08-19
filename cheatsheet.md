@@ -669,9 +669,13 @@ Prefix = `Ctrl+B`.
 
 ## dotfiles
 
+An ordinary git repo at `~/.dotfiles`; home-manager symlinks the app config
+into `$HOME`. Edit the files in the repo (or through the symlinks) and commit
+with plain git:
+
 ```fish
-dotfiles status
-dotfiles add ~/.config/nvim/lua/plugins/foo.lua
-dotfiles commit -m "message"
-dotfiles push
+cd ~/.dotfiles
+git add .config/nvim/lua/plugins/foo.lua
+git commit -m "message"
+git push
 ```
