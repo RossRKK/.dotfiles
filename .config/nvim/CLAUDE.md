@@ -24,7 +24,8 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 
 | Spec             | Covers                                    |
 | ---------------- | ----------------------------------------- |
-| `ide_spec.lua`   | side-terminal width, explorer geometry    |
+| `ide_spec.lua`      | side-terminal width, explorer geometry |
+| `worktree_spec.lua` | worktree dir naming, `git worktree add` flags |
 
 The side-terminal and branch-review logic now live in external plugins, each
 with its own test suite (developed locally under `~/dev` via lazy's `dev` path):
@@ -56,7 +57,9 @@ purpose — mocking it would test the mock.
   tabpage" model: it is the only place that builds the IDE layout, called both by
   the startup handler in `plugins/explorer.lua` and by the `<leader>tn` picker, so
   a workspace tab and the tab nvim started in are the same thing. The left column
-  itself lives in `util/sidebar.lua` for the same reason.
+  itself lives in `util/sidebar.lua` for the same reason. `util/worktree.lua` is
+  the git side of the same idea: it turns a branch into a worktree under
+  `<repo>/.worktrees/` and hands the directory to `workspace.open`.
 - `lua/plugins/` — one file per plugin, lazy.nvim specs. Three of our own live
   as external plugins under `~/dev` (lazy `dev` path), each declared in a small
   spec here: `fishmonger.lua` (the side terminal, wired into the snacks terminal

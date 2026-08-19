@@ -79,6 +79,12 @@ end, { desc = "New project tab (zoxide)" })
 map("n", "<leader>te", function()
   require("config.workspace").explore()
 end, { desc = "New project tab (browse)" })
+-- The same thing for a branch of the project you're in: create (or reuse) a
+-- worktree for it under .worktrees/ and open that as its own tab. See
+-- util/worktree.lua.
+map("n", "<leader>tw", function()
+  require("util.worktree").pick()
+end, { desc = "New project tab (git worktree)" })
 map("n", "<leader>tt", function()
   require("config.workspace").pick()
 end, { desc = "Switch to open project tab" })
