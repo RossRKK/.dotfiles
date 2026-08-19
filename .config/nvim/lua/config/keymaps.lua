@@ -73,9 +73,9 @@ map("n", "<leader>x", "<cmd>bp|bdelete #<cr>", { desc = "Close buffer" })
 -- (neotest.lua) since these are reached far more often.
 map("n", "<leader>tn", function()
   require("config.workspace").pick_new()
-end, { desc = "New project tab (zoxide)" })
--- The same thing for a project zoxide has never seen (a fresh clone): browse to
--- it instead of naming it.
+end, { desc = "New project tab (recent/dev)" })
+-- The same thing for a project the recent list doesn't know (a fresh clone):
+-- browse to it instead of naming it.
 map("n", "<leader>te", function()
   require("config.workspace").explore()
 end, { desc = "New project tab (browse)" })
