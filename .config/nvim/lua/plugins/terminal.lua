@@ -11,8 +11,6 @@ return {
     config = function(_, opts)
       require("snacks").setup(opts)
 
-      local ide = require("config.ide")
-
       -- fishmonger owns its own default width; edgy (see edgy.lua) adopts the
       -- window via the "fishmonger" filetype and re-governs sizing in this config.
       -- shell: bare "fish" (jobstart resolves it via $PATH) rather than a
@@ -23,24 +21,10 @@ return {
       require("fishmonger").setup_keymaps()
       require("fishmonger").setup_exit()
 
-      -- IDE mode (opened a directory) auto-opens the side terminal, then hands
-      -- focus back to the editor window so we land on the file/tree, not the term.
-      -- Text-editor mode (single file, bare nvim, commit message) opens nothing;
-      -- <C-t> is always available to summon it manually.
-      vim.api.nvim_create_autocmd("VimEnter", {
-        callback = function()
-          if not ide.is_ide_mode() then
-            return
-          end
-          vim.schedule(function()
-            -- Go through fishmonger so slot 1 is registered as a tab.
-            -- insert = false because we hand focus straight back to the editor.
-            require("fishmonger").show(1, { insert = false })
-            vim.cmd("wincmd p")
-            vim.cmd("stopinsert")
-          end)
-        end,
-      })
+      -- The side terminal auto-opens as part of a workspace (IDE mode, and every
+      -- <leader>tn project tabpage) -- config.workspace.open does it, so there is
+      -- one place that knows the layout. Text-editor mode (single file, bare
+      -- nvim, commit message) opens nothing; <C-t> summons it anywhere.
 
       -- <C-g> works from normal and terminal mode (pairs with the <C-t>
       -- side-terminal toggle) so the git TUI is reachable wherever the cursor
