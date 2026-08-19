@@ -1,11 +1,10 @@
 # Neovim config
 
-Personal Neovim config, tracked in the bare dotfiles repo at `~/.dotfiles`
-(work tree `$HOME`). Stage changes with `dotfiles add`, not plain `git add` —
-the dotfiles workflow (bare-repo clone, the `dotfiles` alias) is documented in
-`~/README.md`.
+Personal Neovim config, tracked in the dotfiles repo, whose root is two levels
+up from here; home-manager symlinks this directory into `$HOME`. The workflow
+is documented in `../../README.md`.
 
-User-facing keymaps and features are documented in `~/cheatsheet.md` (a broader
+User-facing keymaps and features are documented in `../../cheatsheet.md` (a broader
 sheet also covering tmux and the dotfiles commands). **Keep it in sync:** when
 you add, remove, or rebind a mapping here, update the matching table there.
 
