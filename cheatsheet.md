@@ -132,6 +132,7 @@ that project, its own side terminals, its own cwd. Opening a second project is
 | ----------- | ---------------------------------------------------------- |
 | `Space+tn`  | New project tab — names one from zoxide's list             |
 | `Space+te`  | New project tab — browse the filesystem for one (float)    |
+| `Space+tw`  | New project tab — a git worktree of a branch of this repo   |
 | `Space+tt`  | Switch to an open project (picker; matches number or name) |
 | `Space+tx`  | Close this project tab (its terminals shut down with it)   |
 | `gt` / `gT` | Next / prev tab                                            |
@@ -151,6 +152,19 @@ into isn't in there at all. `Space+te` browses instead — a file tree in a floa
 over the editor, rooted at `~`: `l` / `h` / `Backspace` to move around, typing
 filters live, and `Enter` opens the highlighted directory as a workspace. That's
 the one for a fresh clone.
+
+`Space+tw` is the third opener, and the only one that can open a project that
+doesn't exist yet: it lists the branches of the repo you're in (local and
+remote), and `Enter` opens that branch's **git worktree** as a new tab — creating
+the worktree under `<repo>/.worktrees/<branch>` if there isn't one. Type a name
+nothing matches and `Enter` makes a new branch off `HEAD` instead. Picking a
+branch that already has a worktree just opens it.
+
+So a branch becomes a project tab: its own checkout, terminals and buffer list,
+with your main checkout untouched in the tab next door — no stash, no
+`git checkout` dance, and an agent can work a branch while you work another.
+`.worktrees/` is in the global gitignore, so it never shows up in `git status`.
+Removing one is still plain `git worktree remove` in the terminal.
 
 Separately, `gw` in the **docked explorer** opens the node's directory as its own
 workspace tab — how a subdirectory of the current project, or a sibling repo you
