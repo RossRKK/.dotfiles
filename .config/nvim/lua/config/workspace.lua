@@ -112,30 +112,42 @@ function M.open(dir, opts)
   end)
 end
 
---- Fast path: pick a project from zoxide's frecency list. Type a couple of
---- letters of somewhere you work often and it's the top hit.
+--- Fast path: pick a known project. Type a couple of letters of somewhere you
+--- work often and it's the top hit (the source is frecency-ranked).
 ---
---- snacks' zoxide source supplies the list, but not its default confirm
---- (load_session), which does a GLOBAL chdir into the picked directory --
---- dragging every existing workspace tab along with it.
+--- The list is snacks' `projects` source, NOT zoxide: the git roots of your recent
+--- files (:oldfiles / shada), plus every repo one level inside the `dev` dirs
+--- below. That's editing history rather than shell-cd history, which is the right
+--- signal here -- a project you opened from the greeter or a worktree tab counts,
+--- and one you only ever `cd`'d into to run a command doesn't clutter the list.
+--- Same list the dashboard's Projects section shows (plugins/dashboard.lua).
 ---
---- Only knows directories you have actually cd'd into; for a fresh clone, or
---- anything else zoxide has never seen, use M.explore().
-function M.pick_new()
-  Snacks.picker.zoxide({
+--- We supply the list but not its default confirm (load_session), which does a
+--- GLOBAL chdir into the picked directory -- dragging every existing workspace tab
+--- along with it.
+---
+--- For a fresh clone -- nothing edited in it yet, and not under `dev` -- use
+--- M.explore().
+---@param opts? table passed to open(); defaults to a new tabpage. The greeter
+---   (plugins/dashboard.lua) overrides it to take over the starting tab instead.
+function M.pick_new(opts)
+  opts = opts or { tab = true }
+  Snacks.picker.projects({
+    dev = { "~/dev" }, -- snacks' default also lists ~/projects, which doesn't exist here
     confirm = function(picker, item)
       picker:close()
       if item then
-        M.open(item.file, { tab = true })
+        M.open(item.file, opts)
       end
     end,
   })
 end
 
---- Slow path: browse the filesystem for a project zoxide has never seen (a fresh
---- clone). snacks' explorer picker, as a float over the editor -- explicitly NOT
---- neo-tree: neo-tree keys its filesystem state per TABPAGE, so a browse tree and
---- the docked sidebar are the same tree, and browsing to ~ re-roots the explorer
+--- Slow path: browse the filesystem for a project M.pick_new()'s list doesn't
+--- know yet (a fresh clone). snacks' explorer picker, as a float over the editor
+--- -- explicitly NOT neo-tree: neo-tree keys its filesystem state per TABPAGE, so
+--- a browse tree and the docked sidebar are the same tree, and browsing to ~
+--- re-roots the explorer
 --- behind you. A picker owns its own state and leaves the sidebar alone.
 ---
 --- Its own default layout is the `sidebar` preset, which docks it into the left
@@ -151,17 +163,19 @@ end
 --- beats a top-level `confirm` in key resolution. So `<CR>` is rebound to the
 --- action instead, in both windows -- it's pressed in the input window while
 --- filtering, and in the list once focus moves there.
-function M.explore()
+---@param opts? table passed to open(); see M.pick_new.
+function M.explore(opts)
+  opts = opts or { tab = true }
   local open = function(picker, item)
     picker:close()
     if item then
-      M.open(item.dir and item.file or vim.fs.dirname(item.file), { tab = true })
+      M.open(item.dir and item.file or vim.fs.dirname(item.file), opts)
     end
   end
   Snacks.picker.explorer({
     cwd = vim.env.HOME,
     -- Dotfile directories are projects too (~/.dotfiles, ~/.config/*), and the
-    -- point of this picker is reaching a repo zoxide has never seen.
+    -- point of this picker is reaching a repo nothing has recorded yet.
     hidden = true,
     auto_close = true, -- it's a one-shot chooser here, not a panel to leave open
     layout = { preset = "dropdown", preview = false },
