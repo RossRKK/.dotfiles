@@ -30,6 +30,9 @@ return {
       desc = "Live grep in current file's dir",
     },
     { "<leader>fb", function() Snacks.picker.buffers() end, desc = "Find buffers" },
+    -- fo = :oldfiles, the dashboard's "Recent file" entry reachable once you've
+    -- left the dashboard. Wider than fb: files closed (or from a past session).
+    { "<leader>fo", function() Snacks.picker.recent() end, desc = "Recent files" },
     { "<leader>fh", function() Snacks.picker.help() end, desc = "Help tags" },
     -- LSP symbol search (candidates are symbols, not text lines). fs: current
     -- file (VS Code "Go to Symbol"); fw: whole workspace, re-queried live.

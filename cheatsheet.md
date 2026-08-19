@@ -237,6 +237,7 @@ under the cursor — an accepted trade-off. The scope also gives text objects:
 | `Space+fg` | Live grep across project |
 | `Space+fd` | Live grep in the current file's directory |
 | `Space+fb` | Find open buffers        |
+| `Space+fo` | Recent files (oldfiles, across sessions) |
 | `Space+fs` | Symbols in current file (LSP) |
 | `Space+fw` | Symbols across workspace (LSP, live) |
 | `Space+ft` | List TODO / FIXME / … comments (Trouble) |
