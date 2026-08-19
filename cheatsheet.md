@@ -149,8 +149,9 @@ The two openers are the fast path and the fallback. `Space+tn` ranks by
 **frecency** — the same zoxide database `z` uses in the shell — so a couple of
 letters of somewhere you work often lands it, but a directory you've never `cd`'d
 into isn't in there at all. `Space+te` browses instead — a file tree in a float
-over the editor, rooted at `~`: `l` / `h` / `Backspace` to move around, typing
-filters live, and `Enter` opens the highlighted directory as a workspace. That's
+over the editor, rooted at `~`: `l` / `h` / `Backspace` to move around (or
+`Space` to expand a folder, as in the explorer), typing filters live, and `Enter`
+opens the highlighted directory as a workspace. That's
 the one for a fresh clone.
 
 `Space+tw` is the third opener, and the only one that can open a project that
