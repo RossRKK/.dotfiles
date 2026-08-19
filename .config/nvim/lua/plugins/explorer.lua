@@ -1,7 +1,8 @@
--- File explorer (neo-tree) + a symbols outline, sharing the left column.
+-- File explorer (neo-tree) in the left column, plus an on-demand symbols popup.
 --
--- Two neo-tree sources are used: `filesystem` (the tree) and `document_symbols`
--- (an outline of the focused file, driven by the LSP's documentSymbol request).
+-- Two neo-tree sources are used: `filesystem` (the docked tree) and
+-- `document_symbols` (a float outlining the focused file, driven by the LSP's
+-- documentSymbol request; <leader>lo).
 -- The branch-review UI paints its triage/nitpick glyphs on the filesystem tree
 -- via renderer components (registered below); those come from the triage.nvim /
 -- nitpick.nvim plugins, wired in lua/plugins/review.lua.
@@ -160,18 +161,26 @@ return {
         },
         document_symbols = {
           follow_cursor = true,
+          -- The outline is a popup, not a docked panel: it used to sit under the
+          -- tree in the left column, where <C-h> landed on it as often as on the
+          -- explorer and closing the main buffer left the column stranded.
+          window = { position = "float" },
         },
       })
 
-      -- The left column stacks two neo-tree windows: the file tree on top, the
-      -- symbols outline below it. edgy owns the stacking (see lua/plugins/edgy.lua):
-      -- both sources open with `show` (which doesn't steal focus), and edgy
-      -- relocates each into its left-edge slot by neo_tree_source. Opening and
-      -- closing that column lives in util.sidebar -- config.workspace opens one
-      -- per project tabpage, so it can't stay local to this file.
+      -- The left column holds one neo-tree window: the file tree. It opens with
+      -- `show` (which doesn't steal focus) and edgy relocates it into the
+      -- left-edge slot (see lua/plugins/edgy.lua). Opening and closing that
+      -- column lives in util.sidebar -- config.workspace opens one per project
+      -- tabpage, so it can't stay local to this file.
       local sidebar = require("util.sidebar")
 
-      vim.keymap.set("n", "<leader>e", sidebar.toggle, { desc = "Toggle explorer + outline" })
+      vim.keymap.set("n", "<leader>e", sidebar.toggle, { desc = "Toggle explorer" })
+      -- The symbols outline, on demand as a float. `toggle` so the same key
+      -- dismisses it; `reveal` follows the cursor's symbol on open.
+      vim.keymap.set("n", "<leader>lo", "<cmd>Neotree document_symbols float toggle reveal<cr>", {
+        desc = "Outline (symbols popup)",
+      })
       vim.keymap.set("n", "<leader>v", "<cmd>Neotree filesystem reveal left reveal_force_cwd<cr>", {
         desc = "Reveal file in explorer",
       })
@@ -199,7 +208,7 @@ return {
       vim.api.nvim_create_autocmd("ColorScheme", { callback = set_git_highlights })
       set_git_highlights()
 
-      -- `nvim <dir>` (e.g. `nvim .`): build the first workspace -- tree + outline
+      -- `nvim <dir>` (e.g. `nvim .`): build the first workspace -- the tree
       -- beside a real editor window, side terminal on the right. Same open() the
       -- <leader>tn picker calls for a second project, minus the new tabpage: this
       -- one takes the tabpage nvim started in, and the global cwd with it.

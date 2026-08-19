@@ -1,6 +1,6 @@
 -- Workspaces: one project per nvim tabpage.
 --
--- A workspace tabpage is the IDE layout (explorer + outline left, side terminal
+-- A workspace tabpage is the IDE layout (explorer left, side terminal
 -- right, editor in the middle) rooted at a project directory. Opening a second
 -- one gives you a second project side by side, switchable with gt/gT or the
 -- picker below, without a second nvim.
