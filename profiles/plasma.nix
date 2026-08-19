@@ -39,6 +39,7 @@
               "applications:firefox.desktop"
               "applications:org.kde.konsole.desktop"
               "applications:com.mitchellh.ghostty.desktop"
+              "applications:neovide.desktop"
             ] ++ config.taskbar.extraLaunchers;
           }
           "org.kde.plasma.marginsseparator"
