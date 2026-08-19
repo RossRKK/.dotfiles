@@ -13,6 +13,18 @@ map("t", "<C-k>", "<C-\\><C-n><C-w>k", { desc = "Move to upper window" })
 -- Exit to terminal-normal mode (then gf jumps to a file:line ref under the cursor)
 map("t", "<C-n>", "<C-\\><C-n>", { desc = "Terminal: enter normal mode" })
 
+-- Shift+Enter inserts a newline in Claude Code's prompt instead of submitting.
+-- The program wants ESC CR for that; ghostty's config sends it as text
+-- (`keybind = shift+enter=text:\x1b\r`), so under ghostty this never reaches
+-- nvim as a chord and the mapping below is inert. Neovide has no equivalent
+-- keybind setting -- it hands nvim a real <S-CR>, and nvim's terminal then
+-- forwards a bare CR to the child, which submits. So do ghostty's translation
+-- here: in terminal mode the rhs is fed to the pty, i.e. \x1b then \r.
+--
+-- Deliberately NOT the kitty-protocol CSI 13;2u encoding: tmux strips it, and
+-- ESC CR survives every layer.
+map("t", "<S-CR>", "<Esc><CR>", { desc = "Terminal: send Shift+Enter as ESC CR" })
+
 -- Delete/change never touch the clipboard: without an explicit register they
 -- go to the black hole "_. With clipboard=unnamedplus the *default* register
 -- reports as '+' (the clipboard), not the unnamed '"', so both must count as
