@@ -160,6 +160,9 @@ function M.explore()
   end
   Snacks.picker.explorer({
     cwd = vim.env.HOME,
+    -- Dotfile directories are projects too (~/.dotfiles, ~/.config/*), and the
+    -- point of this picker is reaching a repo zoxide has never seen.
+    hidden = true,
     auto_close = true, -- it's a one-shot chooser here, not a panel to leave open
     layout = { preset = "dropdown", preview = false },
     actions = { workspace_open = open },
