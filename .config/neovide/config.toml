@@ -1,0 +1,18 @@
+# Match Ghostty's font setup (see ../ghostty/config): 0xProto Nerd Font Propo
+# with programming ligatures off.
+[font]
+normal = ["0xProto Nerd Font Propo"]
+size = 12.0
+
+# 0xProto ships a real Italic face, and it's a loud one — curled, single-storey
+# letterforms that don't read as the same font. Point the italic slots at the
+# upright faces instead, so italic highlights (comments, LSP hints) just come
+# through in the regular shape. Naming the style explicitly is what does it:
+# with only a family, Neovide picks the Italic face for the italic slots.
+italic = [{ family = "0xProto Nerd Font Propo", style = "Regular" }]
+bold_italic = [{ family = "0xProto Nerd Font Propo", style = "Bold" }]
+
+# Disable ligatures — show >= as two glyphs, not one. calt drives 0xProto's
+# programming ligatures; liga/dlig cover standard/discretionary ones.
+[font.features]
+"0xProto Nerd Font Propo" = ["-calt", "-liga", "-dlig"]
