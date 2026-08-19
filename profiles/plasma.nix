@@ -12,6 +12,14 @@
     description = "Extra taskbar launchers appended to the base set.";
   };
 
+  # User avatar. Plasma (kickoff, the lock screen, system settings) reads
+  # ~/.face.icon; some older bits still look at ~/.face, so provide both.
+  # SDDM's copy lives in /var/lib/AccountsService and is set system-side.
+  config.home.file = {
+    ".face.icon".source = ../images/avatar.png;
+    ".face".source = ../images/avatar.png;
+  };
+
   config.programs.plasma = {
     enable = true;
 
@@ -23,6 +31,11 @@
       # lives in the repo so it's reproducible on a fresh machine.
       wallpaper = ../wallpapers/earth-set.jpg;
     };
+
+    # The lock screen has its own wallpaper setting (kscreenlockerrc), entirely
+    # separate from the desktop's. Without this it falls back to stock Breeze,
+    # which is why unlocking looked like the wallpaper had "reset".
+    kscreenlocker.appearance.wallpaper = ../wallpapers/earth-set.jpg;
 
     # One bottom panel per monitor (screen = "all"), each with the same pinned
     # launchers. Defining panels here means plasma-manager owns the layout.
