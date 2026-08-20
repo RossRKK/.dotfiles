@@ -165,12 +165,23 @@ return {
 },
       right = {
         -- The fishmonger side terminal. Exclude floats so lazygit (a float) is
-        -- never pulled into the edgebar. No `title`/`winbar` here: fishmonger
-        -- draws its own tmux-style tab strip as the window's winbar and
-        -- re-asserts it after each buffer swap (edgy blanks a panel's winbar on
-        -- swap), so edgy only needs to adopt and size this window.
+        -- never pulled into the edgebar. fishmonger draws its own tmux-style tab
+        -- strip as the window's winbar, so edgy only needs to adopt and size
+        -- this window.
+        --
+        -- `winbar = false` is load-bearing: it's the one value that makes edgy
+        -- leave the option alone (true installs edgy's own titlebar expression,
+        -- and edgy's default is true). Without it, every Edgy.Window construction
+        -- for this window overwrites fishmonger's winbar with edgy's -- which,
+        -- for a view with no title, renders as an empty strip. That construction
+        -- is not once-per-window: edgy caches Edgy.Window objects in a
+        -- WEAK-VALUED table keyed by window handle, so a garbage collection drops
+        -- the entry and the next layout update rebuilds it and re-applies `wo`.
+        -- Hence the tab strip vanishing at unpredictable moments rather than on
+        -- any one action.
         {
           ft = "fishmonger",
+          wo = { winbar = false },
           filter = function(_, win)
             return vim.api.nvim_win_get_config(win).relative == ""
           end,

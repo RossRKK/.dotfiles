@@ -155,7 +155,9 @@ end
 --- Navigation is the usual `l` / `h` / `<BS>` and typing filters live; `<CR>`
 --- opens the highlighted directory as a workspace instead of expanding it, which
 --- is the one thing this picker is for. `l` keeps the plain expand-or-open
---- behaviour.
+--- behaviour, and so does `<Space>` -- matching neo-tree, where space toggles a
+--- folder -- but only in the list window: in the input window space is a
+--- literal character being typed into the filter.
 ---
 --- Opening lives in its own action rather than in `confirm`: the explorer source
 --- installs `actions.confirm` (expand the directory) in its own `config`, which
@@ -182,7 +184,7 @@ function M.explore(opts)
     actions = { workspace_open = open },
     win = {
       input = { keys = { ["<CR>"] = { "workspace_open", mode = { "n", "i" } } } },
-      list = { keys = { ["<CR>"] = "workspace_open" } },
+      list = { keys = { ["<CR>"] = "workspace_open", ["<Space>"] = "confirm" } },
     },
   })
 end
