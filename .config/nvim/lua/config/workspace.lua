@@ -45,6 +45,11 @@ end
 --- the glyphs being here rather than only in the OS title: a background project
 --- whose agent is waiting on you says so from its tab, without switching to it.
 ---
+--- Deliberately the TITLE glyph and not fishmonger's richer agent state (the
+--- `icon` field, which resolves the hook-reported state first): this label has
+--- room for one character per terminal, and the detail belongs in the agent view
+--- (fishmonger.view), which has room to say what the agent actually wants.
+---
 --- bufferline renders a tabpage as `t:name` (falling back to the tab number), so
 --- the label is just that variable; redrawtabline re-evaluates its %! expression.
 ---@param tab? integer tabpage handle (default: current)

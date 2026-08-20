@@ -16,7 +16,16 @@ return {
       -- shell: bare "fish" (jobstart resolves it via $PATH) rather than a
       -- hardcoded path, so this works whether fish lives at /usr/bin,
       -- /opt/homebrew/bin, or elsewhere.
-      require("fishmonger").setup({ shell = "fish" })
+      -- project_name: fishmonger's own default is the tabpage cwd's basename,
+      -- which is the same answer everywhere except a worktree; config.workspace
+      -- is the one place that names a workspace, so the agent view borrows it
+      -- rather than growing a second naming rule.
+      require("fishmonger").setup({
+        shell = "fish",
+        project_name = function(tab)
+          return require("config.workspace").name(tab)
+        end,
+      })
       -- Tab keymaps for the side terminal (<C-b>{1-9}, etc).
       require("fishmonger").setup_keymaps()
       require("fishmonger").setup_exit()
