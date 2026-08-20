@@ -74,22 +74,44 @@ function M.new_file()
   vim.cmd.startinsert()
 end
 
---- Kick off a branch overview for `root` and redraw the greeters when it lands.
---- Safe to call whenever the greeter is shown -- the expensive step (the
+-- Roots with a report in flight, so a burst of events queues nothing behind the
+-- first one rather than stacking git processes.
+local fetching = {}
+
+--- Kick off a branch overview for `root` and redraw the greeters if it says
+--- something new. Safe to call as often as you like -- the expensive step (the
 --- merge-result diff) is memoised inside triage on the base/HEAD shas, so a
 --- repeat call on an unchanged branch spawns only the cheap git queries.
 ---@param root string workspace cwd
 function M.fetch(root)
   local ok, triage = pcall(require, "triage")
-  if not ok then
+  if not ok or fetching[root] then
     return
   end
+  fetching[root] = true
   triage.report({ root = root }, function(report)
-    M.reports[vim.fs.normalize(root)] = report or false
+    fetching[root] = nil
+    report = report or false
+    -- Only redraw on an actual change: re-rendering an identical dashboard
+    -- fights the cursor for no benefit.
+    if vim.deep_equal(M.reports[root], report) then
+      return
+    end
+    M.reports[root] = report
     -- Re-resolves every open dashboard's sections, which is how the overview
     -- appears without reopening the greeter.
     Snacks.dashboard.update()
   end)
+end
+
+--- Re-ask for the overview of every greeter currently on screen.
+function M.refresh_visible()
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "snacks_dashboard" then
+      M.fetch(vim.fs.normalize(require("config.workspace").cwd(vim.api.nvim_win_get_tabpage(win))))
+    end
+  end
 end
 
 --- Open a file from the overview in the main editor window (the greeter's own
@@ -333,23 +355,35 @@ end
 function M.setup()
   local group = vim.api.nvim_create_augroup("workspace_greeter", { clear = true })
 
-  -- Keep a displayed overview honest: a commit or push made in the side terminal
-  -- while the greeter is on screen would otherwise leave stale counts sitting
-  -- there until the greeter was reopened. Only for greeters actually visible, and
-  -- only on the events that can move a branch.
-  vim.api.nvim_create_autocmd({ "FocusGained", "BufWritePost", "TermLeave" }, {
-    group = group,
-    callback = function()
-      for _, win in ipairs(vim.api.nvim_list_wins()) do
-        local buf = vim.api.nvim_win_get_buf(win)
-        if vim.bo[buf].filetype == "snacks_dashboard" then
-          M.fetch(
-            vim.fs.normalize(require("config.workspace").cwd(vim.api.nvim_win_get_tabpage(win)))
-          )
+  -- Keep a displayed overview honest. The branch moves outside nvim -- a commit
+  -- or push in the side terminal, a lazygit session, a rebase in another window
+  -- -- and none of that raises an event of its own, so the greeter re-asks on
+  -- everything that plausibly follows such a move:
+  --   FocusGained  came back from the terminal / another app
+  --   TermClose    lazygit (or any transient terminal) exited
+  --   TermLeave    left terminal mode in the side terminal
+  --   BufWritePost saved a file, so the uncommitted set changed
+  --   DirChanged   the tab's project changed under us
+  -- Only greeters actually on screen are refreshed, the report is suppressed
+  -- while one is already in flight, and an unchanged answer redraws nothing --
+  -- so over-firing here costs a few small git queries, not a flicker.
+  vim.api.nvim_create_autocmd(
+    { "FocusGained", "TermClose", "TermLeave", "BufWritePost", "DirChanged" },
+    {
+      group = group,
+      callback = function()
+        -- Debounced: closing lazygit fires several of these at once, and the
+        -- state worth reading is the one after they've all landed. stop() alone
+        -- leaves the libuv handle alive, so close it too; defer_fn timers close
+        -- themselves once fired, hence the is_closing guard.
+        if M._pending and not M._pending:is_closing() then
+          M._pending:stop()
+          M._pending:close()
         end
-      end
-    end,
-  })
+        M._pending = vim.defer_fn(M.refresh_visible, 100)
+      end,
+    }
+  )
 
   vim.api.nvim_create_autocmd("BufEnter", {
     group = group,
