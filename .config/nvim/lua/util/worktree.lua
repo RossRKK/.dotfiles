@@ -49,6 +49,32 @@ function M.root(dir)
   return (vim.fs.dirname(common):gsub("/$", ""))
 end
 
+--- Resolve a picked-or-pasted name to a ref the repo actually has. GitHub's UI
+--- copies the bare branch name (`feat/x`), not a remote-qualified ref, so a name
+--- that isn't a local branch is checked against every remote's tracking refs
+--- before we conclude it's new.
+---@param branch string as picked/pasted ("x", "origin/x", "remotes/origin/x")
+---@param locals table<string, true> existing local branch names
+---@param remote_refs table<string, true> remote-tracking refs ("origin/x")
+---@return string? ref the branch as an existing local or remote-tracking ref
+function M.resolve(branch, locals, remote_refs)
+  branch = branch:gsub("^remotes/", "")
+  if locals[branch] or remote_refs[branch] then
+    return branch
+  end
+  -- origin first, so a fork remote carrying the same branch can't win by
+  -- table-iteration luck; any other remote is only reachable when unambiguous.
+  if remote_refs["origin/" .. branch] then
+    return "origin/" .. branch
+  end
+  for ref in pairs(remote_refs) do
+    if ref:match("^[^/]+/(.+)$") == branch then
+      return ref
+    end
+  end
+  return nil
+end
+
 --- `git worktree add` arguments for putting `branch` at `path`.
 ---
 --- Three cases, and they need different flags: an existing local branch is just
@@ -108,6 +134,22 @@ end
 
 ---@param dir string
 ---@return table<string, true>
+--- Remote-tracking refs as a set of short names ("origin/x"). `HEAD` symrefs
+--- (origin/HEAD) are skipped: they alias another branch and would only add a
+--- confusing duplicate for resolve() to hit.
+---@param dir string
+---@return table<string, true>
+local function remote_refs(dir)
+  local out = git(dir, { "for-each-ref", "--format=%(refname:short)", "refs/remotes" }) or ""
+  local set = {}
+  for name in vim.gsplit(out, "\n") do
+    if name ~= "" and not name:match("/HEAD$") then
+      set[name] = true
+    end
+  end
+  return set
+end
+
 local function remote_names(dir)
   local set = {}
   for name in vim.gsplit(git(dir, { "remote" }) or "", "\n") do
@@ -136,13 +178,25 @@ function M.open(branch, dir)
     return
   end
 
+  -- A name that matches nothing local or remote-tracking may simply not be
+  -- fetched yet -- the "paste a branch name straight from GitHub" case -- so try
+  -- a targeted fetch from origin before concluding it's a new branch off HEAD.
+  local locals = local_branches(root)
+  local resolved = M.resolve(branch, locals, remote_refs(root))
+  if not resolved and not branch:find("%s") then
+    local short = branch:gsub("^remotes/", "")
+    if git(root, { "fetch", "origin", short }) then
+      resolved = M.resolve(branch, locals, remote_refs(root))
+    end
+  end
+  branch = resolved or branch
+
   local short = branch:gsub("^remotes/", "")
   local path = existing(root)[short]
   if not path then
     path = root .. "/.worktrees/" .. M.slug(branch)
     if vim.fn.isdirectory(path) ~= 1 then
-      local _, add_err =
-        git(root, M.add_args(branch, path, local_branches(root), remote_names(root)))
+      local _, add_err = git(root, M.add_args(branch, path, locals, remote_names(root)))
       if add_err then
         vim.notify("git worktree add: " .. add_err, vim.log.levels.ERROR)
         return
@@ -151,6 +205,21 @@ function M.open(branch, dir)
   end
 
   require("config.workspace").open(path, { tab = true })
+end
+
+--- M.open, callable from a lazygit custom command over `nvim --remote-expr`.
+--- The float has to hide first (the new tab would otherwise be built underneath
+--- it), and the real work is deferred so the RPC reply returns immediately
+--- instead of holding lazygit while worktree creation (possibly a fetch) runs.
+---@param branch string
+---@return string '' -- --remote-expr prints the expression's value; keep it empty
+function M.open_from_lazygit(branch)
+  local cwd = vim.fn.getcwd()
+  require("util.lazygit").hide()
+  vim.schedule(function()
+    M.open(branch, cwd)
+  end)
+  return ""
 end
 
 --- Pick a branch to open as a worktree tab.

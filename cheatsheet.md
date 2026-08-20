@@ -93,8 +93,14 @@ text (the swap trick).
 | `:vert res 80`        | Resize vertical split to 80 columns         |
 | `Shift+L` / `Shift+H` | Next / prev buffer (within this workspace)  |
 | `Space+x`             | Close buffer                                |
+| `Space+X`             | Close all buffers in this workspace         |
 | `Space+.`             | Toggle scratch buffer (per project)         |
 | `Space+S`             | Pick among all scratch buffers              |
+
+Closing the last buffer doesn't leave you on a blank `[No Name]` — the workspace
+**greeter** takes the main window instead: the project name, the pickers on one
+key (`f` find, `r` recent, `g` grep, `n` new file), and this project's recent
+files. `Space+X` is the quick way back to it.
 
 ### Layout (edgy)
 
@@ -158,9 +164,14 @@ the one for a fresh clone.
 `Space+tw` is the third opener, and the only one that can open a project that
 doesn't exist yet: it lists the branches of the repo you're in (local and
 remote), and `Enter` opens that branch's **git worktree** as a new tab — creating
-the worktree under `<repo>/.worktrees/<branch>` if there isn't one. Type a name
-nothing matches and `Enter` makes a new branch off `HEAD` instead. Picking a
-branch that already has a worktree just opens it.
+the worktree under `<repo>/.worktrees/<branch>` if there isn't one. Type (or
+paste, straight from GitHub) a name nothing matches and `Enter` first looks for
+it on the remotes — fetching `origin/<name>` if it isn't known yet — and only
+makes a new branch off `HEAD` when no remote has it. Picking a branch that
+already has a worktree just opens it.
+
+The same thing is reachable from **lazygit**: `w` on a branch (local or remote)
+opens it as a worktree project tab in the surrounding nvim.
 
 So a branch becomes a project tab: its own checkout, terminals and buffer list,
 with your main checkout untouched in the tab next door — no stash, no
@@ -398,7 +409,9 @@ Highlights what merging this branch into the default branch would actually
 change (the merge-result diff): gitsigns marks changed lines in the sign column,
 and the explorer flags changed files. Changes the default branch already has —
 even if the branch made them independently — don't show. Off by default; turn it
-on per-branch with `Space+rt` and approve / reject files as you go.
+on with `Space+rt` and approve / reject files as you go. The toggle — like the
+target and all review state — is **per repo**, so each workspace tab reviews (or
+doesn't) independently.
 
 The target defaults to the auto-detected default branch (`origin/HEAD`, else
 `main` / `master`). Override it with `Space+rb` (or `:ReviewBase <branch>`, with
@@ -422,8 +435,8 @@ was acted on — re-review the fix) rather than losing the flag.
 `Space+rd` overlays a combined inline diff on the file itself — deleted lines
 shown inline, added / changed lines highlighted — against the review base
 (default branch tip), instead of a side-by-side split. Works whether or not
-review mode is on; it's a global mode, so it applies to all buffers until
-toggled off.
+review mode is on; it's a mode across the current buffer's repo, applying to
+that repo's buffers until toggled off.
 
 ### PR comments (batched review)
 

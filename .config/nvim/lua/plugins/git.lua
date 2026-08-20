@@ -39,11 +39,16 @@ return {
       current_line_blame_formatter = "  <author>, <author_time:%R> · <summary>",
       on_attach = function(bufnr)
         local gs = require("gitsigns")
-        -- Review mode rebases the sign column onto the branch merge-base; make
-        -- sure buffers that attach after that base was chosen inherit it.
-        local base = require("triage.gitsigns").current
+        -- Review mode rebases the sign column onto the branch merge-base, per
+        -- repo; make sure buffers that attach after their repo's base was chosen
+        -- inherit it. Buffer-local, never global: a global base would be
+        -- revalidated against buffers from other repos (other workspace tabs),
+        -- which may not resolve this repo's ref.
+        local base = require("triage.gitsigns").base_for(bufnr)
         if base then
-          pcall(gs.change_base, base, true)
+          vim.api.nvim_buf_call(bufnr, function()
+            pcall(gs.change_base, base, false)
+          end)
         end
         local function map(l, r, desc)
           vim.keymap.set("n", l, r, { buffer = bufnr, desc = desc })

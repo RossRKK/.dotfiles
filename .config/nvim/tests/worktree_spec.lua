@@ -14,6 +14,32 @@ describe("worktree.slug", function()
   end)
 end)
 
+describe("worktree.resolve", function()
+  local locals = { main = true }
+  local refs = { ["origin/main"] = true, ["origin/feat/x"] = true, ["fork/feat/x"] = true }
+
+  it("keeps an existing local branch as-is", function()
+    assert.equals("main", worktree.resolve("main", locals, refs))
+  end)
+
+  it("keeps a remote-qualified ref as-is (with remotes/ stripped)", function()
+    assert.equals("origin/feat/x", worktree.resolve("remotes/origin/feat/x", locals, refs))
+  end)
+
+  -- The paste-from-GitHub case: a bare branch name that only exists remotely.
+  it("qualifies a bare name with origin over other remotes", function()
+    assert.equals("origin/feat/x", worktree.resolve("feat/x", locals, refs))
+  end)
+
+  it("falls back to any remote carrying the branch", function()
+    assert.equals("fork/feat/y", worktree.resolve("feat/y", locals, { ["fork/feat/y"] = true }))
+  end)
+
+  it("returns nil for a name nothing has", function()
+    assert.is_nil(worktree.resolve("new/thing", locals, refs))
+  end)
+end)
+
 describe("worktree.add_args", function()
   local locals = { main = true }
   local remotes = { origin = true }

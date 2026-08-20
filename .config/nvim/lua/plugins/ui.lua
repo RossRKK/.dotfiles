@@ -22,7 +22,9 @@ return {
               return vim.trim(triage .. (nitpick ~= "" and ("  " .. nitpick) or ""))
             end,
             cond = function()
-              return package.loaded["triage"] ~= nil and require("triage").enabled
+              -- is_enabled() is per repo (cwd's), so the fragment only shows in
+              -- tabs whose project is actually under review.
+              return package.loaded["triage"] ~= nil and require("triage").is_enabled()
             end,
           },
         },

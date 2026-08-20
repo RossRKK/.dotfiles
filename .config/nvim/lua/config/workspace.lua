@@ -61,7 +61,11 @@ function M.set_label(tab)
     end
   end
   local name = M.name(tab)
-  vim.api.nvim_tabpage_set_var(tab, "name", #icons > 0 and (table.concat(icons) .. " " .. name) or name)
+  vim.api.nvim_tabpage_set_var(
+    tab,
+    "name",
+    #icons > 0 and (table.concat(icons) .. " " .. name) or name
+  )
   pcall(vim.cmd, "redrawtabline")
 end
 
@@ -89,7 +93,10 @@ function M.open(dir, opts)
   vim.api.nvim_tabpage_set_var(0, "workspace", vim.fn.fnamemodify(dir, ":t"))
   M.set_label() -- name the tab now; the glyphs land as its terminals report in
 
-  vim.cmd.enew() -- an empty editor window for files to open into
+  -- The editor window for files to open into. Not an empty buffer: the
+  -- workspace greeter (config/greeter.lua) — branch status, recent files, and
+  -- pickers — which any opened file simply replaces.
+  require("config.greeter").open()
   if opts.drop_buf then
     pcall(vim.api.nvim_buf_delete, opts.drop_buf, { force = true })
   end
@@ -109,6 +116,11 @@ function M.open(dir, opts)
       vim.api.nvim_set_current_win(editor)
     end
     vim.cmd("stopinsert")
+    -- The greeter centred itself against a full-width window: it was drawn
+    -- before the explorer and terminal took their columns. Re-render now that
+    -- the editor window is its final size. (snacks re-renders on WinResized,
+    -- but edgy's sizing doesn't reliably produce one for this window.)
+    Snacks.dashboard.update()
   end)
 end
 

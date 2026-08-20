@@ -91,7 +91,21 @@ map("n", "<S-h>", function()
   goto_main_window()
   vim.cmd("BufferLineCyclePrev")
 end, { desc = "Prev buffer" })
-map("n", "<leader>x", "<cmd>bp|bdelete #<cr>", { desc = "Close buffer" })
+-- Snacks.bufdelete rather than `bp|bdelete #`: that pair can't close the LAST
+-- buffer (with nothing to switch to, bp stays put and there's no alternate to
+-- delete), and it lets Vim drop the replacement buffer into whatever window it
+-- likes -- hijacking the explorer or terminal. This switches each window showing
+-- the buffer off it first, so the layout survives and the main window lands on
+-- the greeter (config/greeter.lua) when that was the last one.
+map("n", "<leader>x", function()
+  require("config.windows").goto_main_window()
+  Snacks.bufdelete()
+end, { desc = "Close buffer" })
+-- All of this workspace's buffers at once, landing back on the greeter
+-- (config/greeter.lua) — the fast way back to the tab's "home screen".
+map("n", "<leader>X", function()
+  require("config.greeter").close_all()
+end, { desc = "Close all buffers (this workspace)" })
 
 -- Workspaces: one project per tabpage (see config/workspace.lua). Switching
 -- between them is Vim's own gt/gT -- only opening one, listing them, and closing

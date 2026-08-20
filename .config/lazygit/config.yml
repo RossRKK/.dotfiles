@@ -22,6 +22,22 @@ customCommands:
     command: >-
       git worktree add ~/"{{.Form.Name}}" -b "rkk/{{.Form.Name}}"
     loadingText: "Creating worktree..."
+  # Open the selected branch as a worktree project tab in the surrounding nvim
+  # (util/worktree.lua). No-op outside nvim, where $NVIM is unset.
+  - key: "w"
+    context: "localBranches"
+    description: "Open branch as a worktree project tab (nvim)"
+    command: >-
+      [ -n "$NVIM" ] && nvim --server "$NVIM" --remote-expr
+      "v:lua.require'util.worktree'.open_from_lazygit('{{.SelectedLocalBranch.Name}}')"
+    loadingText: "Opening worktree tab..."
+  - key: "w"
+    context: "remoteBranches"
+    description: "Open branch as a worktree project tab (nvim)"
+    command: >-
+      [ -n "$NVIM" ] && nvim --server "$NVIM" --remote-expr
+      "v:lua.require'util.worktree'.open_from_lazygit('{{.SelectedRemoteBranch.RemoteName}}/{{.SelectedRemoteBranch.Name}}')"
+    loadingText: "Opening worktree tab..."
   - key: "p"
     context: "commits"
     description: "Export selected commit(s) to a single squashed patch"
