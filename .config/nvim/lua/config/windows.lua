@@ -13,7 +13,24 @@ function M.is_editor_window(win)
     return false
   end
   local buf = vim.api.nvim_win_get_buf(win)
+  -- The workspace greeter (config/greeter.lua) is unlisted nofile, but it IS
+  -- the main window whenever it's showing — files must open over it.
+  if vim.bo[buf].filetype == "snacks_dashboard" then
+    return true
+  end
   return vim.bo[buf].buftype == "" and vim.bo[buf].buflisted
+end
+
+--- The tabpage's main editor window: the first window holding an ordinary file
+--- buffer (or the greeter). nil if the tab is all panels.
+---@param tab? integer tabpage handle (default: current)
+---@return integer?
+function M.main_window(tab)
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab or 0)) do
+    if M.is_editor_window(win) then
+      return win
+    end
+  end
 end
 
 -- Ensure the current window is a main editor window before opening a file.
