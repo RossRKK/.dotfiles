@@ -39,19 +39,61 @@ function M.cwd(tab)
   return vim.fn.getcwd(-1, nr)
 end
 
+-- Short highlight names for the tab-strip status glyphs. bufferline reserves
+-- width for a tab by measuring the raw `t:name` string, %-codes and all, so
+-- every character of a group name inside the label narrows the buffer section
+-- of the bar -- hence FmT1/FmT1S rather than the state group's own name.
+local glyph_groups = {}
+
+--- The tabline highlight code for a status glyph: the agent state's colour
+--- (fishmonger's hl, e.g. DiagnosticWarn) over the tab tile's own background,
+--- which differs between the selected tile and the rest. Re-derived on every
+--- call rather than cached: it follows colorscheme changes and bufferline
+--- setting its groups up late (VeryLazy) for free, and set_label only runs on
+--- state changes.
+---@param hl string highlight group carrying the state's fg
+---@param selected boolean is this the current tabpage's tile
+---@return string
+local function glyph_code(hl, selected)
+  local id = glyph_groups[hl]
+  if not id then
+    id = tostring(vim.tbl_count(glyph_groups) + 1)
+    glyph_groups[hl] = id
+  end
+  local name = "FmT" .. id .. (selected and "S" or "")
+  local tile = selected and "BufferLineTabSelected" or "BufferLineTab"
+  vim.api.nvim_set_hl(0, name, {
+    fg = vim.api.nvim_get_hl(0, { name = hl, link = false }).fg,
+    bg = vim.api.nvim_get_hl(0, { name = tile, link = false }).bg,
+  })
+  return "%#" .. name .. "#"
+end
+
+--- The code that hands the rest of the label back to the tile's own highlight
+--- after a coloured glyph. An alias of the bufferline group rather than the
+--- group itself, purely to keep the label short (see glyph_groups).
+---@param selected boolean
+---@return string
+local function restore_code(selected)
+  local name = selected and "FmT0S" or "FmT0"
+  vim.api.nvim_set_hl(0, name, { link = selected and "BufferLineTabSelected" or "BufferLineTab" })
+  return "%#" .. name .. "#"
+end
+
 --- Paint a tabpage's label on the bufferline's tab indicators: the project name,
---- prefixed with the status glyph of each of that tabpage's side terminals
---- (Claude Code's ✳/· marker — see fishmonger's title_icon). That's the point of
---- the glyphs being here rather than only in the OS title: a background project
---- whose agent is waiting on you says so from its tab, without switching to it.
+--- prefixed with the status glyph of each of that tabpage's side terminals, in
+--- that state's colour -- the same icon and highlight the agent view and the
+--- greeter's Agents section use (fishmonger resolves the hook-reported agent
+--- state first, falling back to the leading glyph of the terminal's OSC title).
+--- That's the point of the glyphs being here rather than only in the OS title: a
+--- background project whose agent is waiting on you says so from its tab -- and
+--- says so in orange -- without switching to it.
 ---
---- Deliberately the TITLE glyph and not fishmonger's richer agent state (the
---- `icon` field, which resolves the hook-reported state first): this label has
---- room for one character per terminal, and the detail belongs in the agent view
---- (fishmonger.view), which has room to say what the agent actually wants.
----
---- bufferline renders a tabpage as `t:name` (falling back to the tab number), so
---- the label is just that variable; redrawtabline re-evaluates its %! expression.
+--- bufferline renders a tabpage as `t:name` (falling back to the tab number)
+--- without escaping it, which is what lets the %#..# codes through; it also
+--- means they must be re-picked when the current tabpage changes, since the
+--- glyph sits on the selected tile's background or an ordinary one. The
+--- TabEnter hook in plugins/fishmonger.lua repaints every label for that.
 ---@param tab? integer tabpage handle (default: current)
 function M.set_label(tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
@@ -59,17 +101,27 @@ function M.set_label(tab)
     return
   end
   local fishmonger = package.loaded["fishmonger"]
-  local icons = {}
+  local selected = tab == vim.api.nvim_get_current_tabpage()
+  local icons, coloured = {}, false
   if fishmonger then
     for _, term in ipairs(fishmonger.tabs(tab)) do
-      icons[#icons + 1] = fishmonger.title_icon(term.title)
+      if term.icon and term.hl then
+        coloured = true
+        icons[#icons + 1] = glyph_code(term.hl, selected) .. term.icon
+      else
+        icons[#icons + 1] = term.icon
+      end
     end
   end
-  local name = M.name(tab)
+  -- Escaped because the label lands in the tabline as-is: a directory with a
+  -- literal % in its name must not become a statusline item.
+  local name = M.name(tab):gsub("%%", "%%%%")
   vim.api.nvim_tabpage_set_var(
     tab,
     "name",
-    #icons > 0 and (table.concat(icons) .. " " .. name) or name
+    #icons > 0
+        and (table.concat(icons) .. (coloured and restore_code(selected) or "") .. " " .. name)
+      or name
   )
   pcall(vim.cmd, "redrawtabline")
 end

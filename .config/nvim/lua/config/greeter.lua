@@ -551,6 +551,21 @@ function M.setup()
     callback = M.update_dashboards,
   })
 
+  -- The working-state spinner: repaint on each frame so the Agents list
+  -- animates like the tab strips do -- but not while the cursor is IN a
+  -- dashboard, because snacks' update() re-snaps the cursor onto the nearest
+  -- item and a 150ms tick would wrestle you for it. The spinner just freezes
+  -- while you navigate the greeter and resumes when you leave.
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "FishmongerAgentsTick",
+    callback = function()
+      if vim.bo.filetype ~= "snacks_dashboard" then
+        M.update_dashboards()
+      end
+    end,
+  })
+
   -- Stop watching a project once its greeter is gone.
   vim.api.nvim_create_autocmd("BufWipeout", {
     group = group,
