@@ -52,6 +52,7 @@
 | `p` / `P`         | Paste below / above                    |
 | `u` / `Ctrl+R`    | Undo / redo                            |
 | `Ctrl+S`          | Save                                   |
+| `Ctrl+V`          | Paste clipboard (Neovide only; insert/cmdline/terminal) |
 | `Space+R`         | Reload file from disk                  |
 | `.`               | Repeat last change                     |
 

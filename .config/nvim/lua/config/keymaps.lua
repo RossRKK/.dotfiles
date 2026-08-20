@@ -50,6 +50,20 @@ for _, key in ipairs({ "d", "D", "c", "C", "x", "X" }) do
   map({ "n", "x" }, key, blackhole(key), { expr = true, desc = key .. " without yanking" })
 end
 
+-- Ctrl+V pastes the system clipboard, Neovide only. A terminal translates
+-- Ctrl+V into a paste event before nvim ever sees it; Neovide hands nvim the
+-- raw chord, so without these mappings "paste" silently does visual-block /
+-- insert-literal instead. Normal mode is left alone (blockwise visual is worth
+-- more than a paste key there), and insert-literal remains on the builtin
+-- synonym <C-q>. Terminal mode goes through nvim_paste so the pty gets a
+-- proper bracketed paste (Claude Code et al. see one paste, not keystrokes).
+if vim.g.neovide then
+  map({ "i", "c" }, "<C-v>", "<C-r>+", { desc = "Paste clipboard" })
+  map("t", "<C-v>", function()
+    vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
+  end, { desc = "Paste clipboard" })
+end
+
 -- Clear search highlight
 map("n", "<Esc>", "<cmd>nohlsearch<cr>")
 
