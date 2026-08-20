@@ -147,6 +147,11 @@ in
         ".tmux.conf"
         ".local/bin/clipboard-copy"
         ".local/bin/nvim-dev"
+        # Claude Code hook publishing each session's state for fishmonger's
+        # agent view. Only the script is managed here: ~/.claude/settings.json,
+        # which wires it to the hook events, is written by Claude itself (model,
+        # theme) and would fight a generated file.
+        ".claude/hooks/agent-status"
       ]
       (path: {
         source = link path;

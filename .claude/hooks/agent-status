@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# Publish a Claude Code session's state to a file, for fishmonger's agent view
+# (lua/fishmonger/agent.lua) to read.
+#
+# WHY A FILE. The only status Claude Code emits by itself is the glyph it puts
+# at the front of its OSC title, which distinguishes "thinking" from "not
+# thinking" and nothing else -- in particular not the one distinction that
+# matters when the terminal is in a background workspace: has it FINISHED, or is
+# it BLOCKED on you? Claude also rewrites that title on its own cadence, so a
+# hook cannot borrow the channel. Hooks know the answer exactly, so they write it
+# somewhere nvim can watch instead.
+#
+# Installed as the command for several hook events in ~/.claude/settings.json,
+# each passing the event as $1; the hook's JSON payload arrives on stdin.
+#
+#   agent-status busy         UserPromptSubmit, PostToolUse
+#   agent-status tool         PreToolUse            (.tool_name decides)
+#   agent-status notify       Notification          (.message decides)
+#   agent-status stop         Stop                  (transcript decides)
+#   agent-status end          SessionEnd
+#
+# Output: $XDG_RUNTIME_DIR/claude-agents/<session_id>.json, written atomically
+# (write to .tmp, rename) so a reader never sees half a file.
+set -euo pipefail
+
+event=${1:-busy}
+dir=${XDG_RUNTIME_DIR:-/tmp}/claude-agents
+mkdir -p "$dir"
+
+payload=$(cat)
+get() { printf '%s' "$payload" | jq -r "$1 // empty" 2>/dev/null || true; }
+
+session=$(get .session_id)
+[ -n "$session" ] || exit 0
+cwd=$(get .cwd)
+transcript=$(get .transcript_path)
+
+# The last assistant message in the transcript, as plain text. Used only to tell
+# "I'm done" from "I asked you something" at Stop -- a distinction no hook event
+# carries, since Stop fires for both. jsonl, newest last; assistant turns hold a
+# content array whose text blocks are the prose.
+last_assistant() {
+  [ -n "$transcript" ] && [ -f "$transcript" ] || return 0
+  # Only the tail is worth scanning: the last assistant entry is at the end of a
+  # file that can be tens of MB by the end of a long session.
+  tail -n 40 "$transcript" 2>/dev/null | jq -rs '
+    map(select(.type == "assistant"))
+    | last
+    | .message.content // []
+    | map(select(.type == "text") | .text)
+    | join("\n")
+  ' 2>/dev/null || true
+}
+
+state=$event
+detail=
+
+case $event in
+busy)
+  state=busy
+  ;;
+tool)
+  # PreToolUse on the tools whose whole purpose is to stop and ask. Unlike the
+  # Stop heuristic below these are exact: the model is definitionally waiting.
+  case $(get .tool_name) in
+  AskUserQuestion)
+    state=asking
+    detail=$(printf '%s' "$payload" | jq -r '.tool_input.questions[0].question // empty' 2>/dev/null || true)
+    ;;
+  ExitPlanMode)
+    state=plan
+    detail="plan ready for review"
+    ;;
+  *) exit 0 ;; # any other tool is just work in progress; leave the state alone
+  esac
+  ;;
+notify)
+  detail=$(get .message)
+  # Claude sends both the permission request and the "still waiting" nudge
+  # through Notification; the message text is the only discriminator.
+  case $detail in
+  *permission* | *approve* | *allow*) state=permission ;;
+  *) state=idle ;;
+  esac
+  ;;
+stop)
+  text=$(last_assistant)
+  # Trailing "?" (ignoring trailing whitespace and markdown list/emphasis noise)
+  # means the turn ended on a question to you, which reads as "done" to every
+  # other signal. A heuristic, deliberately: it is wrong occasionally and cheap
+  # always, and the exact cases are already covered by `tool` above.
+  if printf '%s' "$text" | tail -c 400 | grep -qE '\?["'"'"'*_`)]*[[:space:]]*$'; then
+    state=asked
+  else
+    state=done
+  fi
+  # The first line of the answer is a usable summary of what it's waiting on.
+  detail=$(printf '%s' "$text" | tail -c 400 | tr '\n' ' ' | sed -e 's/  */ /g' -e 's/^ *//' | tail -c 120)
+  ;;
+end)
+  rm -f "$dir/$session.json"
+  exit 0
+  ;;
+esac
+
+# The pid chain from this hook up to init. fishmonger matches a session to a
+# terminal by looking for that terminal's shell pid in here -- exact even with
+# several agents in one directory, and it needs no wrapper script or env var,
+# because the hook is by construction a descendant of the shell that ran claude.
+#
+# The claude process itself is singled out on the way up, as the thing whose
+# being alive means the session is: every other pid in the chain (the shell,
+# nvim, the login session) outlives it, so a crashed agent that never got to run
+# its SessionEnd hook would otherwise leave a file that looks live forever.
+pids=
+agent=
+pid=$PPID
+while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
+  pids="$pids$pid "
+  if [ -z "$agent" ] && [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "claude" ]; then
+    agent=$pid
+  fi
+  # /proc/<pid>/stat: ppid is the field after the parenthesised comm and state,
+  # and comm may itself contain spaces or brackets, so cut at the LAST ")".
+  line=$(cat "/proc/$pid/stat" 2>/dev/null) || break
+  pid=$(printf '%s' "${line##*) }" | cut -d' ' -f2)
+done
+: "${agent:=$PPID}"
+
+tmp="$dir/$session.json.tmp"
+jq -nc \
+  --arg session "$session" \
+  --arg state "$state" \
+  --arg detail "$detail" \
+  --arg cwd "$cwd" \
+  --arg transcript "$transcript" \
+  --arg pids "$pids" \
+  --argjson agent "$agent" \
+  '{session: $session, state: $state, detail: $detail, cwd: $cwd, agent_pid: $agent,
+    transcript: $transcript, pids: ($pids | split(" ") | map(select(. != "") | tonumber))}' \
+  >"$tmp"
+mv -f "$tmp" "$dir/$session.json"

@@ -327,6 +327,51 @@ local function files(report, win)
   return items
 end
 
+--- The agents section: every agent running in any workspace, not just this one,
+--- each a letter away from being jumped to (switch tabpage + surface its
+--- terminal). The rows and the jumping are fishmonger's (fishmonger.view), so
+--- the same list is one keystroke away from anywhere as a popup (<C-b>a) and
+--- there is one definition of what an agent row says.
+---
+--- Cross-workspace on purpose, and above the branch overview: the branch is
+--- still there when you get to it, while an agent stuck on a permission prompt
+--- in a project you aren't looking at is costing you time right now. This is the
+--- screen you land on between tasks, which makes it the right place to be told.
+---@return table[]?
+local function agents()
+  local ok, view = pcall(require, "fishmonger.view")
+  if not ok then
+    return nil
+  end
+  local rows = view.items()
+  if #rows == 0 then
+    return nil
+  end
+  local section = { icon = " ", title = "Agents", indent = 2, padding = 1 }
+  for _, row in ipairs(rows) do
+    section[#section + 1] = {
+      -- A table icon is passed through verbatim by snacks' formatter, which is
+      -- what keeps the glyph's own state colour (see the changed-files list).
+      icon = { row.icon, hl = row.hl, width = 1 },
+      -- A session fishmonger can't reach (an agent in a bare terminal) gets no
+      -- key: it still belongs in the list -- it is still an agent waiting on you
+      -- -- but there is nothing to jump to.
+      key = row.action and row.key or nil,
+      -- Where it is, what it's doing (the terminal's own title, when it says
+      -- more than the project name), and what it wants. Built by filtering
+      -- rather than concatenating: title is absent more often than not.
+      desc = table.concat(
+        vim.tbl_filter(function(part)
+          return part ~= nil and part ~= ""
+        end, { row.project, row.title, row.state }),
+        "  "
+      ),
+      action = row.action,
+    }
+  end
+  return section
+end
+
 --- Show the greeter in `win` (default: the current window). The buffer is a
 --- fresh scratch one -- snacks styles it bufhidden=wipe and unlisted, so opening
 --- any real file over it disposes of it without a trace.
@@ -371,6 +416,11 @@ function M.open(win)
     win = win,
     buf = buf,
     sections = {
+      -- Agents first, ABOVE the header: everything below it is about this
+      -- project, and this list deliberately isn't -- it's every workspace's
+      -- agents. Sitting under a "<repo> - <branch>" heading would read as a
+      -- claim that these belong to this repo.
+      agents,
       -- "<repo> - <branch>", so a worktree reads as the repo and the branch it
       -- holds (ionics/.worktrees/rkk-some-branch -> "ionics - rkk/some-branch")
       -- rather than as its checkout directory. The workspace name is the
@@ -464,6 +514,19 @@ function M.setup()
   vim.api.nvim_create_autocmd({ "FocusGained", "BufWritePost", "DirChanged" }, {
     group = group,
     callback = M.queue_refresh,
+  })
+
+  -- An agent changing state is the one thing on this screen that moves without
+  -- anyone touching nvim, so the list has to repaint on its own -- a stale
+  -- "working" where the agent is actually blocked is worse than not showing it.
+  -- update() re-resolves every open dashboard's sections, so background
+  -- workspaces' greeters are current the moment you switch to them too.
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "FishmongerAgentsChanged",
+    callback = function()
+      Snacks.dashboard.update()
+    end,
   })
 
   -- Stop watching a project once its greeter is gone.
