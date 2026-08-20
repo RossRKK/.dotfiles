@@ -16,8 +16,11 @@ return {
     dev = true,
     config = function()
       require("triage").setup({
-        on_toggle = function(on)
-          require("nitpick").set_shown(on)
+        -- Review mode is per repo, so the toggle carries the root it applies
+        -- to: with one project per tab, both plugins must follow the SAME repo
+        -- rather than each resolving the cwd's on its own.
+        on_toggle = function(on, root)
+          require("nitpick").set_shown(on, root)
         end,
       })
     end,
