@@ -91,6 +91,9 @@ function M.fetch(root)
   fetching[root] = true
   triage.report({ root = root }, function(report)
     fetching[root] = nil
+    if report then
+      M.watch(root, report)
+    end
     report = report or false
     -- Only redraw on an actual change: re-rendering an identical dashboard
     -- fights the cursor for no benefit.
@@ -104,12 +107,111 @@ function M.fetch(root)
   end)
 end
 
+--- Refresh the visible greeters shortly. Debounced, because the triggers come
+--- in bursts: one `git commit` writes the index, HEAD's reflog and a ref, and
+--- the state worth reading is the one after all of them have landed. stop()
+--- alone leaves the libuv handle alive, so close it too; defer_fn timers close
+--- themselves once fired, hence the is_closing guard.
+function M.queue_refresh()
+  if M._pending and not M._pending:is_closing() then
+    M._pending:stop()
+    M._pending:close()
+  end
+  M._pending = vim.defer_fn(M.refresh_visible, 100)
+end
+
 --- Re-ask for the overview of every greeter currently on screen.
 function M.refresh_visible()
+  for _, root in ipairs(M.visible_roots()) do
+    M.fetch(root)
+  end
+end
+
+--- Every distinct workspace root currently showing a greeter.
+---@return string[]
+function M.visible_roots()
+  local roots, seen = {}, {}
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     local buf = vim.api.nvim_win_get_buf(win)
     if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "snacks_dashboard" then
-      M.fetch(vim.fs.normalize(require("config.workspace").cwd(vim.api.nvim_win_get_tabpage(win))))
+      local root =
+        vim.fs.normalize(require("config.workspace").cwd(vim.api.nvim_win_get_tabpage(win)))
+      if not seen[root] then
+        seen[root], roots[#roots + 1] = true, root
+      end
+    end
+  end
+  return roots
+end
+
+-- Filesystem watchers on the git directories behind each greeter: normalized
+-- root -> list of uv fs_event handles.
+local watchers = {}
+
+--- Watch a repo's git directories, so the overview follows the branch instead of
+--- describing where it was when the greeter opened. Nothing that moves a branch
+--- raises an autocmd -- a commit or rebase in the side terminal, a lazygit
+--- session, a fetch, another nvim, a plain shell -- but all of it writes here.
+---
+--- Two directories, non-recursively: the worktree's own git dir (HEAD, index,
+--- reflog: commit, stage, checkout, rebase) and the shared common dir
+--- (packed-refs, FETCH_HEAD: a fetch bringing new upstream commits). Loose ref
+--- files under refs/ are deliberately not watched -- libuv only supports
+--- recursive watches on macOS/Windows, so a branch with a `/` in its name would
+--- need a watcher per directory level, and everything that writes a ref also
+--- touches one of these two.
+---@param root string normalized workspace root
+---@param report table TriageReport carrying the directories
+function M.watch(root, report)
+  if watchers[root] or not report.git_dir then
+    return
+  end
+  local uv = vim.uv or vim.loop
+  local handles = {}
+  local dirs = { report.git_dir }
+  if report.common_dir and report.common_dir ~= report.git_dir then
+    dirs[#dirs + 1] = report.common_dir
+  end
+  for _, dir in ipairs(dirs) do
+    local handle = uv.new_fs_event()
+    -- A failed watch (the directory went away mid-rebase, or the inotify limit
+    -- is exhausted) is not worth reporting: the events above still refresh the
+    -- greeter, this just makes it prompter.
+    if
+      handle
+      and handle:start(
+          dir,
+          {},
+          vim.schedule_wrap(function()
+            M.queue_refresh()
+          end)
+        )
+        == 0
+    then
+      handles[#handles + 1] = handle
+    elseif handle then
+      handle:close()
+    end
+  end
+  watchers[root] = handles
+end
+
+--- Drop the watchers for roots no longer showing a greeter. Called when a
+--- greeter buffer goes away: the overview only needs watching while it's on
+--- screen, and a long session would otherwise hold an inotify watch per project
+--- ever visited.
+function M.unwatch_hidden()
+  local visible = {}
+  for _, root in ipairs(M.visible_roots()) do
+    visible[root] = true
+  end
+  for root, handles in pairs(watchers) do
+    if not visible[root] then
+      for _, handle in ipairs(handles) do
+        handle:stop()
+        handle:close()
+      end
+      watchers[root] = nil
     end
   end
 end
@@ -355,35 +457,26 @@ end
 function M.setup()
   local group = vim.api.nvim_create_augroup("workspace_greeter", { clear = true })
 
-  -- Keep a displayed overview honest. The branch moves outside nvim -- a commit
-  -- or push in the side terminal, a lazygit session, a rebase in another window
-  -- -- and none of that raises an event of its own, so the greeter re-asks on
-  -- everything that plausibly follows such a move:
-  --   FocusGained  came back from the terminal / another app
-  --   TermClose    lazygit (or any transient terminal) exited
-  --   TermLeave    left terminal mode in the side terminal
-  --   BufWritePost saved a file, so the uncommitted set changed
-  --   DirChanged   the tab's project changed under us
-  -- Only greeters actually on screen are refreshed, the report is suppressed
-  -- while one is already in flight, and an unchanged answer redraws nothing --
-  -- so over-firing here costs a few small git queries, not a flicker.
-  vim.api.nvim_create_autocmd(
-    { "FocusGained", "TermClose", "TermLeave", "BufWritePost", "DirChanged" },
-    {
-      group = group,
-      callback = function()
-        -- Debounced: closing lazygit fires several of these at once, and the
-        -- state worth reading is the one after they've all landed. stop() alone
-        -- leaves the libuv handle alive, so close it too; defer_fn timers close
-        -- themselves once fired, hence the is_closing guard.
-        if M._pending and not M._pending:is_closing() then
-          M._pending:stop()
-          M._pending:close()
-        end
-        M._pending = vim.defer_fn(M.refresh_visible, 100)
-      end,
-    }
-  )
+  -- The git-directory watchers (M.watch) are what actually keep the overview
+  -- current -- they catch a commit, rebase or fetch whoever made it. These
+  -- events are the backstop for the rest: coming back from another app, and the
+  -- working-tree edits that change the uncommitted count without touching .git.
+  vim.api.nvim_create_autocmd({ "FocusGained", "BufWritePost", "DirChanged" }, {
+    group = group,
+    callback = M.queue_refresh,
+  })
+
+  -- Stop watching a project once its greeter is gone.
+  vim.api.nvim_create_autocmd("BufWipeout", {
+    group = group,
+    callback = function(ev)
+      if vim.bo[ev.buf].filetype == "snacks_dashboard" then
+        -- Scheduled: at BufWipeout time the buffer is still in its window, so
+        -- it would still count as visible.
+        vim.schedule(M.unwatch_hidden)
+      end
+    end,
+  })
 
   vim.api.nvim_create_autocmd("BufEnter", {
     group = group,
