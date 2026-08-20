@@ -150,8 +150,10 @@ that project, its own side terminals, its own cwd. Opening a second project is
 | `gt` / `gT` | Next / prev tab                                            |
 
 Tab labels sit at the **right end of the bufferline**, showing the project name —
-prefixed with the status glyph of each of that project's Claude Code terminals,
-so a background workspace waiting on you says so without switching to it. (The
+prefixed with the agent status icon of each of that project's Claude Code
+terminals (the same coloured icons the agent view and greeter use), so a
+background workspace waiting on you says so — in that state's colour — without
+switching to it. (The
 OS window title still tracks the workspace you're _in_.)
 
 Buffers are global in Vim, but the bufferline shows only those under the current

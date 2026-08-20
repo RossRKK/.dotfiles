@@ -61,9 +61,23 @@ return {
       -- which workspace is current, ones opening and closing, and a rename via
       -- :tcd are all invisible to fishmonger. Scheduled because at TabClosed /
       -- TabNewEntered time the tabpage list and cwd aren't settled yet.
-      vim.api.nvim_create_autocmd({ "VimEnter", "TabEnter", "TabNewEntered", "TabClosed", "DirChanged" }, {
-        callback = vim.schedule_wrap(refresh_title),
-      })
+      --
+      -- The bufferline labels repaint here too: their glyph colours are baked
+      -- against the tile's background (selected vs not, see
+      -- config.workspace.set_label), so switching tabpages has to re-pick them
+      -- even though no agent state moved.
+      vim.api.nvim_create_autocmd(
+        { "VimEnter", "TabEnter", "TabNewEntered", "TabClosed", "DirChanged" },
+        {
+          callback = vim.schedule_wrap(function()
+            local workspace = require("config.workspace")
+            for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+              workspace.set_label(tab)
+            end
+            refresh_title()
+          end),
+        }
+      )
     end,
   },
 }
