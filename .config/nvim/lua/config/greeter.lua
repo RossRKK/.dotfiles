@@ -74,6 +74,27 @@ function M.new_file()
   vim.cmd.startinsert()
 end
 
+-- Live dashboard instances, buffer -> the object Snacks.dashboard.open()
+-- returned. Kept because Snacks.dashboard.update() cannot be trusted to reach
+-- more than the newest dashboard: every instance registers its listeners in an
+-- augroup CREATED BY NAME with clear = true ("snacks_dashboard"), so opening a
+-- greeter wipes every older greeter's Update autocmd and they go permanently
+-- stale. Calling each instance's :update() directly bypasses that event
+-- plumbing. Pruned lazily: snacks styles the buffers bufhidden=wipe, so a
+-- dead entry is just an invalid buffer.
+local instances = {}
+
+--- Repaint every open greeter, newest and stale-augroup ones alike.
+function M.update_dashboards()
+  for buf, dash in pairs(instances) do
+    if vim.api.nvim_buf_is_valid(buf) then
+      pcall(dash.update, dash)
+    else
+      instances[buf] = nil
+    end
+  end
+end
+
 -- Roots with a report in flight, so a burst of events queues nothing behind the
 -- first one rather than stacking git processes.
 local fetching = {}
@@ -103,7 +124,7 @@ function M.fetch(root)
     M.reports[root] = report
     -- Re-resolves every open dashboard's sections, which is how the overview
     -- appears without reopening the greeter.
-    Snacks.dashboard.update()
+    M.update_dashboards()
   end)
 end
 
@@ -357,13 +378,15 @@ local function agents()
       -- key: it still belongs in the list -- it is still an agent waiting on you
       -- -- but there is nothing to jump to.
       key = row.action and row.key or nil,
-      -- Where it is, what it's doing (the terminal's own title, when it says
-      -- more than the project name), and what it wants. Built by filtering
-      -- rather than concatenating: title is absent more often than not.
+      -- Where it is, then what it's doing (the terminal's own title, when it
+      -- says more than the project name). No state WORD: the icon already says
+      -- it, and repeating it in text pushed the title out of the eye line.
+      -- Built by filtering rather than concatenating: title is absent more
+      -- often than not.
       desc = table.concat(
         vim.tbl_filter(function(part)
           return part ~= nil and part ~= ""
-        end, { row.project, row.title, row.state }),
+        end, { row.project, row.title }),
         "  "
       ),
       action = row.action,
@@ -412,7 +435,7 @@ function M.open(win)
     return cached ~= false and cached or nil
   end
 
-  Snacks.dashboard.open({
+  instances[buf] = Snacks.dashboard.open({
     win = win,
     buf = buf,
     sections = {
@@ -519,14 +542,13 @@ function M.setup()
   -- An agent changing state is the one thing on this screen that moves without
   -- anyone touching nvim, so the list has to repaint on its own -- a stale
   -- "working" where the agent is actually blocked is worse than not showing it.
-  -- update() re-resolves every open dashboard's sections, so background
-  -- workspaces' greeters are current the moment you switch to them too.
+  -- update_dashboards() re-resolves every open dashboard's sections, so
+  -- background workspaces' greeters are current the moment you switch to them
+  -- too.
   vim.api.nvim_create_autocmd("User", {
     group = group,
     pattern = "FishmongerAgentsChanged",
-    callback = function()
-      Snacks.dashboard.update()
-    end,
+    callback = M.update_dashboards,
   })
 
   -- Stop watching a project once its greeter is gone.

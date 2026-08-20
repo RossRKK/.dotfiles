@@ -76,11 +76,23 @@ tool)
   ;;
 notify)
   detail=$(get .message)
-  # Claude sends both the permission request and the "still waiting" nudge
-  # through Notification; the message text is the only discriminator.
+  # Claude sends the permission request, the "still waiting" nudge AND
+  # housekeeping notices (context summarization, etc.) through Notification; the
+  # message text is the only discriminator. Only messages that mean "blocked on
+  # you" may change the state -- a summarization notice landing mid-turn used to
+  # flip a working agent to "waiting".
   case $detail in
   *permission* | *approve* | *allow*) state=permission ;;
-  *) state=idle ;;
+  *"waiting for your input"*)
+    # The nudge fires after ANY idle minute, including after a turn that ended
+    # cleanly -- Stop has already said "done" (or "asked"), and the nudge knows
+    # less than Stop did. It may only repair a session still marked busy, i.e.
+    # a real block whose original notification we somehow missed.
+    current=$(jq -r '.state // empty' "$dir/$session.json" 2>/dev/null || true)
+    [ "$current" = busy ] || exit 0
+    state=idle
+    ;;
+  *) exit 0 ;;
   esac
   ;;
 stop)
