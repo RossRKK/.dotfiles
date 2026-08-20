@@ -98,9 +98,14 @@ text (the swap trick).
 | `Space+S`             | Pick among all scratch buffers              |
 
 Closing the last buffer doesn't leave you on a blank `[No Name]` — the workspace
-**greeter** takes the main window instead: the project name, the pickers on one
-key (`f` find, `r` recent, `g` grep, `n` new file), and this project's recent
-files. `Space+X` is the quick way back to it.
+**greeter** takes the main window instead, as a branch overview: `repo - branch`
+(a worktree reads as its repo, not its checkout directory), how far ahead/behind
+its remote it is, the review base and commits on top of it, and the files this
+branch changes — the same merge-result diff and triage marks (`●` changed, `✓`
+approved, `✗` rejected, `↻` revised) review mode puts in the explorer. Each file
+has a key next to it; press it to open. `Space+X` is the quick way back to the
+greeter. Outside a git repo there's no overview, so it falls back to the pickers
+(`f` find, `g` grep, `n` new file).
 
 ### Layout (edgy)
 
