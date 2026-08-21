@@ -44,6 +44,22 @@ return {
         vim.o.titlestring = table.concat(segments, " "):gsub("%%", "%%%%")
       end
 
+      -- Coalesced: the spinner tick raises FishmongerTabsChanged once per
+      -- tabpage per frame, and refresh_title reads every tabpage anyway, so
+      -- running it per event multiplied the work by the tab count several times
+      -- a second. One deferred run per burst repaints the same title.
+      local title_queued = false
+      local function queue_title()
+        if title_queued then
+          return
+        end
+        title_queued = true
+        vim.schedule(function()
+          title_queued = false
+          refresh_title()
+        end)
+      end
+
       vim.api.nvim_create_autocmd("User", {
         pattern = "FishmongerTabsChanged",
         callback = function(ev)
@@ -53,7 +69,7 @@ return {
           -- nvim. The title covers every tabpage, so background events repaint
           -- it too rather than returning early.
           require("config.workspace").set_label(ev.data.tab)
-          refresh_title()
+          queue_title()
         end,
       })
 

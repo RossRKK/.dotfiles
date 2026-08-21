@@ -109,10 +109,17 @@ end
 local instances = {}
 
 --- Repaint every open greeter, newest and stale-augroup ones alike.
-function M.update_dashboards()
+--- `visible_only` limits it to greeters currently in a window -- the spinner
+--- tick fires several times a second, and re-resolving a hidden dashboard's
+--- sections that often buys nothing (it's re-resolved anyway the moment it is
+--- shown, via open()).
+---@param visible_only? boolean
+function M.update_dashboards(visible_only)
   for buf, dash in pairs(instances) do
     if vim.api.nvim_buf_is_valid(buf) then
-      pcall(dash.update, dash)
+      if not visible_only or vim.fn.win_findbuf(buf)[1] then
+        pcall(dash.update, dash)
+      end
     else
       instances[buf] = nil
     end
@@ -233,7 +240,17 @@ function M.watch(root, report)
       and handle:start(
           dir,
           {},
-          vim.schedule_wrap(function()
+          vim.schedule_wrap(function(_, filename)
+            -- Lock files are the churn of every read-only git command (each
+            -- `git status` creates and deletes index.lock), including the ones
+            -- the refresh itself runs -- reacting to them made the watcher feed
+            -- itself, a permanent ~2 refreshes/sec/repo. The index is skipped
+            -- too: it moves with every lock cycle, and everything the overview
+            -- shows about it (the dirty count) comes from the working tree,
+            -- whose edits BufWritePost already covers.
+            if filename and (filename:match("%.lock$") or filename == "index") then
+              return
+            end
             M.queue_refresh()
           end)
         )
@@ -652,7 +669,9 @@ function M.setup()
     pattern = "FishmongerAgentsTick",
     callback = function()
       if vim.bo.filetype ~= "snacks_dashboard" then
-        M.update_dashboards()
+        -- Visible greeters only: this fires several times a second, and hidden
+        -- ones re-resolve on open() anyway.
+        M.update_dashboards(true)
       end
     end,
   })
