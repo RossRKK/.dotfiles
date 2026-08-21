@@ -147,7 +147,16 @@ function M.set_label(tab)
         and (table.concat(icons) .. (coloured and restore_code(selected) or "") .. " " .. name)
       or name
   )
-  pcall(vim.cmd, "redrawtabline")
+  -- Coalesced: the spinner tick relabels every tabpage per frame, and one
+  -- redraw shows all of them -- per-call redraws re-evaluated the whole
+  -- bufferline once per tab, several times a second.
+  if not M._redraw_queued then
+    M._redraw_queued = true
+    vim.schedule(function()
+      M._redraw_queued = false
+      pcall(vim.cmd, "redrawtabline")
+    end)
+  end
 end
 
 --- Set the current (or a new) tabpage up as a workspace on `dir`.
