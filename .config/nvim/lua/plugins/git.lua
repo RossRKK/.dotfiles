@@ -44,12 +44,20 @@ return {
         -- inherit it. Buffer-local, never global: a global base would be
         -- revalidated against buffers from other repos (other workspace tabs),
         -- which may not resolve this repo's ref.
-        local base = require("triage.gitsigns").base_for(bufnr)
-        if base then
-          vim.api.nvim_buf_call(bufnr, function()
-            pcall(gs.change_base, base, false)
-          end)
-        end
+        --
+        -- Deferred: gitsigns runs on_attach *before* it registers the buffer in
+        -- its cache, and change_base silently no-ops on an unregistered buffer.
+        -- One tick later the registration (which follows on_attach
+        -- synchronously) has happened. Re-resolve the base then, in case it
+        -- changed in between.
+        vim.schedule(function()
+          local base = require("triage.gitsigns").base_for(bufnr)
+          if base and vim.api.nvim_buf_is_valid(bufnr) then
+            vim.api.nvim_buf_call(bufnr, function()
+              pcall(gs.change_base, base, false)
+            end)
+          end
+        end)
         local function map(l, r, desc)
           vim.keymap.set("n", l, r, { buffer = bufnr, desc = desc })
         end

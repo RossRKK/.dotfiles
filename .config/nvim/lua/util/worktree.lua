@@ -75,6 +75,27 @@ function M.resolve(branch, locals, remote_refs)
   return nil
 end
 
+--- The local branch a worktree for `branch` ends up with checked out. A remote
+--- ref (`origin/x`) gets a local tracking branch `x` (see add_args), so the
+--- project directory and the existing-worktree lookup must use that name, not
+--- the remote-qualified one -- unless a local branch literally named `origin/x`
+--- exists, which wins just as it does in add_args.
+---@param branch string branch name as picked ("x", "origin/x", "remotes/origin/x")
+---@param locals table<string, true> set of existing local branch names
+---@param remotes table<string, true> set of known remote names ("origin")
+---@return string
+function M.local_name(branch, locals, remotes)
+  branch = branch:gsub("^remotes/", "")
+  if locals[branch] then
+    return branch
+  end
+  local remote, rest = branch:match("^([^/]+)/(.+)$")
+  if remote and remotes[remote] then
+    return rest
+  end
+  return branch
+end
+
 --- `git worktree add` arguments for putting `branch` at `path`.
 ---
 --- Three cases, and they need different flags: an existing local branch is just
@@ -191,12 +212,13 @@ function M.open(branch, dir)
   end
   branch = resolved or branch
 
-  local short = branch:gsub("^remotes/", "")
-  local path = existing(root)[short]
+  local remotes = remote_names(root)
+  local local_branch = M.local_name(branch, locals, remotes)
+  local path = existing(root)[local_branch]
   if not path then
-    path = root .. "/.worktrees/" .. M.slug(branch)
+    path = root .. "/.worktrees/" .. M.slug(local_branch)
     if vim.fn.isdirectory(path) ~= 1 then
-      local _, add_err = git(root, M.add_args(branch, path, locals, remote_names(root)))
+      local _, add_err = git(root, M.add_args(branch, path, locals, remotes))
       if add_err then
         vim.notify("git worktree add: " .. add_err, vim.log.levels.ERROR)
         return

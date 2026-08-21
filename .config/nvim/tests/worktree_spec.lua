@@ -40,6 +40,30 @@ describe("worktree.resolve", function()
   end)
 end)
 
+-- The worktree directory (and thus the project tab) is named after the local
+-- branch that ends up checked out, never the remote-qualified ref.
+describe("worktree.local_name", function()
+  local locals = { main = true, ["origin/x"] = true }
+  local remotes = { origin = true }
+
+  it("strips the remote qualifier from a remote ref", function()
+    assert.equals("feat/x", worktree.local_name("origin/feat/x", locals, remotes))
+    assert.equals("feat/x", worktree.local_name("remotes/origin/feat/x", locals, remotes))
+  end)
+
+  it("keeps a local branch as-is", function()
+    assert.equals("main", worktree.local_name("main", locals, remotes))
+  end)
+
+  it("prefers a local branch that looks like a remote ref", function()
+    assert.equals("origin/x", worktree.local_name("origin/x", locals, remotes))
+  end)
+
+  it("keeps a slashed name that matches no remote", function()
+    assert.equals("new/thing", worktree.local_name("new/thing", locals, remotes))
+  end)
+end)
+
 describe("worktree.add_args", function()
   local locals = { main = true }
   local remotes = { origin = true }
