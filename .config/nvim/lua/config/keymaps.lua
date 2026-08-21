@@ -60,7 +60,15 @@ end
 if vim.g.neovide then
   map({ "i", "c" }, "<C-v>", "<C-r>+", { desc = "Paste clipboard" })
   map("t", "<C-v>", function()
-    vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
+    local text = vim.fn.getreg("+")
+    if text == "" then
+      -- Clipboard has no text (likely an image). Forward the raw chord to the
+      -- pty so the program inside (e.g. Claude Code) reads the clipboard
+      -- itself -- image paste only works if the keystroke reaches it.
+      vim.api.nvim_chan_send(vim.bo.channel, "\22")
+    else
+      vim.api.nvim_paste(text, true, -1)
+    end
   end, { desc = "Paste clipboard" })
 end
 
