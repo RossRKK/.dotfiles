@@ -638,6 +638,39 @@ end
 function M.setup()
   local group = vim.api.nvim_create_augroup("workspace_greeter", { clear = true })
 
+  -- Patch over a snacks bug: D:find indexes self.lines[cursor row] and hands it
+  -- to charidx() without a nil guard. A dashboard that shrinks on re-render --
+  -- ours does, the file list is sized to the window (see files()) -- can leave
+  -- the cursor below the last rendered line, and snacks' own VimResized autocmd
+  -- (the one update path not behind a pcall) then dies with E1174. Clamp the
+  -- row into the rendered lines before handing it over.
+  --
+  -- Applied on VeryLazy, not here: setup() runs from config.autocmds, before
+  -- lazy has put snacks on the runtimepath. Patching the class is enough for
+  -- dashboards opened earlier (the bare-nvim startup one): instances resolve
+  -- find() through the class metatable at call time.
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "VeryLazy",
+    once = true,
+    callback = function()
+      local ok, dashboard = pcall(require, "snacks.dashboard")
+      if not ok or dashboard.Dashboard._find_clamped then
+        return
+      end
+      local D = dashboard.Dashboard
+      local find = D.find
+      D._find_clamped = true
+      function D:find(pos, from)
+        if #self.lines == 0 then
+          return nil
+        end
+        pos = { math.max(1, math.min(pos[1], #self.lines)), pos[2] }
+        return find(self, pos, from)
+      end
+    end,
+  })
+
   -- The git-directory watchers (M.watch) are what actually keep the overview
   -- current -- they catch a commit, rebase or fetch whoever made it. These
   -- events are the backstop for the rest: coming back from another app, and the
