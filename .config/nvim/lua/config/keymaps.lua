@@ -91,6 +91,13 @@ map("n", "<S-h>", function()
   goto_main_window()
   vim.cmd("BufferLineCyclePrev")
 end, { desc = "Prev buffer" })
+-- Straight to this workspace's greeter (config/greeter.lua), which is the
+-- leftmost buffer tab. Reachable by clicking it or cycling <S-h> off the left
+-- end too; this is the one that doesn't depend on how many buffers are in the
+-- way. Builds the greeter if this workspace hasn't shown one yet.
+map("n", "<leader>h", function()
+  require("config.greeter").focus()
+end, { desc = "Go to workspace overview" })
 -- Snacks.bufdelete rather than `bp|bdelete #`: that pair can't close the LAST
 -- buffer (with nothing to switch to, bp stays put and there's no alternate to
 -- delete), and it lets Vim drop the replacement buffer into whatever window it

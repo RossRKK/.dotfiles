@@ -14,6 +14,13 @@
 -- reports regardless of whether review mode is on, so the overview reads the
 -- same before you toggle it as after.
 --
+-- It is also a real, listed buffer, pinned to the front of the bufferline: one
+-- per workspace, kept alive for the life of the tab rather than rebuilt each
+-- time. That makes the overview somewhere you can go back to (<leader>h, a
+-- click, or <S-h> off the left end) instead of only somewhere you land when the
+-- last buffer closes. plugins/buffers.lua does the pinning and the filtering --
+-- it keys off the b:greeter_root set below.
+--
 -- No pickers here: find/recent/grep have keybinds, and repeating them as a menu
 -- costs the space the overview wants. The changed-file list IS the file
 -- selector -- the files this branch is about, a letter away. The pickers only
@@ -35,6 +42,23 @@ local M = {}
 -- report lands. Keyed by root so switching tabs shows that project's overview
 -- immediately, without a flash of the previous one.
 M.reports = {}
+
+-- The live greeter buffer per workspace root: normalized cwd -> buffer.
+--
+-- One per workspace and reused, because the greeter is now a bufferline tab: a
+-- fresh buffer on every open() would give the bar a new "first tab" each time
+-- the buffer list emptied, and leave the old ones behind on it. Entries are
+-- dropped when the buffer dies (its tab closed, see setup()).
+M.buffers = {}
+
+--- Is this one of the persistent greeter buffers? Tagged with the root rather
+--- than checked against M.buffers so the bufferline's filter (plugins/buffers.lua)
+--- can ask the same question of a buffer without reaching into this module.
+---@param buf integer
+---@return boolean
+function M.is_greeter(buf)
+  return vim.api.nvim_buf_is_valid(buf) and vim.b[buf].greeter_root ~= nil
+end
 
 --- Is this buffer a spent one -- nothing in it, nothing to save, nobody's
 --- scratch -- that the greeter may take the window from and delete? A previous
@@ -304,16 +328,27 @@ end
 --- the window can show, with the remainder counted -- the list is a way into the
 --- files, not a report to scroll.
 ---@param report table? TriageReport
----@param win integer
+---@param buf integer the greeter's buffer
 ---@return table[]
-local function files(report, win)
+local function files(report, buf)
   if not report then
     return {}
   end
   local triage = require("triage")
+  -- Sized against whichever window is showing the greeter NOW, not the one it
+  -- was opened in: the buffer outlives any single window (it's a bufferline tab
+  -- you come back to), so a captured window handle goes stale -- and asking a
+  -- stale one for its height is an error, which would blank the section.
+  local height = 30
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_buf(w) == buf then
+      height = vim.api.nvim_win_get_height(w)
+      break
+    end
+  end
   -- Leave room for the header, the summary and the section title; the rest of
   -- the window is the list's.
-  local limit = math.max(5, vim.api.nvim_win_get_height(win) - 12)
+  local limit = math.max(5, height - 12)
   local items = {}
   for i, file in ipairs(report.files) do
     if i > limit then
@@ -395,16 +430,46 @@ local function agents()
   return section
 end
 
---- Show the greeter in `win` (default: the current window). The buffer is a
---- fresh scratch one -- snacks styles it bufhidden=wipe and unlisted, so opening
---- any real file over it disposes of it without a trace.
+--- Show this workspace's greeter in `win` (default: the current window).
+---
+--- The buffer is listed and kept for the life of the workspace, so it holds a
+--- place on the bufferline rather than being conjured and thrown away: a second
+--- call just puts the existing one back in the window.
 ---@param win? integer
 function M.open(win)
   win = win or vim.api.nvim_get_current_win()
-  local buf = vim.api.nvim_create_buf(false, true)
   local tab = vim.api.nvim_win_get_tabpage(win)
   local workspace = require("config.workspace")
   local root = vim.fs.normalize(workspace.cwd(tab))
+
+  -- Already built for this workspace: show it and re-ask for the overview. Not
+  -- rebuilt, because the buffer IS the bufferline tab -- a new one each time
+  -- would renumber the bar's first entry and strand the old buffers on it.
+  local existing = M.buffers[root]
+  if existing and vim.api.nvim_buf_is_valid(existing) then
+    if vim.api.nvim_win_get_buf(win) ~= existing then
+      local outgoing = vim.api.nvim_win_get_buf(win)
+      vim.api.nvim_win_set_buf(win, existing)
+      -- Same spent-buffer cleanup as below, minus the greeters: another
+      -- workspace's greeter looks disposable by filetype but must survive.
+      if not M.is_greeter(outgoing) and M.is_disposable(outgoing) then
+        pcall(vim.api.nvim_buf_delete, outgoing, { force = true })
+      end
+    end
+    M.fetch(root)
+    M.update_dashboards()
+    return
+  end
+
+  -- Listed, so it appears on the bufferline; scratch, so it is never a file on
+  -- disk. bufhidden is forced back to "hide" after open() below -- snacks'
+  -- styling sets wipe, which would destroy the buffer (and its place on the
+  -- bar) the moment you switched to a file.
+  local buf = vim.api.nvim_create_buf(true, true)
+  -- Tagged before open() so the bufferline's filter and sort see it on the very
+  -- first redraw, rather than showing it as a stray "[No Name]" for a frame.
+  vim.b[buf].greeter_root = root
+  M.buffers[root] = buf
 
   -- Retire an outgoing dashboard BEFORE opening ours, never during. Every snacks
   -- dashboard shares one augroup NAME, so they share its id, and a dashboard
@@ -420,7 +485,7 @@ function M.open(win)
   -- which lingers in the buffer list as "[No Name]" on the bufferline once the
   -- greeter has taken the window over.
   local prev = vim.api.nvim_win_get_buf(win)
-  if prev ~= buf and M.is_disposable(prev) then
+  if prev ~= buf and not M.is_greeter(prev) and M.is_disposable(prev) then
     vim.api.nvim_win_set_buf(win, buf)
     pcall(vim.api.nvim_buf_delete, prev, { force = true })
   end
@@ -470,7 +535,7 @@ function M.open(win)
         title = "Changed Files",
         indent = 2,
         function()
-          return files(report(), win)
+          return files(report(), buf)
         end,
       },
       -- Not a git repo: there's no overview to show, so fall back to the
@@ -502,6 +567,23 @@ function M.open(win)
       end,
     },
   })
+
+  -- Undo the two pieces of snacks' styling that assume a throwaway dashboard.
+  -- Set after open(), not before: styling happens inside it, so anything set
+  -- earlier is overwritten. bufhidden=wipe would destroy the buffer -- and its
+  -- place on the bar -- the instant you opened a file over it, which is exactly
+  -- the trip back the bufferline tab exists to provide; unlisted would keep it
+  -- off the bar altogether.
+  vim.bo[buf].bufhidden = "hide"
+  vim.bo[buf].buflisted = true
+end
+
+--- Put the cursor on this workspace's greeter, building it if the workspace
+--- hasn't got one yet. The <leader>h target: the bufferline tab is clickable and
+--- <S-h> reaches it by cycling, but neither is a straight "take me home".
+function M.focus()
+  require("config.windows").goto_main_window()
+  M.open()
 end
 
 --- Close every buffer belonging to this workspace tab (the same set bufferline
@@ -519,8 +601,13 @@ function M.close_all()
       end
     end
   end
-  -- The BufEnter fallback below re-opens the greeter once the window lands on
-  -- the empty replacement buffer, so nothing more to do here.
+  -- Land on the greeter explicitly rather than leaving it to the BufEnter
+  -- fallback. Now that the greeter is listed, bufdelete may well switch the
+  -- window straight onto it -- in which case no empty buffer ever appears and
+  -- the fallback never fires. open() is idempotent (it reuses this workspace's
+  -- buffer), so doing both is harmless and the outcome stops depending on which
+  -- of the two got there first.
+  M.open()
 end
 
 --- Keep the greeter as the floor of a workspace tab: whenever a window in one
@@ -562,6 +649,29 @@ function M.setup()
     callback = function()
       if vim.bo.filetype ~= "snacks_dashboard" then
         M.update_dashboards()
+      end
+    end,
+  })
+
+  -- A closed workspace tab leaves its greeter behind in the (global) buffer
+  -- list. The bufferline filters it off every other project's bar, so it is
+  -- invisible rather than wrong -- but a long session would accumulate one per
+  -- project ever opened, and <leader>h would reuse a buffer belonging to a tab
+  -- that no longer exists. Reap the ones whose root no tab is rooted at.
+  vim.api.nvim_create_autocmd("TabClosed", {
+    group = group,
+    callback = function()
+      local live = {}
+      for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+        live[vim.fs.normalize(require("config.workspace").cwd(tab))] = true
+      end
+      for root, buf in pairs(M.buffers) do
+        if not live[root] then
+          M.buffers[root] = nil
+          if vim.api.nvim_buf_is_valid(buf) then
+            pcall(vim.api.nvim_buf_delete, buf, { force = true })
+          end
+        end
       end
     end,
   })

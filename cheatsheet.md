@@ -92,13 +92,17 @@ text (the swap trick).
 | `Ctrl+H/L/J/K`        | Move between splits (works in terminal too) |
 | `:vert res 80`        | Resize vertical split to 80 columns         |
 | `Shift+L` / `Shift+H` | Next / prev buffer (within this workspace)  |
+| `Space+h`             | Go to the workspace overview (leftmost tab) |
 | `Space+x`             | Close buffer                                |
 | `Space+X`             | Close all buffers in this workspace         |
 | `Space+.`             | Toggle scratch buffer (per project)         |
 | `Space+S`             | Pick among all scratch buffers              |
 
-Closing the last buffer doesn't leave you on a blank `[No Name]` — the workspace
-**greeter** takes the main window instead, as a branch overview: `repo - branch`
+The **greeter** is the leftmost buffer tab, labelled `Overview` — one per
+workspace, always there, so going back to it is `Space+h`, a click, or `<S-h>`
+off the left end. It's also what the main window falls back to when the last
+buffer closes, rather than a blank `[No Name]`. It shows a branch overview:
+`repo - branch`
 (a worktree reads as its repo, not its checkout directory), how far ahead/behind
 its remote it is, the review base and commits on top of it, and the files this
 branch changes — the same merge-result diff and triage marks (`●` changed, `✓`
