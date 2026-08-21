@@ -60,15 +60,46 @@ end
 if vim.g.neovide then
   map({ "i", "c" }, "<C-v>", "<C-r>+", { desc = "Paste clipboard" })
   map("t", "<C-v>", function()
-    local text = vim.fn.getreg("+")
-    if text == "" then
-      -- Clipboard has no text (likely an image). Forward the raw chord to the
-      -- pty so the program inside (e.g. Claude Code) reads the clipboard
-      -- itself -- image paste only works if the keystroke reaches it.
-      vim.api.nvim_chan_send(vim.bo.channel, "\22")
-    else
+    -- getreg throws ("clipboard provider gave invalid data") when the
+    -- clipboard holds an image, so an error here means image, not failure.
+    local ok, text = pcall(vim.fn.getreg, "+")
+    if ok and text ~= "" then
       vim.api.nvim_paste(text, true, -1)
+      return
     end
+    -- Clipboard has no text (likely an image). Don't forward Ctrl+V for the
+    -- inner program to read the clipboard itself: on WSL that goes through
+    -- WSLg, which only offers image/bmp (Claude Code wants PNG) and has
+    -- segfaulted weston on image transfers. Pull the image via Windows
+    -- interop instead and hand the pty a PNG file path, which Claude Code
+    -- reads natively.
+    local chan = vim.bo.channel
+    vim.system({
+      "powershell.exe",
+      "-NoProfile",
+      "-Command",
+      -- Unique name per paste: Claude Code reads the file at message send, not
+      -- at paste, so reusing one name would make every image in a message the
+      -- last one pasted.
+      '$i = Get-Clipboard -Format Image; if ($i) { $p = Join-Path $env:TEMP ("nvim-clip-{0}.png" -f (Get-Date -Format FileDateTime)); $i.Save($p, [System.Drawing.Imaging.ImageFormat]::Png); $p }',
+    }, { text = true }, function(res)
+      local winpath = vim.trim(res.stdout or "")
+      if res.code ~= 0 or winpath == "" then
+        -- No image either; fall back to forwarding the raw chord.
+        vim.schedule(function()
+          vim.api.nvim_chan_send(chan, "\22")
+        end)
+        return
+      end
+      vim.system({ "wslpath", "-u", winpath }, { text = true }, function(wp)
+        local path = vim.trim(wp.stdout or "")
+        if path ~= "" then
+          vim.schedule(function()
+            vim.api.nvim_chan_send(chan, path .. " ")
+          end)
+        end
+      end)
+    end)
   end, { desc = "Paste clipboard" })
 end
 
