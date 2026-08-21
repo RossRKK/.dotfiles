@@ -149,6 +149,12 @@ function M.fetch(root)
     -- Re-resolves every open dashboard's sections, which is how the overview
     -- appears without reopening the greeter.
     M.update_dashboards()
+    -- The tab labels carry the same "<repo> - <branch>" name
+    -- (workspace.display_name reads this cache), so a fresh report -- the
+    -- first one, or a checkout moving the branch -- has to repaint them too.
+    for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+      require("config.workspace").set_label(tab)
+    end
   end)
 end
 
@@ -404,6 +410,13 @@ local function agents()
     return nil
   end
   local section = { icon = " ", title = "Agents", indent = 2, padding = 1 }
+  -- Column-align the titles: pad every project name to the widest one, so what
+  -- each agent is doing lines up down the list instead of starting wherever
+  -- that row's project name happens to end.
+  local project_width = 0
+  for _, row in ipairs(rows) do
+    project_width = math.max(project_width, vim.fn.strdisplaywidth(row.project or ""))
+  end
   for _, row in ipairs(rows) do
     section[#section + 1] = {
       -- A table icon is passed through verbatim by snacks' formatter, which is
@@ -416,14 +429,11 @@ local function agents()
       -- Where it is, then what it's doing (the terminal's own title, when it
       -- says more than the project name). No state WORD: the icon already says
       -- it, and repeating it in text pushed the title out of the eye line.
-      -- Built by filtering rather than concatenating: title is absent more
-      -- often than not.
-      desc = table.concat(
-        vim.tbl_filter(function(part)
-          return part ~= nil and part ~= ""
-        end, { row.project, row.title }),
-        "  "
-      ),
+      -- Padded by display width, not %-Ns: project names can hold multibyte
+      -- characters, and string.format counts bytes.
+      desc = (row.project or "") .. (" "):rep(
+        project_width - vim.fn.strdisplaywidth(row.project or "")
+      ) .. (row.title and ("  " .. row.title) or ""),
       action = row.action,
     }
   end
@@ -509,19 +519,13 @@ function M.open(win)
       -- agents. Sitting under a "<repo> - <branch>" heading would read as a
       -- claim that these belong to this repo.
       agents,
-      -- "<repo> - <branch>", so a worktree reads as the repo and the branch it
-      -- holds (ionics/.worktrees/rkk-some-branch -> "ionics - rkk/some-branch")
-      -- rather than as its checkout directory. The workspace name is the
+      -- "<repo> - <branch>", the workspace's display name everywhere (tab
+      -- labels, agent view): workspace.display_name reads the same report
+      -- cache this greeter fills, with the plain workspace name as the
       -- fallback for a directory git can't tell us anything about.
       function()
-        local this = report()
-        local name = workspace.name(tab)
-        if this and this.repo then
-          local branch = this.branch or this.head
-          name = branch and (this.repo .. " - " .. branch) or this.repo
-        end
         return {
-          text = { { name, hl = "SnacksDashboardHeader" } },
+          text = { { workspace.display_name(tab), hl = "SnacksDashboardHeader" } },
           align = "center",
           padding = 1,
         }
