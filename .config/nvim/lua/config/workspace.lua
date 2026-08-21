@@ -30,6 +30,30 @@ function M.name(tab)
   return vim.fn.fnamemodify(M.cwd(tab), ":t")
 end
 
+--- What a workspace is called wherever it's on display: "<repo> - <branch>",
+--- so a worktree reads as the repo and the branch it holds
+--- (ionics/.worktrees/rkk-some-branch -> "ionics - rkk/some-branch") rather
+--- than as its checkout directory. Drawn from the greeter's cached branch
+--- report (config.greeter fetches one per workspace and watches the git dirs,
+--- so it follows checkouts); before the report lands -- or for a directory git
+--- can't say anything about -- it falls back to the plain workspace name.
+--- Used by the tab labels below, the greeter header, and fishmonger's agent
+--- view (via project_name in plugins/terminal.lua), so all three agree.
+---@param tab? integer tabpage handle (default: current)
+---@return string
+function M.display_name(tab)
+  tab = tab or vim.api.nvim_get_current_tabpage()
+  -- package.loaded, not require: no reason to drag the greeter in just to name
+  -- a tab, and before its setup there is no report to read anyway.
+  local greeter = package.loaded["config.greeter"]
+  local report = greeter and greeter.reports[vim.fs.normalize(M.cwd(tab))]
+  if report and report.repo then
+    local branch = report.branch or report.head
+    return branch and (report.repo .. " - " .. branch) or report.repo
+  end
+  return M.name(tab)
+end
+
 --- A tabpage's working directory (its tab-local cwd, else the global one).
 ---@param tab? integer tabpage handle (default: current)
 ---@return string
@@ -115,7 +139,7 @@ function M.set_label(tab)
   end
   -- Escaped because the label lands in the tabline as-is: a directory with a
   -- literal % in its name must not become a statusline item.
-  local name = M.name(tab):gsub("%%", "%%%%")
+  local name = M.display_name(tab):gsub("%%", "%%%%")
   vim.api.nvim_tabpage_set_var(
     tab,
     "name",
