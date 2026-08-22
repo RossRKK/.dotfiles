@@ -148,14 +148,61 @@ in
         ".local/bin/clipboard-copy"
         ".local/bin/nvim-dev"
         # Claude Code hook publishing each session's state for fishmonger's
-        # agent view. Only the script is managed here: ~/.claude/settings.json,
-        # which wires it to the hook events, is written by Claude itself (model,
-        # theme) and would fight a generated file.
+        # agent view. Only the script is symlinked here; the settings.json
+        # stanza that wires it to the hook events is merged in by the
+        # claude-agent-status-hooks activation script below, because that file
+        # is co-owned with Claude itself (model, theme) and cannot be generated.
         ".claude/hooks/agent-status"
       ]
       (path: {
         source = link path;
       });
+
+  # Wire agent-status into Claude Code's hook events.
+  #
+  # ~/.claude/settings.json can't be a managed symlink: Claude rewrites it in
+  # place when you change model or theme, and a read-only store path would
+  # either break that or be clobbered. So instead of owning the file we own one
+  # key in it, merging our `hooks` block over whatever is already there on every
+  # `hms`. `*` recurses into objects, so Claude's keys survive; the hooks value
+  # itself is replaced wholesale, which is what we want -- this repo is the
+  # source of truth for the wiring, and stale event lists should disappear.
+  home.activation.claude-agent-status-hooks =
+    let
+      hook = event: {
+        hooks = [
+          {
+            type = "command";
+            command = "${config.home.homeDirectory}/.claude/hooks/agent-status ${event}";
+          }
+        ];
+      };
+      # Mirrors the event table in the header of .claude/hooks/agent-status.
+      hooks.hooks = {
+        UserPromptSubmit = [ (hook "busy") ];
+        PostToolUse = [ (hook "busy") ];
+        PreToolUse = [ (hook "tool") ];
+        Notification = [ (hook "notify") ];
+        Stop = [ (hook "stop") ];
+        SessionEnd = [ (hook "end") ];
+      };
+      hooksFile = (pkgs.formats.json { }).generate "claude-agent-status-hooks.json" hooks;
+    in
+    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      settings="${config.home.homeDirectory}/.claude/settings.json"
+      $DRY_RUN_CMD mkdir -p "$(dirname "$settings")"
+      # A missing or unparseable file merges from {} rather than aborting the
+      # switch -- the wiring is worth more than whatever was in there.
+      existing=$(${pkgs.jq}/bin/jq -e . "$settings" 2>/dev/null) || existing='{}'
+      # Stage into a temp file and install it with mv, so the write is atomic
+      # (Claude may be running) and so --dry-run really is dry: a redirection
+      # after $DRY_RUN_CMD would truncate the file regardless.
+      tmp=$(mktemp)
+      printf '%s' "$existing" |
+        ${pkgs.jq}/bin/jq --slurpfile new ${hooksFile} '. * $new[0]' >"$tmp"
+      $DRY_RUN_CMD mv $VERBOSE_ARG "$tmp" "$settings"
+      rm -f "$tmp"
+    '';
 
   home.packages = with pkgs; [
     # Plain package on purpose (see comment above programs.lazygit): the
@@ -180,6 +227,7 @@ in
     gcx # Grafana Cloud CLI
     gnumake # plugin test suites (fishmonger.nvim etc.) drive nvim via make test
     imagemagick
+    jq # .claude/hooks/agent-status parses its hook payloads with it
     terraform
 
     # LSP servers (used by neovim via lspconfig; installed here so Mason doesn't
