@@ -52,7 +52,7 @@
 | `p` / `P`         | Paste below / above                    |
 | `u` / `Ctrl+R`    | Undo / redo                            |
 | `Ctrl+S`          | Save                                   |
-| `Ctrl+V`          | Paste clipboard (Neovide only; insert/cmdline/terminal) |
+| `Ctrl+V`          | Paste clipboard (Neovide only; insert/cmdline/terminal). In a terminal, an image goes to the program inside -- so screenshots paste into Claude Code |
 | `Space+R`         | Reload file from disk                  |
 | `.`               | Repeat last change                     |
 

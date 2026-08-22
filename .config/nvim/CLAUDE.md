@@ -26,6 +26,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `ide_spec.lua`      | side-terminal width, explorer geometry |
 | `worktree_spec.lua` | worktree dir naming, `git worktree add` flags |
 | `term_caps_spec.lua` | inline-image capability (Ghostty yes, Neovide/other no) |
+| `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
 
 The side-terminal and branch-review logic now live in external plugins, each
 with its own test suite (developed locally under `~/dev` via lazy's `dev` path):
