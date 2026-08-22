@@ -197,9 +197,9 @@ were looking at, becomes a workspace of its own.
 `nvim <dir>` still builds the first workspace exactly as before; the picker just
 builds subsequent ones the same way.
 
-> **Session restore is off** while this settles. persistence.nvim saves one
-> session per cwd, which has no meaning once several projects share one nvim, so
-> startup opens an empty editor instead of reopening the last files.
+> **There is no session restore.** A saved session carries a single cwd, which
+> has no meaning once several projects share one nvim, so startup opens an empty
+> editor rather than reopening the last files.
 
 ---
 
@@ -265,7 +265,6 @@ under the cursor — an accepted trade-off. The scope also gives text objects:
 | `Space+fs` | Symbols in current file (LSP) |
 | `Space+fw` | Symbols across workspace (LSP, live) |
 | `Space+ft` | List TODO / FIXME / … comments (Trouble) |
-| `Space+fr` | Project find **& replace** (grug-far) |
 | `Space+fh` | Help tags                |
 
 The finder is the [snacks picker](https://github.com/folke/snacks.nvim) (input on
