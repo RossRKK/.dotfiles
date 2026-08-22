@@ -55,51 +55,25 @@ end
 -- raw chord, so without these mappings "paste" silently does visual-block /
 -- insert-literal instead. Normal mode is left alone (blockwise visual is worth
 -- more than a paste key there), and insert-literal remains on the builtin
--- synonym <C-q>. Terminal mode goes through nvim_paste so the pty gets a
--- proper bracketed paste (Claude Code et al. see one paste, not keystrokes).
+-- synonym <C-q>.
 if vim.g.neovide then
   map({ "i", "c" }, "<C-v>", "<C-r>+", { desc = "Paste clipboard" })
+  -- Terminal mode: text goes through nvim_paste so the pty gets one proper
+  -- bracketed paste, but an image is left to the program inside -- forward the
+  -- raw chord and let it read the clipboard itself. Claude Code already does
+  -- that on every platform (osascript / wl-paste / Windows.Forms.Clipboard), so
+  -- fetching the image here would only be a worse copy that needs a temp file
+  -- to hand it over. The one job left is to not swallow the keystroke.
+  --
   map("t", "<C-v>", function()
-    -- getreg throws ("clipboard provider gave invalid data") when the
-    -- clipboard holds an image, so an error here means image, not failure.
+    -- getreg throws on some providers when the clipboard holds an image and
+    -- returns raw image bytes on others; util/clipboard sorts out both.
     local ok, text = pcall(vim.fn.getreg, "+")
-    if ok and text ~= "" then
+    if ok and require("util.clipboard").is_text(text) then
       vim.api.nvim_paste(text, true, -1)
       return
     end
-    -- Clipboard has no text (likely an image). Don't forward Ctrl+V for the
-    -- inner program to read the clipboard itself: on WSL that goes through
-    -- WSLg, which only offers image/bmp (Claude Code wants PNG) and has
-    -- segfaulted weston on image transfers. Pull the image via Windows
-    -- interop instead and hand the pty a PNG file path, which Claude Code
-    -- reads natively.
-    local chan = vim.bo.channel
-    vim.system({
-      "powershell.exe",
-      "-NoProfile",
-      "-Command",
-      -- Unique name per paste: Claude Code reads the file at message send, not
-      -- at paste, so reusing one name would make every image in a message the
-      -- last one pasted.
-      '$i = Get-Clipboard -Format Image; if ($i) { $p = Join-Path $env:TEMP ("nvim-clip-{0}.png" -f (Get-Date -Format FileDateTime)); $i.Save($p, [System.Drawing.Imaging.ImageFormat]::Png); $p }',
-    }, { text = true }, function(res)
-      local winpath = vim.trim(res.stdout or "")
-      if res.code ~= 0 or winpath == "" then
-        -- No image either; fall back to forwarding the raw chord.
-        vim.schedule(function()
-          vim.api.nvim_chan_send(chan, "\22")
-        end)
-        return
-      end
-      vim.system({ "wslpath", "-u", winpath }, { text = true }, function(wp)
-        local path = vim.trim(wp.stdout or "")
-        if path ~= "" then
-          vim.schedule(function()
-            vim.api.nvim_chan_send(chan, path .. " ")
-          end)
-        end
-      end)
-    end)
+    vim.api.nvim_chan_send(vim.bo.channel, "\22")
   end, { desc = "Paste clipboard" })
 end
 
