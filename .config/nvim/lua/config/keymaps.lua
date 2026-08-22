@@ -50,21 +50,41 @@ for _, key in ipairs({ "d", "D", "c", "C", "x", "X" }) do
   map({ "n", "x" }, key, blackhole(key), { expr = true, desc = key .. " without yanking" })
 end
 
--- Ctrl+V pastes the system clipboard, Neovide only. A terminal translates
--- Ctrl+V into a paste event before nvim ever sees it; Neovide hands nvim the
--- raw chord, so without these mappings "paste" silently does visual-block /
--- insert-literal instead. Normal mode is left alone (blockwise visual is worth
--- more than a paste key there), and insert-literal remains on the builtin
--- synonym <C-q>.
+-- Ctrl+V pastes the system clipboard. Neovide hands nvim the raw chord, so
+-- without these mappings "paste" silently does visual-block / insert-literal
+-- instead. A terminal normally translates Ctrl+V into a paste event before
+-- nvim ever sees it -- but only for text: Windows Terminal's paste action
+-- can't paste an image, and the chord then falls through to nvim, so on WSL
+-- the terminal-mode mapping is installed too to handle the image case.
+-- Normal mode is left alone (blockwise visual is worth more than a paste key
+-- there), and insert-literal remains on the builtin synonym <C-q>.
+local is_wsl = vim.fn.has("wsl") == 1
 if vim.g.neovide then
   map({ "i", "c" }, "<C-v>", "<C-r>+", { desc = "Paste clipboard" })
+end
+if vim.g.neovide or is_wsl then
   -- Terminal mode: text goes through nvim_paste so the pty gets one proper
-  -- bracketed paste, but an image is left to the program inside -- forward the
-  -- raw chord and let it read the clipboard itself. Claude Code already does
-  -- that on every platform (osascript / wl-paste / Windows.Forms.Clipboard), so
-  -- fetching the image here would only be a worse copy that needs a temp file
-  -- to hand it over. The one job left is to not swallow the keystroke.
-  --
+  -- bracketed paste; an image is left to the program inside -- forward the
+  -- raw chord and let it read the clipboard itself (Claude Code does, via
+  -- osascript / wl-paste). On WSL that read would go through WSLg's clipboard
+  -- bridge, which only offers image/bmp (Claude Code wants PNG) and has
+  -- segfaulted weston on image transfers -- so first re-copy the image from
+  -- the Windows clipboard into the Linux one as PNG via interop; wl-copy then
+  -- serves wl-paste locally, without the bridge.
+  local mirror_image_to_wayland = table.concat({
+    [[out=$(powershell.exe -NoProfile -Command ']]
+      .. [[Add-Type -AssemblyName System.Windows.Forms;]]
+      .. [[$i=[Windows.Forms.Clipboard]::GetImage();]]
+      .. [[if ($i) { $ms=New-Object IO.MemoryStream;]]
+      .. [[$i.Save($ms,[Drawing.Imaging.ImageFormat]::Png);]]
+      .. [[[Convert]::ToBase64String($ms.ToArray()) }' | tr -d '\r')]],
+    [[[ -n "$out" ] || exit 1]],
+    -- wl-copy forks a daemon to serve the selection; without the redirects it
+    -- inherits this pipeline's stdout/stderr and vim.system waits on those
+    -- pipes forever -- the on-exit callback (which forwards the paste chord)
+    -- would never fire.
+    [[printf %s "$out" | base64 -d | wl-copy -t image/png >/dev/null 2>&1]],
+  }, "\n")
   map("t", "<C-v>", function()
     -- getreg throws on some providers when the clipboard holds an image and
     -- returns raw image bytes on others; util/clipboard sorts out both.
@@ -73,7 +93,18 @@ if vim.g.neovide then
       vim.api.nvim_paste(text, true, -1)
       return
     end
-    vim.api.nvim_chan_send(vim.bo.channel, "\22")
+    local chan = vim.bo.channel
+    if not is_wsl then
+      vim.api.nvim_chan_send(chan, "\22")
+      return
+    end
+    vim.system({ "sh", "-c", mirror_image_to_wayland }, {}, function()
+      -- Forward the chord whether or not an image was found: the inner
+      -- program should still see its paste key on a merely-empty clipboard.
+      vim.schedule(function()
+        vim.api.nvim_chan_send(chan, "\22")
+      end)
+    end)
   end, { desc = "Paste clipboard" })
 end
 
