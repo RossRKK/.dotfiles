@@ -60,6 +60,14 @@ return {
         end)
       end
 
+      -- A fresh branch report (config.greeter) has already repainted the tab
+      -- labels itself; the OS title reads the same cache, so it repaints here.
+      -- Without this a checkout only reached the title via unrelated events.
+      vim.api.nvim_create_autocmd("User", {
+        pattern = "GreeterReportChanged",
+        callback = queue_title,
+      })
+
       vim.api.nvim_create_autocmd("User", {
         pattern = "FishmongerTabsChanged",
         callback = function(ev)
