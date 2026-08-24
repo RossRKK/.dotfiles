@@ -18,14 +18,57 @@ in
 
   programs.fish = {
     enable = true;
-    interactiveShellInit = ''
-      fish_vi_key_bindings
-      # fish 4 applies the key-binding switch with `set --no-event`, so the
-      # call above never fires autopair's --on-variable rebind handler and it
-      # ends up with no bindings in insert mode; re-run it explicitly.
-      _autopair_fish_key_bindings
-      any-nix-shell fish --info-right | source
-    '';
+    interactiveShellInit = lib.mkMerge [
+      ''
+        fish_vi_key_bindings
+        # fish 4 applies the key-binding switch with `set --no-event`, so the
+        # call above never fires autopair's --on-variable rebind handler and it
+        # ends up with no bindings in insert mode; re-run it explicitly.
+        _autopair_fish_key_bindings
+        any-nix-shell fish --info-right | source
+      ''
+      # Must run after `zoxide init` (ordered later in this file's output)
+      # since it copies and re-wraps the cd function zoxide defines.
+      (lib.mkOrder 3000 ''
+        # Worktree-aware cd: zoxide's frecency always ranks the main checkout
+        # above a young worktree of the same repo. When a query result lands
+        # in a sibling worktree of the repo we're already inside, remap it to
+        # the equivalent path in the current worktree if it exists.
+        # (No upstream support: https://github.com/ajeetdsouza/zoxide/discussions/970)
+        functions --copy cd __zoxide_plain_cd
+        function cd --wraps=cd --description 'worktree-aware zoxide cd'
+            switch (count $argv)
+                case 0
+                    __zoxide_plain_cd
+                    return
+                case 1
+                    # `cd -` and existing paths bypass zoxide entirely.
+                    if test "$argv[1]" = -; or test -d "$argv[1]"
+                        __zoxide_plain_cd $argv[1]
+                        return
+                    end
+            end
+            set -l target (zoxide query --exclude $PWD -- $argv)
+            or return
+            set -l current_root (git rev-parse --show-toplevel 2>/dev/null)
+            if test -n "$current_root"
+                set -l target_root (git -C $target rev-parse --show-toplevel 2>/dev/null)
+                if test -n "$target_root"; and test "$target_root" != "$current_root"
+                    set -l target_git (git -C $target rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+                    set -l current_git (git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+                    if test -n "$target_git"; and test "$target_git" = "$current_git"
+                        set -l rewritten (string replace -- $target_root $current_root $target)
+                        if test -d "$rewritten"
+                            __zoxide_plain_cd $rewritten
+                            return
+                        end
+                    end
+                end
+            end
+            __zoxide_plain_cd $target
+        end
+      '')
+    ];
     plugins = [
       {
         name = "fzf-fish";
