@@ -162,7 +162,31 @@ function M.fetch(root)
     for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
       require("config.workspace").set_label(tab)
     end
+    -- The OS title carries the same names (see plugins/fishmonger.lua), but
+    -- its repaints hang off fishmonger and tabpage events, none of which fire
+    -- for a checkout. Announce the fresh report so it can repaint too.
+    vim.api.nvim_exec_autocmds("User", { pattern = "GreeterReportChanged" })
   end)
+end
+
+-- Per-root debounce timers for the watcher-driven fetches below.
+local queued_fetches = {}
+
+--- Fetch `root`'s overview shortly. Debounced per root for the same reason as
+--- queue_refresh, but not gated on a greeter being visible: the report cache
+--- also names the workspace's tab and the OS title, so a checkout has to land
+--- here even while a file is on screen.
+---@param root string normalized workspace root
+function M.queue_fetch(root)
+  local timer = queued_fetches[root]
+  if timer and not timer:is_closing() then
+    timer:stop()
+    timer:close()
+  end
+  queued_fetches[root] = vim.defer_fn(function()
+    queued_fetches[root] = nil
+    M.fetch(root)
+  end, 100)
 end
 
 --- Refresh the visible greeters shortly. Debounced, because the triggers come
@@ -251,7 +275,7 @@ function M.watch(root, report)
             if filename and (filename:match("%.lock$") or filename == "index") then
               return
             end
-            M.queue_refresh()
+            M.queue_fetch(root)
           end)
         )
         == 0
@@ -264,17 +288,19 @@ function M.watch(root, report)
   watchers[root] = handles
 end
 
---- Drop the watchers for roots no longer showing a greeter. Called when a
---- greeter buffer goes away: the overview only needs watching while it's on
---- screen, and a long session would otherwise hold an inotify watch per project
---- ever visited.
-function M.unwatch_hidden()
-  local visible = {}
-  for _, root in ipairs(M.visible_roots()) do
-    visible[root] = true
+--- Drop the watchers for roots no tabpage is rooted at anymore. Watchers live
+--- as long as the workspace does, not just while its greeter is on screen: the
+--- report cache they refresh also names the workspace's tab and the OS title,
+--- which are visible the whole time. Bounded by the tabpage count, so a long
+--- session still can't accumulate an inotify watch per project ever visited.
+--- Called from the TabClosed reap in setup().
+function M.unwatch_closed()
+  local live = {}
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    live[vim.fs.normalize(require("config.workspace").cwd(tab))] = true
   end
   for root, handles in pairs(watchers) do
-    if not visible[root] then
+    if not live[root] then
       for _, handle in ipairs(handles) do
         handle:stop()
         handle:close()
@@ -660,6 +686,26 @@ function M.setup()
       end
       local D = dashboard.Dashboard
       local find = D.find
+
+      -- Second snacks assumption broken by a persistent dashboard: size()
+      -- reads nvim_win_get_width(self.win) unguarded, and the class's
+      -- WinResized/VimResized autocmd calls it on every resize -- including
+      -- while this dashboard's window is gone (ours outlive their window; see
+      -- M.open). Snacks only re-resolves self.win on WinEnter, so a resize in
+      -- between dies with "Invalid window id". Re-resolve here instead, and
+      -- with no window at all report the last known size, so the autocmd's
+      -- deep_equal sees "unchanged" and skips the update.
+      local size = D.size
+      function D:size()
+        if not (self.win and vim.api.nvim_win_is_valid(self.win)) then
+          local win = vim.fn.bufwinid(self.buf)
+          if win == -1 then
+            return self._size or { width = 0, height = 0 }
+          end
+          self.win = win
+        end
+        return size(self)
+      end
       D._find_clamped = true
       function D:find(pos, from)
         if #self.lines == 0 then
@@ -713,7 +759,8 @@ function M.setup()
   -- list. The bufferline filters it off every other project's bar, so it is
   -- invisible rather than wrong -- but a long session would accumulate one per
   -- project ever opened, and <leader>h would reuse a buffer belonging to a tab
-  -- that no longer exists. Reap the ones whose root no tab is rooted at.
+  -- that no longer exists. Reap the ones whose root no tab is rooted at, and
+  -- the git-directory watchers with them (see unwatch_closed).
   vim.api.nvim_create_autocmd("TabClosed", {
     group = group,
     callback = function()
@@ -729,18 +776,7 @@ function M.setup()
           end
         end
       end
-    end,
-  })
-
-  -- Stop watching a project once its greeter is gone.
-  vim.api.nvim_create_autocmd("BufWipeout", {
-    group = group,
-    callback = function(ev)
-      if vim.bo[ev.buf].filetype == "snacks_dashboard" then
-        -- Scheduled: at BufWipeout time the buffer is still in its window, so
-        -- it would still count as visible.
-        vim.schedule(M.unwatch_hidden)
-      end
+      M.unwatch_closed()
     end,
   })
 
