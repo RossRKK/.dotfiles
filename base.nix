@@ -251,66 +251,70 @@ in
       rm -f "$tmp"
     '';
 
-  home.packages = with pkgs; [
-    # Plain package on purpose (see comment above programs.lazygit): the
-    # programs.neovim wrapper would generate an init.lua that collides with
-    # the symlinked ~/.config/nvim.
-    neovim
+  home.packages =
+    with pkgs;
+    [
+      # Plain package on purpose (see comment above programs.lazygit): the
+      # programs.neovim wrapper would generate an init.lua that collides with
+      # the symlinked ~/.config/nvim.
+      neovim
 
-    # tmux stays a plain package: programs.tmux always generates its own
-    # ~/.config/tmux/tmux.conf, which the symlinked ~/.tmux.conf would shadow.
-    tmux
+      # tmux stays a plain package: programs.tmux always generates its own
+      # ~/.config/tmux/tmux.conf, which the symlinked ~/.tmux.conf would shadow.
+      tmux
 
-    # Runtimes
-    python3
-    nodejs
-    # rustup rather than nixpkgs rustc/cargo so per-project rust-toolchain.toml
-    # pins (e.g. liboi's nightly + rust-src) are respected; it also proxies
-    # rustfmt/clippy/rust-analyzer, which would collide if installed directly
-    rustup
+      # Runtimes
+      python3
+      nodejs
+      # rustup rather than nixpkgs rustc/cargo so per-project rust-toolchain.toml
+      # pins (e.g. liboi's nightly + rust-src) are respected; it also proxies
+      # rustfmt/clippy/rust-analyzer, which would collide if installed directly
+      rustup
 
-    # CLI tools
-    any-nix-shell
-    gcx # Grafana Cloud CLI
-    gnumake # plugin test suites (fishmonger.nvim etc.) drive nvim via make test
-    imagemagick
-    jq # .claude/hooks/agent-status parses its hook payloads with it
-    terraform
+      # CLI tools
+      any-nix-shell
+      gcx # Grafana Cloud CLI
+      gnumake # plugin test suites (fishmonger.nvim etc.) drive nvim via make test
+      imagemagick
+      jq # .claude/hooks/agent-status parses its hook payloads with it
+      terraform
+      cmake
 
-    # LSP servers (used by neovim via lspconfig; installed here so Mason doesn't
-    # try to download pre-compiled binaries that won't run on NixOS)
-    basedpyright
-    typescript-language-server
-    svelte-language-server
-    lua-language-server
-    yaml-language-server
-    vscode-langservers-extracted # provides jsonls
-    terraform-ls
-    marksman
-    helm-ls
-    nixd
+      # LSP servers (used by neovim via lspconfig; installed here so Mason doesn't
+      # try to download pre-compiled binaries that won't run on NixOS)
+      basedpyright
+      typescript-language-server
+      svelte-language-server
+      lua-language-server
+      yaml-language-server
+      vscode-langservers-extracted # provides jsonls
+      terraform-ls
+      marksman
+      helm-ls
+      nixd
 
-    # Debug adapters (nvim-dap; debugpy is not here because the python adapter
-    # runs debugpy out of each project's venv, see dap.lua)
-    vscode-js-debug # provides js-debug (pwa-node adapter)
-    vscode-extensions.vadimcn.vscode-lldb.adapter # provides codelldb (used by rustaceanvim)
+      # Debug adapters (nvim-dap; debugpy is not here because the python adapter
+      # runs debugpy out of each project's venv, see dap.lua)
+      vscode-js-debug # provides js-debug (pwa-node adapter)
+      vscode-extensions.vadimcn.vscode-lldb.adapter # provides codelldb (used by rustaceanvim)
 
-    # Formatters and CLI tools (same reason)
-    gcc # tree-sitter CLI calls cc to compile parsers
-    lld
-    llvm
-    tree-sitter
-    stylua
-    prettierd
-    ruff
-    shfmt
-    shellcheck
-    gdtoolkit_4 # provides gdformat / gdlint
-    nixfmt # official nixfmt (RFC 166)
-  ] ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
-    # The nix neovim wrapper puts wl-copy on its own PATH; install it user-wide
-    # too so locally-built nvim (e.g. ~/dev/neovim) gets a clipboard provider.
-    # Wayland-only, so skip it on hosts (e.g. macOS) that can't build it.
-    wl-clipboard
-  ];
+      # Formatters and CLI tools (same reason)
+      gcc # tree-sitter CLI calls cc to compile parsers
+      lld
+      llvm
+      tree-sitter
+      stylua
+      prettierd
+      ruff
+      shfmt
+      shellcheck
+      gdtoolkit_4 # provides gdformat / gdlint
+      nixfmt # official nixfmt (RFC 166)
+    ]
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+      # The nix neovim wrapper puts wl-copy on its own PATH; install it user-wide
+      # too so locally-built nvim (e.g. ~/dev/neovim) gets a clipboard provider.
+      # Wayland-only, so skip it on hosts (e.g. macOS) that can't build it.
+      wl-clipboard
+    ];
 }
