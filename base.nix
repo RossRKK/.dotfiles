@@ -279,6 +279,7 @@ in
       jq # .claude/hooks/agent-status parses its hook payloads with it
       terraform
       cmake
+      openssl
 
       # LSP servers (used by neovim via lspconfig; installed here so Mason doesn't
       # try to download pre-compiled binaries that won't run on NixOS)
