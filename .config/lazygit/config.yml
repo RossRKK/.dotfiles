@@ -8,7 +8,7 @@ customCommands:
         title: "Branch name"
         key: "Name"
         initialValue: >-
-          rkk/{{ runCommand (printf "sh -c %s" (printf "echo %s | sed -E 's#^[^/]+/##'" .SelectedLocalBranch.Name | quote)) }}
+          rkk/{{ runCommand (printf "sh -c %s" (printf "echo %s | sed -E -e 's#^(main|master|develop|trunk)$##' -e 's#^[^/]+/##'" .SelectedLocalBranch.Name | quote)) }}
     command: >-
       git checkout -b "{{.Form.Name}}"
     loadingText: "Creating branch..."
