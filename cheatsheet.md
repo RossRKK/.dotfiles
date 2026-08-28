@@ -27,6 +27,7 @@
 | `i`       | Insert before cursor   |
 | `a`       | Insert after cursor    |
 | `o` / `O` | New line below / above |
+| `]<Space>` / `[<Space>` | Blank line below / above (stays in normal mode; takes a count) |
 | `v`       | Visual mode            |
 | `V`       | Visual line mode       |
 | `Ctrl+Q`  | Visual block mode      |
