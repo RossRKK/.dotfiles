@@ -55,6 +55,7 @@
 | `Ctrl+S`          | Save                                   |
 | `Ctrl+V`          | Paste clipboard (Neovide only; insert/cmdline/terminal). In a terminal, an image goes to the program inside -- so screenshots paste into Claude Code |
 | `Space+R`         | Reload file from disk                  |
+| `Space+N`         | Toggle relative line numbers (absolute is the default) |
 | `.`               | Repeat last change                     |
 
 Delete/change (`d D c C x X`) never write the clipboard — only yanks do. To
