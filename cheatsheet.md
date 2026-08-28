@@ -313,6 +313,18 @@ groups supported).
 | --------- | --------------------- |
 | `Space+d` | Show diagnostic popup |
 
+### Format on save (conform)
+
+Files are formatted on save (see `lua/plugins/conform.lua` for the
+formatter-per-filetype table). To save without reformatting:
+
+| Command          | Action                                            |
+| ---------------- | ------------------------------------------------- |
+| `:FormatDisable` | Turn off format-on-save everywhere                |
+| `:FormatDisable!`| Turn off format-on-save for this buffer only      |
+| `:FormatEnable`  | Turn it back on (clears both flags)               |
+| `:noa w`         | One-off: write skipping all autocmds (no toggle)  |
+
 ### Space+u — Undo tree
 
 | Key       | Action                                          |
@@ -460,6 +472,7 @@ alongside them.
 | ---------- | --------------------------------------------------------- |
 | `]r` / `[r` | Jump to next / prev PR comment                           |
 | `Space+rc` | Draft a comment on the line (or visual range)             |
+| `Space+rl` | List all comments + drafts in a jumpable overview split   |
 | `Space+re` | Edit the comment / draft on the line (asks if several)    |
 | `Space+ra` | Reply to the comment thread on the line (posts now)       |
 | `Space+rx` | Discard the draft on the line                             |
@@ -471,8 +484,9 @@ alongside them.
 Submit infers the verdict from the triage rollup — no picking: any live
 rejection → **request changes**, all approved → **approve**, anything still
 untriaged → **comment**. So an early submit goes out as a plain comment batch,
-and only firms up to approve/request-changes once nothing's pending. A compose
-float shows the verdict in its title and takes an optional summary (`Ctrl+S`
+and only firms up to approve/request-changes once nothing's pending. A short
+compose split at the bottom (move in/out with `Ctrl+J`/`Ctrl+K` like any window)
+shows the verdict in its winbar and takes an optional summary (`Ctrl+S`
 sends even when empty, `q` cancels); a bare approval with no summary defaults to
 "LGTM". Drafts clear on a successful submit, so continuing the review starts a
 fresh batch. Replies and edits to already-posted comments still go out
