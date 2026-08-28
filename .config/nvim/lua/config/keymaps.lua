@@ -334,3 +334,7 @@ end, { desc = "Yank open file path" })
 map("n", "<leader>yl", function()
   yank_file_path(true)
 end, { desc = "Yank open file path:line" })
+
+map("n", "<leader>N", function()
+  vim.wo.relativenumber = not vim.wo.relativenumber
+end, { desc = "Toggle relative line numbers" })
