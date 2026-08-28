@@ -97,6 +97,15 @@ describe("worktree.add_args", function()
     )
   end)
 
+  -- Picking `origin/x` when a local branch `x` already exists: -b would fail
+  -- with "branch already exists", so the local branch is checked out instead.
+  it("reuses an existing local branch for its remote ref", function()
+    assert.same(
+      { "worktree", "add", "/r/.worktrees/x", "x" },
+      worktree.add_args("origin/x", "/r/.worktrees/x", { x = true }, remotes)
+    )
+  end)
+
   -- A local branch called `foo/bar` must not be mistaken for remote `foo`'s
   -- branch `bar`: the local check has to come first.
   it("prefers a local branch that looks like a remote ref", function()

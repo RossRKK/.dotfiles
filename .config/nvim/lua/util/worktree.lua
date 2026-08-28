@@ -114,6 +114,12 @@ function M.add_args(branch, path, locals, remotes)
   end
   local remote, rest = branch:match("^([^/]+)/(.+)$")
   if remote and remotes[remote] then
+    -- A local branch by the tracking name already exists (picked as `origin/x`
+    -- with `x` local): -b would fail with "branch already exists", so check the
+    -- local branch out instead.
+    if locals[rest] then
+      return { "worktree", "add", path, rest }
+    end
     return { "worktree", "add", "--track", "-b", rest, path, branch }
   end
   return { "worktree", "add", "-b", branch, path }
