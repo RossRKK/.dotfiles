@@ -2,7 +2,7 @@
 -- placement and sizing, replacing the hand-rolled width math (ide.term_width),
 -- the WinResized enforcer, and the manual outline-stacking splits.
 --
--- Layout: explorer + outline on the LEFT, the side terminal on the RIGHT, the
+-- Layout: the explorer on the LEFT, the side terminal on the RIGHT, the
 -- editor in the middle. The terminal's tmux-style tab manager (fishmonger)
 -- is unchanged -- it only ever shows one terminal window at a time, which edgy
 -- just positions in the right edgebar.
@@ -15,9 +15,7 @@
 -- (edgy rebuilds the splits before proportioning them), and latching that would
 -- wedge the panel near-empty. So for the first WARMUP_MS of a given window's
 -- life we hand back the opening size and let edgy proportion the panel; only
--- after that do we start tracking the live size. Two live
--- siblings sharing a column (explorer/outline) must BOTH use this -- pairing a
--- live panel with an auto-sized one is asymmetric and collapses the live one.
+-- after that do we start tracking the live size.
 local WARMUP_MS = 1000
 
 -- Birth tick per panel window id (shared across panels); cleared on reset so
@@ -98,11 +96,8 @@ local function is_explorer(buf)
   return src == "filesystem" or src == "git_status"
 end
 
-local function is_outline(buf)
-  return vim.b[buf].neo_tree_source == "document_symbols"
-end
-
--- Any window in the left column (explorer or outline); they share one width.
+-- Any window in the left column. Floats are excluded by find_win, so the
+-- outline popup (also filetype neo-tree) never stands in for the tree here.
 local function is_left(buf)
   return vim.bo[buf].filetype == "neo-tree"
 end
@@ -157,39 +152,36 @@ return {
         right = { size = live_size(0.4, "width", is_terminal) },
       },
       left = {
-        -- The file tree, ~70% of the column. It must live-track too: pairing a
-        -- live outline with an auto-sized explorer is asymmetric and collapses
-        -- the outline on open, whereas two live siblings share the column and
-        -- stay put when either is dragged. git_status shares this slot:
+        -- The file tree, sole occupant of the column (the symbols outline is a
+        -- float now, see plugins/explorer.lua), so it needs no height of its
+        -- own -- only the column width below. git_status shares this slot:
         -- <leader>gt swaps the filesystem source for git_status in place
         -- (neo-tree reuses the window), so both belong to the same edgy view.
         {
           title = "Explorer",
           ft = "neo-tree",
           filter = is_explorer,
-          size = { height = live_size(0.7, "height", is_explorer) },
         },
-        -- The symbols outline stacks beneath the tree. neo-tree replaces a second
-        -- same-position source, so explorer.lua opens this one elsewhere and edgy
-        -- relocates it here -- which is exactly what removes the old split hack.
-        {
-          title = "Outline",
-          ft = "neo-tree",
-          filter = function(buf)
-            return vim.b[buf].neo_tree_source == "document_symbols"
-          end,
-          -- Opens at ~30% height, then follows manual resizes (see live_size).
-          size = { height = live_size(0.3, "height", is_outline) },
-        },
-      },
+},
       right = {
         -- The fishmonger side terminal. Exclude floats so lazygit (a float) is
-        -- never pulled into the edgebar. No `title`/`winbar` here: fishmonger
-        -- draws its own tmux-style tab strip as the window's winbar and
-        -- re-asserts it after each buffer swap (edgy blanks a panel's winbar on
-        -- swap), so edgy only needs to adopt and size this window.
+        -- never pulled into the edgebar. fishmonger draws its own tmux-style tab
+        -- strip as the window's winbar, so edgy only needs to adopt and size
+        -- this window.
+        --
+        -- `winbar = false` is load-bearing: it's the one value that makes edgy
+        -- leave the option alone (true installs edgy's own titlebar expression,
+        -- and edgy's default is true). Without it, every Edgy.Window construction
+        -- for this window overwrites fishmonger's winbar with edgy's -- which,
+        -- for a view with no title, renders as an empty strip. That construction
+        -- is not once-per-window: edgy caches Edgy.Window objects in a
+        -- WEAK-VALUED table keyed by window handle, so a garbage collection drops
+        -- the entry and the next layout update rebuilds it and re-applies `wo`.
+        -- Hence the tab strip vanishing at unpredictable moments rather than on
+        -- any one action.
         {
           ft = "fishmonger",
+          wo = { winbar = false },
           filter = function(_, win)
             return vim.api.nvim_win_get_config(win).relative == ""
           end,

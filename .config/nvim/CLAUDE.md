@@ -1,11 +1,10 @@
 # Neovim config
 
-Personal Neovim config, tracked in the bare dotfiles repo at `~/.dotfiles`
-(work tree `$HOME`). Stage changes with `dotfiles add`, not plain `git add` —
-the dotfiles workflow (bare-repo clone, the `dotfiles` alias) is documented in
-`~/README.md`.
+Personal Neovim config, tracked in the dotfiles repo, whose root is two levels
+up from here; home-manager symlinks this directory into `$HOME`. The workflow
+is documented in `../../README.md`.
 
-User-facing keymaps and features are documented in `~/cheatsheet.md` (a broader
+User-facing keymaps and features are documented in `../../cheatsheet.md` (a broader
 sheet also covering tmux and the dotfiles commands). **Keep it in sync:** when
 you add, remove, or rebind a mapping here, update the matching table there.
 
@@ -24,7 +23,10 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 
 | Spec             | Covers                                    |
 | ---------------- | ----------------------------------------- |
-| `ide_spec.lua`   | side-terminal width, explorer geometry    |
+| `ide_spec.lua`      | side-terminal width, explorer geometry |
+| `worktree_spec.lua` | worktree dir naming, `git worktree add` flags |
+| `term_caps_spec.lua` | inline-image capability (Ghostty yes, Neovide/other no) |
+| `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
 
 The side-terminal and branch-review logic now live in external plugins, each
 with its own test suite (developed locally under `~/dev` via lazy's `dev` path):
@@ -52,7 +54,13 @@ purpose — mocking it would test the mock.
 
 - `lua/config/` — options, keymaps, autocmds, and the IDE-mode machinery.
   `ide.lua` is the single source of truth for "IDE mode vs text-editor mode"
-  and the window geometry that follows.
+  and the window geometry that follows. `workspace.lua` owns the "one project per
+  tabpage" model: it is the only place that builds the IDE layout, called both by
+  the startup handler in `plugins/explorer.lua` and by the `<leader>tn` picker, so
+  a workspace tab and the tab nvim started in are the same thing. The left column
+  itself lives in `util/sidebar.lua` for the same reason. `util/worktree.lua` is
+  the git side of the same idea: it turns a branch into a worktree under
+  `<repo>/.worktrees/` and hands the directory to `workspace.open`.
 - `lua/plugins/` — one file per plugin, lazy.nvim specs. Three of our own live
   as external plugins under `~/dev` (lazy `dev` path), each declared in a small
   spec here: `fishmonger.lua` (the side terminal, wired into the snacks terminal

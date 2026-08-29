@@ -6,7 +6,7 @@ vim.g.loaded_netrwPlugin = 1
 local opt = vim.opt
 
 opt.number = true
-opt.relativenumber = true
+opt.relativenumber = false -- absolute by default; <leader>N toggles relative
 opt.signcolumn = "yes"
 opt.cursorline = true
 

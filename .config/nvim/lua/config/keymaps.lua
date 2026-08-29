@@ -13,6 +13,18 @@ map("t", "<C-k>", "<C-\\><C-n><C-w>k", { desc = "Move to upper window" })
 -- Exit to terminal-normal mode (then gf jumps to a file:line ref under the cursor)
 map("t", "<C-n>", "<C-\\><C-n>", { desc = "Terminal: enter normal mode" })
 
+-- Shift+Enter inserts a newline in Claude Code's prompt instead of submitting.
+-- The program wants ESC CR for that; ghostty's config sends it as text
+-- (`keybind = shift+enter=text:\x1b\r`), so under ghostty this never reaches
+-- nvim as a chord and the mapping below is inert. Neovide has no equivalent
+-- keybind setting -- it hands nvim a real <S-CR>, and nvim's terminal then
+-- forwards a bare CR to the child, which submits. So do ghostty's translation
+-- here: in terminal mode the rhs is fed to the pty, i.e. \x1b then \r.
+--
+-- Deliberately NOT the kitty-protocol CSI 13;2u encoding: tmux strips it, and
+-- ESC CR survives every layer.
+map("t", "<S-CR>", "<Esc><CR>", { desc = "Terminal: send Shift+Enter as ESC CR" })
+
 -- Delete/change never touch the clipboard: without an explicit register they
 -- go to the black hole "_. With clipboard=unnamedplus the *default* register
 -- reports as '+' (the clipboard), not the unnamed '"', so both must count as
@@ -38,6 +50,64 @@ for _, key in ipairs({ "d", "D", "c", "C", "x", "X" }) do
   map({ "n", "x" }, key, blackhole(key), { expr = true, desc = key .. " without yanking" })
 end
 
+-- Ctrl+V pastes the system clipboard. Neovide hands nvim the raw chord, so
+-- without these mappings "paste" silently does visual-block / insert-literal
+-- instead. A terminal normally translates Ctrl+V into a paste event before
+-- nvim ever sees it -- but only for text: Windows Terminal's paste action
+-- can't paste an image, and the chord then falls through to nvim, so on WSL
+-- the terminal-mode mapping is installed too to handle the image case.
+-- Normal mode is left alone (blockwise visual is worth more than a paste key
+-- there), and insert-literal remains on the builtin synonym <C-q>.
+local is_wsl = vim.fn.has("wsl") == 1
+if vim.g.neovide then
+  map({ "i", "c" }, "<C-v>", "<C-r>+", { desc = "Paste clipboard" })
+end
+if vim.g.neovide or is_wsl then
+  -- Terminal mode: text goes through nvim_paste so the pty gets one proper
+  -- bracketed paste; an image is left to the program inside -- forward the
+  -- raw chord and let it read the clipboard itself (Claude Code does, via
+  -- osascript / wl-paste). On WSL that read would go through WSLg's clipboard
+  -- bridge, which only offers image/bmp (Claude Code wants PNG) and has
+  -- segfaulted weston on image transfers -- so first re-copy the image from
+  -- the Windows clipboard into the Linux one as PNG via interop; wl-copy then
+  -- serves wl-paste locally, without the bridge.
+  local mirror_image_to_wayland = table.concat({
+    [[out=$(powershell.exe -NoProfile -Command ']]
+      .. [[Add-Type -AssemblyName System.Windows.Forms;]]
+      .. [[$i=[Windows.Forms.Clipboard]::GetImage();]]
+      .. [[if ($i) { $ms=New-Object IO.MemoryStream;]]
+      .. [[$i.Save($ms,[Drawing.Imaging.ImageFormat]::Png);]]
+      .. [[[Convert]::ToBase64String($ms.ToArray()) }' | tr -d '\r')]],
+    [[[ -n "$out" ] || exit 1]],
+    -- wl-copy forks a daemon to serve the selection; without the redirects it
+    -- inherits this pipeline's stdout/stderr and vim.system waits on those
+    -- pipes forever -- the on-exit callback (which forwards the paste chord)
+    -- would never fire.
+    [[printf %s "$out" | base64 -d | wl-copy -t image/png >/dev/null 2>&1]],
+  }, "\n")
+  map("t", "<C-v>", function()
+    -- getreg throws on some providers when the clipboard holds an image and
+    -- returns raw image bytes on others; util/clipboard sorts out both.
+    local ok, text = pcall(vim.fn.getreg, "+")
+    if ok and require("util.clipboard").is_text(text) then
+      vim.api.nvim_paste(text, true, -1)
+      return
+    end
+    local chan = vim.bo.channel
+    if not is_wsl then
+      vim.api.nvim_chan_send(chan, "\22")
+      return
+    end
+    vim.system({ "sh", "-c", mirror_image_to_wayland }, {}, function()
+      -- Forward the chord whether or not an image was found: the inner
+      -- program should still see its paste key on a merely-empty clipboard.
+      vim.schedule(function()
+        vim.api.nvim_chan_send(chan, "\22")
+      end)
+    end)
+  end, { desc = "Paste clipboard" })
+end
+
 -- Clear search highlight
 map("n", "<Esc>", "<cmd>nohlsearch<cr>")
 
@@ -51,16 +121,68 @@ map("n", "<leader>R", "<cmd>checktime<cr>", { desc = "Reload file from disk" })
 -- Buffer tabs. Switching routes to the main window first (single-main-buffer
 -- layout: cycling from the terminal or explorer must not replace that window's
 -- buffer).
+--
+-- BufferLineCycleNext rather than bnext: it walks the buffers bufferline is
+-- actually showing, which plugins/buffers.lua filters to the current workspace
+-- tabpage's project. Plain bnext walks Vim's global buffer list and would cycle
+-- into another project's files -- ones not even on the bar.
 local goto_main_window = require("config.windows").goto_main_window
 map("n", "<S-l>", function()
   goto_main_window()
-  vim.cmd("bnext")
+  vim.cmd("BufferLineCycleNext")
 end, { desc = "Next buffer" })
 map("n", "<S-h>", function()
   goto_main_window()
-  vim.cmd("bprevious")
+  vim.cmd("BufferLineCyclePrev")
 end, { desc = "Prev buffer" })
-map("n", "<leader>x", "<cmd>bp|bdelete #<cr>", { desc = "Close buffer" })
+-- Straight to this workspace's greeter (config/greeter.lua), which is the
+-- leftmost buffer tab. Reachable by clicking it or cycling <S-h> off the left
+-- end too; this is the one that doesn't depend on how many buffers are in the
+-- way. Builds the greeter if this workspace hasn't shown one yet.
+map("n", "<leader>h", function()
+  require("config.greeter").focus()
+end, { desc = "Go to workspace overview" })
+-- Snacks.bufdelete rather than `bp|bdelete #`: that pair can't close the LAST
+-- buffer (with nothing to switch to, bp stays put and there's no alternate to
+-- delete), and it lets Vim drop the replacement buffer into whatever window it
+-- likes -- hijacking the explorer or terminal. This switches each window showing
+-- the buffer off it first, so the layout survives and the main window lands on
+-- the greeter (config/greeter.lua) when that was the last one.
+map("n", "<leader>x", function()
+  require("config.windows").goto_main_window()
+  Snacks.bufdelete()
+end, { desc = "Close buffer" })
+-- All of this workspace's buffers at once, landing back on the greeter
+-- (config/greeter.lua) — the fast way back to the tab's "home screen".
+map("n", "<leader>X", function()
+  require("config.greeter").close_all()
+end, { desc = "Close all buffers (this workspace)" })
+
+-- Workspaces: one project per tabpage (see config/workspace.lua). Switching
+-- between them is Vim's own gt/gT -- only opening one, listing them, and closing
+-- one down are new. <leader>t is "tab"; the test namespace moved to <leader>T
+-- (neotest.lua) since these are reached far more often.
+map("n", "<leader>tn", function()
+  require("config.workspace").pick_new()
+end, { desc = "New project tab (recent/dev)" })
+-- The same thing for a project the recent list doesn't know (a fresh clone):
+-- browse to it instead of naming it.
+map("n", "<leader>te", function()
+  require("config.workspace").explore()
+end, { desc = "New project tab (browse)" })
+-- The same thing for a branch of the project you're in: create (or reuse) a
+-- worktree for it under .worktrees/ and open that as its own tab. See
+-- util/worktree.lua.
+map("n", "<leader>tw", function()
+  require("util.worktree").pick()
+end, { desc = "New project tab (git worktree)" })
+map("n", "<leader>tt", function()
+  require("config.workspace").pick()
+end, { desc = "Switch to open project tab" })
+-- :tabclose, but named alongside the others. fishmonger shuts that tabpage's
+-- terminals down with it (nothing could reach them afterwards), so this ends the
+-- workspace's shells too. Mirrors <leader>x for a buffer.
+map("n", "<leader>tx", "<cmd>tabclose<cr>", { desc = "Close project tab" })
 
 -- Parse a `path[:line[:col]]` reference (e.g. printed in the terminal, or a path
 -- in a diff/log) and resolve it to a real file on disk. Best-effort: returns
@@ -212,3 +334,7 @@ end, { desc = "Yank open file path" })
 map("n", "<leader>yl", function()
   yank_file_path(true)
 end, { desc = "Yank open file path:line" })
+
+map("n", "<leader>N", function()
+  vim.wo.relativenumber = not vim.wo.relativenumber
+end, { desc = "Toggle relative line numbers" })
