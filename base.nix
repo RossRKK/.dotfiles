@@ -166,12 +166,14 @@ in
 
   home.sessionVariables = {
     EDITOR = "nvim";
-    # bindgen dlopens libclang at build time; there's no FHS path to find it on NixOS.
-    LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-    # ...and once found, libclang has no default include paths either.
-    BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${pkgs.glibc.dev}/include -isystem ${pkgs.libclang.lib}/lib/clang/${lib.versions.major pkgs.libclang.version}/include";
     CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1";
     RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+  } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+    # bindgen dlopens libclang at build time; there's no FHS path to find it on NixOS.
+    LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+    # ...and once found, libclang has no default include paths either. glibc.dev
+    # is Linux-only, so this whole block is gated to Linux hosts.
+    BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${pkgs.glibc.dev}/include -isystem ${pkgs.libclang.lib}/lib/clang/${lib.versions.major pkgs.libclang.version}/include";
   };
 
   # Each key maps to `.config/<key>` in the repo.
