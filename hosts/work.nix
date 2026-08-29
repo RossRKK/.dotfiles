@@ -16,7 +16,7 @@
   '';
 
   home.shellAliases = {
-    hms = "home-manager switch --flake ~/.dotfiles/.config/home-manager#rosskelso@work";
+    hms = "home-manager switch --flake ~/.dotfiles#rosskelso@work";
   };
 
   home.packages = with pkgs; [

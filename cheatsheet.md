@@ -3,10 +3,11 @@
 ## Contents
 
 - [Editing](#editing) — modes · movement · editing · surround · search · splits & buffers
+- [Workspaces](#workspaces) — one project per tab · `Space+t`
 - [Navigation](#navigation) — `g` go-to · `]`/`[` next/prev · Flash jumps
 - [Find and lists](#find-and-lists) — `Space+f` find · `Space+l` Trouble
 - [Code and diagnostics](#code-and-diagnostics) — `Space+c` action · `Space+rn` rename · `Space+d` diagnostics · `Space+u` undo
-- [Tests and debugging](#tests-and-debugging) — `Space+t` neotest · dap debug
+- [Tests and debugging](#tests-and-debugging) — `Space+T` neotest · dap debug
 - [Git](#git) — `Space+g` hunks · merge conflicts
 - [Branch review](#branch-review) — review mode · PR comments
 - [File explorer](#file-explorer) — neo-tree keys · git glyphs · review indicators
@@ -26,6 +27,7 @@
 | `i`       | Insert before cursor   |
 | `a`       | Insert after cursor    |
 | `o` / `O` | New line below / above |
+| `]<Space>` / `[<Space>` | Blank line below / above (stays in normal mode; takes a count) |
 | `v`       | Visual mode            |
 | `V`       | Visual line mode       |
 | `Ctrl+Q`  | Visual block mode      |
@@ -51,7 +53,9 @@
 | `p` / `P`         | Paste below / above                    |
 | `u` / `Ctrl+R`    | Undo / redo                            |
 | `Ctrl+S`          | Save                                   |
+| `Ctrl+V`          | Paste clipboard (Neovide only; insert/cmdline/terminal). In a terminal, an image goes to the program inside -- so screenshots paste into Claude Code |
 | `Space+R`         | Reload file from disk                  |
+| `Space+N`         | Toggle relative line numbers (absolute is the default) |
 | `.`               | Repeat last change                     |
 
 Delete/change (`d D c C x X`) never write the clipboard — only yanks do. To
@@ -89,10 +93,25 @@ text (the swap trick).
 | `:sp`                 | Horizontal split                            |
 | `Ctrl+H/L/J/K`        | Move between splits (works in terminal too) |
 | `:vert res 80`        | Resize vertical split to 80 columns         |
-| `Shift+L` / `Shift+H` | Next / prev buffer                          |
+| `Shift+L` / `Shift+H` | Next / prev buffer (within this workspace)  |
+| `Space+h`             | Go to the workspace overview (leftmost tab) |
 | `Space+x`             | Close buffer                                |
+| `Space+X`             | Close all buffers in this workspace         |
 | `Space+.`             | Toggle scratch buffer (per project)         |
 | `Space+S`             | Pick among all scratch buffers              |
+
+The **greeter** is the leftmost buffer tab, labelled `Overview` — one per
+workspace, always there, so going back to it is `Space+h`, a click, or `<S-h>`
+off the left end. It's also what the main window falls back to when the last
+buffer closes, rather than a blank `[No Name]`. It shows a branch overview:
+`repo - branch`
+(a worktree reads as its repo, not its checkout directory), how far ahead/behind
+its remote it is, the review base and commits on top of it, and the files this
+branch changes — the same merge-result diff and triage marks (`●` changed, `✓`
+approved, `✗` rejected, `↻` revised) review mode puts in the explorer. Each file
+has a key next to it; press it to open. `Space+X` is the quick way back to the
+greeter. Outside a git repo there's no overview, so it falls back to the pickers
+(`f` find, `g` grep, `n` new file).
 
 ### Layout (edgy)
 
@@ -117,6 +136,72 @@ switches auto-expand back off as it resets.
 
 Notifications use the snacks notifier (toasts, top-right); `Space+n` opens the
 scrollback history of everything that was notified.
+
+---
+
+## Workspaces
+
+A **workspace** is one project in one nvim tabpage: its own explorer rooted at
+that project, its own side terminals, its own cwd. Opening a second project is
+`Space+tn` rather than a second nvim, and switching between them is Vim's own
+`gt` / `gT`.
+
+| Key         | Action                                                     |
+| ----------- | ---------------------------------------------------------- |
+| `Space+tn`  | New project tab — names one from zoxide's list             |
+| `Space+te`  | New project tab — browse the filesystem for one (float)    |
+| `Space+tw`  | New project tab — a git worktree of a branch of this repo   |
+| `Space+tt`  | Switch to an open project (picker; matches number or name) |
+| `Space+tx`  | Close this project tab (its terminals shut down with it)   |
+| `gt` / `gT` | Next / prev tab                                            |
+
+Tab labels sit at the **right end of the bufferline**, showing the project name —
+prefixed with the agent status icon of each of that project's Claude Code
+terminals (the same coloured icons the agent view and greeter use), so a
+background workspace waiting on you says so — in that state's colour — without
+switching to it. (The
+OS window title still tracks the workspace you're _in_.)
+
+Buffers are global in Vim, but the bufferline shows only those under the current
+tab's project, and `Shift+L`/`Shift+H` cycle that filtered list.
+
+The two openers are the fast path and the fallback. `Space+tn` ranks by
+**frecency** — the same zoxide database `z` uses in the shell — so a couple of
+letters of somewhere you work often lands it, but a directory you've never `cd`'d
+into isn't in there at all. `Space+te` browses instead — a file tree in a float
+over the editor, rooted at `~`: `l` / `h` / `Backspace` to move around (or
+`Space` to expand a folder, as in the explorer), typing filters live, and `Enter`
+opens the highlighted directory as a workspace. That's
+the one for a fresh clone.
+
+`Space+tw` is the third opener, and the only one that can open a project that
+doesn't exist yet: it lists the branches of the repo you're in (local and
+remote), and `Enter` opens that branch's **git worktree** as a new tab — creating
+the worktree under `<repo>/.worktrees/<branch>` if there isn't one. Type (or
+paste, straight from GitHub) a name nothing matches and `Enter` first looks for
+it on the remotes — fetching `origin/<name>` if it isn't known yet — and only
+makes a new branch off `HEAD` when no remote has it. Picking a branch that
+already has a worktree just opens it.
+
+The same thing is reachable from **lazygit**: `w` on a branch (local or remote)
+opens it as a worktree project tab in the surrounding nvim.
+
+So a branch becomes a project tab: its own checkout, terminals and buffer list,
+with your main checkout untouched in the tab next door — no stash, no
+`git checkout` dance, and an agent can work a branch while you work another.
+`.worktrees/` is in the global gitignore, so it never shows up in `git status`.
+Removing one is still plain `git worktree remove` in the terminal.
+
+Separately, `gw` in the **docked explorer** opens the node's directory as its own
+workspace tab — how a subdirectory of the current project, or a sibling repo you
+were looking at, becomes a workspace of its own.
+
+`nvim <dir>` still builds the first workspace exactly as before; the picker just
+builds subsequent ones the same way.
+
+> **There is no session restore.** A saved session carries a single cwd, which
+> has no meaning once several projects share one nvim, so startup opens an empty
+> editor rather than reopening the last files.
 
 ---
 
@@ -178,10 +263,10 @@ under the cursor — an accepted trade-off. The scope also gives text objects:
 | `Space+fg` | Live grep across project |
 | `Space+fd` | Live grep in the current file's directory |
 | `Space+fb` | Find open buffers        |
+| `Space+fo` | Recent files (oldfiles, across sessions) |
 | `Space+fs` | Symbols in current file (LSP) |
 | `Space+fw` | Symbols across workspace (LSP, live) |
 | `Space+ft` | List TODO / FIXME / … comments (Trouble) |
-| `Space+fr` | Project find **& replace** (grug-far) |
 | `Space+fh` | Help tags                |
 
 The finder is the [snacks picker](https://github.com/folke/snacks.nvim) (input on
@@ -230,6 +315,18 @@ groups supported).
 | --------- | --------------------- |
 | `Space+d` | Show diagnostic popup |
 
+### Format on save (conform)
+
+Files are formatted on save (see `lua/plugins/conform.lua` for the
+formatter-per-filetype table). To save without reformatting:
+
+| Command          | Action                                            |
+| ---------------- | ------------------------------------------------- |
+| `:FormatDisable` | Turn off format-on-save everywhere                |
+| `:FormatDisable!`| Turn off format-on-save for this buffer only      |
+| `:FormatEnable`  | Turn it back on (clears both flags)               |
+| `:noa w`         | One-off: write skipping all autocmds (no toggle)  |
+
 ### Space+u — Undo tree
 
 | Key       | Action                                          |
@@ -242,17 +339,19 @@ Undo is persisted to disk (`undofile`), so the tree survives restarts.
 
 ## Tests and debugging
 
-### Space+t — Tests (neotest)
+### Space+T — Tests (neotest)
+
+Shifted `T`: the unshifted `Space+t` is the workspace (project tab) namespace.
 
 | Key        | Action                       |
 | ---------- | ---------------------------- |
-| `Space+tr` | Run nearest test             |
-| `Space+tf` | Run all tests in the file    |
-| `Space+td` | Debug nearest test (via dap) |
-| `Space+tt` | Toggle the summary tree      |
-| `Space+to` | Show output of the last test |
-| `Space+tO` | Toggle the output panel      |
-| `Space+ts` | Stop a running test          |
+| `Space+Tr` | Run nearest test             |
+| `Space+Tf` | Run all tests in the file    |
+| `Space+Td` | Debug nearest test (via dap) |
+| `Space+Tt` | Toggle the summary tree      |
+| `Space+To` | Show output of the last test |
+| `Space+TO` | Toggle the output panel      |
+| `Space+Ts` | Stop a running test          |
 
 Pass/fail signs render in the gutter; driven by rust-analyzer runnables.
 
@@ -334,7 +433,9 @@ Highlights what merging this branch into the default branch would actually
 change (the merge-result diff): gitsigns marks changed lines in the sign column,
 and the explorer flags changed files. Changes the default branch already has —
 even if the branch made them independently — don't show. Off by default; turn it
-on per-branch with `Space+rt` and approve / reject files as you go.
+on with `Space+rt` and approve / reject files as you go. The toggle — like the
+target and all review state — is **per repo**, so each workspace tab reviews (or
+doesn't) independently.
 
 The target defaults to the auto-detected default branch (`origin/HEAD`, else
 `main` / `master`). Override it with `Space+rb` (or `:ReviewBase <branch>`, with
@@ -358,8 +459,8 @@ was acted on — re-review the fix) rather than losing the flag.
 `Space+rd` overlays a combined inline diff on the file itself — deleted lines
 shown inline, added / changed lines highlighted — against the review base
 (default branch tip), instead of a side-by-side split. Works whether or not
-review mode is on; it's a global mode, so it applies to all buffers until
-toggled off.
+review mode is on; it's a mode across the current buffer's repo, applying to
+that repo's buffers until toggled off.
 
 ### PR comments (batched review)
 
@@ -373,6 +474,7 @@ alongside them.
 | ---------- | --------------------------------------------------------- |
 | `]r` / `[r` | Jump to next / prev PR comment                           |
 | `Space+rc` | Draft a comment on the line (or visual range)             |
+| `Space+rl` | List all comments + drafts in a jumpable overview split   |
 | `Space+re` | Edit the comment / draft on the line (asks if several)    |
 | `Space+ra` | Reply to the comment thread on the line (posts now)       |
 | `Space+rx` | Discard the draft on the line                             |
@@ -384,8 +486,9 @@ alongside them.
 Submit infers the verdict from the triage rollup — no picking: any live
 rejection → **request changes**, all approved → **approve**, anything still
 untriaged → **comment**. So an early submit goes out as a plain comment batch,
-and only firms up to approve/request-changes once nothing's pending. A compose
-float shows the verdict in its title and takes an optional summary (`Ctrl+S`
+and only firms up to approve/request-changes once nothing's pending. A short
+compose split at the bottom (move in/out with `Ctrl+J`/`Ctrl+K` like any window)
+shows the verdict in its winbar and takes an optional summary (`Ctrl+S`
 sends even when empty, `q` cancels); a bare approval with no summary defaults to
 "LGTM". Drafts clear on a successful submit, so continuing the review starts a
 fresh batch. Replies and edits to already-posted comments still go out
@@ -456,6 +559,9 @@ the filter after selecting, `C-Enter` selects and clears it.
 | `gy` | Path relative to the cwd        |
 | `gY` | Absolute path                   |
 
+`gw` (custom) opens the node's directory as its own
+[workspace](#workspaces) tab — the directory itself, or a file's parent.
+
 **Git, ordering & sources**
 
 | Key          | Action                                            |
@@ -520,6 +626,10 @@ tmux-style tabs in the side terminal: one fills the slot, the others stay alive
 but hidden. Switch from **terminal-normal mode** (enter it with `Ctrl+N`), then
 press the `Ctrl+B` binding. `Ctrl+T` toggles the terminal from anywhere. A
 titled tab strip shows across the top when the side terminal is open.
+
+Slots 1–9 are **per workspace** (see [Workspaces](#workspaces)): each project tab
+has its own nine, spawned in that project's directory, and closing the project
+tab with `Space+tx` shuts its shells down.
 
 | Key           | Action                                            |
 | ------------- | ------------------------------------------------- |
@@ -600,9 +710,13 @@ Prefix = `Ctrl+B`.
 
 ## dotfiles
 
+An ordinary git repo at `~/.dotfiles`; home-manager symlinks the app config
+into `$HOME`. Edit the files in the repo (or through the symlinks) and commit
+with plain git:
+
 ```fish
-dotfiles status
-dotfiles add ~/.config/nvim/lua/plugins/foo.lua
-dotfiles commit -m "message"
-dotfiles push
+cd ~/.dotfiles
+git add .config/nvim/lua/plugins/foo.lua
+git commit -m "message"
+git push
 ```

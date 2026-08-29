@@ -24,6 +24,7 @@
     drs = "darwin-rebuild switch --flake ~/chaos.nix";
     # Home-only rebuild (useful during bootstrap before nix-darwin is installed).
     hms = "home-manager switch --flake ~/.dotfiles/.config/home-manager#rossrkk@aether";
+    hms = "home-manager switch --flake ~/.dotfiles#rossrkk@aether";
   };
 
   home.username = "rossrkk";

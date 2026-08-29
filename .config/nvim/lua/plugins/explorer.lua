@@ -1,7 +1,8 @@
--- File explorer (neo-tree) + a symbols outline, sharing the left column.
+-- File explorer (neo-tree) in the left column, plus an on-demand symbols popup.
 --
--- Two neo-tree sources are used: `filesystem` (the tree) and `document_symbols`
--- (an outline of the focused file, driven by the LSP's documentSymbol request).
+-- Two neo-tree sources are used: `filesystem` (the docked tree) and
+-- `document_symbols` (a float outlining the focused file, driven by the LSP's
+-- documentSymbol request; <leader>lo).
 -- The branch-review UI paints its triage/nitpick glyphs on the filesystem tree
 -- via renderer components (registered below); those come from the triage.nvim /
 -- nitpick.nvim plugins, wired in lua/plugins/review.lua.
@@ -39,6 +40,18 @@ return {
         end
       end
 
+      -- Open a node's directory (a file's parent, a directory itself) as its own
+      -- workspace tabpage: promote a subdirectory of the current project, or jump
+      -- straight into a sibling repo you happened to be looking at.
+      local function open_workspace(state)
+        local node = state.tree:get_node()
+        if not node or not node.path then
+          return
+        end
+        local dir = node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
+        require("config.workspace").open(dir, { tab = true })
+      end
+
       require("neo-tree").setup({
         sources = { "filesystem", "document_symbols", "git_status" },
         -- Keep focus in the editor when neo-tree closes a window, and don't let
@@ -74,6 +87,9 @@ return {
             -- gY absolute -- a natural pair.
             ["gy"] = copy_path(":."),
             ["gY"] = copy_path(""),
+            -- g-prefixed like the pair above, and out of neo-tree's way: plain
+            -- `w` is its open_with_window_picker.
+            ["gw"] = open_workspace,
             -- `e` toggles neo-tree's auto-expand-width (fit the longest name).
             -- edgy owns the panel width, but its size now live-tracks the window
             -- (see edgy.lua left size), so it follows the expand instead of
@@ -145,56 +161,26 @@ return {
         },
         document_symbols = {
           follow_cursor = true,
+          -- The outline is a popup, not a docked panel: it used to sit under the
+          -- tree in the left column, where <C-h> landed on it as often as on the
+          -- explorer and closing the main buffer left the column stranded.
+          window = { position = "float" },
         },
       })
 
-      -- The left column stacks two neo-tree windows: the file tree on top, the
-      -- symbols outline below it. edgy owns the stacking (see lua/plugins/edgy.lua):
-      -- both sources open with `show` (which doesn't steal focus), and edgy
-      -- relocates each into its left-edge slot by neo_tree_source. document_symbols
-      -- opens at a neutral position so neo-tree doesn't replace the filesystem
-      -- window before edgy moves it -- the old "two explorers" collision.
+      -- The left column holds one neo-tree window: the file tree. It opens with
+      -- `show` (which doesn't steal focus) and edgy relocates it into the
+      -- left-edge slot (see lua/plugins/edgy.lua). Opening and closing that
+      -- column lives in util.sidebar -- config.workspace opens one per project
+      -- tabpage, so it can't stay local to this file.
+      local sidebar = require("util.sidebar")
 
-      -- The window in this tab showing neo-tree `source`, or nil.
-      local function neotree_win(source)
-        for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-          local buf = vim.api.nvim_win_get_buf(win)
-          local ok, src = pcall(vim.api.nvim_buf_get_var, buf, "neo_tree_source")
-          if ok and src == source then
-            return win
-          end
-        end
-      end
-
-      -- Open the file tree and the outline; edgy stacks them in the left edgebar.
-      -- `show` reveals without focusing, so this is safe to call from auto-open.
-      local function open_sidebar()
-        vim.cmd("Neotree filesystem show left")
-        if not neotree_win("document_symbols") then
-          vim.cmd("Neotree document_symbols show bottom")
-        end
-      end
-
-      -- Close every neo-tree window in the tab (both the tree and the outline; the
-      -- outline lives in a plain split, so :Neotree close alone wouldn't get it).
-      local function close_sidebar()
-        for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-          local buf = vim.api.nvim_win_get_buf(win)
-          if pcall(vim.api.nvim_buf_get_var, buf, "neo_tree_source") then
-            pcall(vim.api.nvim_win_close, win, false)
-          end
-        end
-      end
-
-      local function toggle_sidebar()
-        if neotree_win("filesystem") or neotree_win("document_symbols") then
-          close_sidebar()
-        else
-          open_sidebar()
-        end
-      end
-
-      vim.keymap.set("n", "<leader>e", toggle_sidebar, { desc = "Toggle explorer + outline" })
+      vim.keymap.set("n", "<leader>e", sidebar.toggle, { desc = "Toggle explorer" })
+      -- The symbols outline, on demand as a float. `toggle` so the same key
+      -- dismisses it; `reveal` follows the cursor's symbol on open.
+      vim.keymap.set("n", "<leader>lo", "<cmd>Neotree document_symbols float toggle reveal<cr>", {
+        desc = "Outline (symbols popup)",
+      })
       vim.keymap.set("n", "<leader>v", "<cmd>Neotree filesystem reveal left reveal_force_cwd<cr>", {
         desc = "Reveal file in explorer",
       })
@@ -203,7 +189,7 @@ return {
       -- ga/gu/gr/gc/gp/gg). Same managed left window, so the outline split below
       -- stays put; toggles back to the file tree.
       vim.keymap.set("n", "<leader>gt", function()
-        if neotree_win("git_status") then
+        if sidebar.win("git_status") then
           vim.cmd("Neotree filesystem show left")
         else
           vim.cmd("Neotree git_status show left")
@@ -222,29 +208,19 @@ return {
       vim.api.nvim_create_autocmd("ColorScheme", { callback = set_git_highlights })
       set_git_highlights()
 
-      -- `nvim <dir>` (e.g. `nvim .`): open the tree as a side panel beside a real
-      -- editor window, so there's always somewhere for files to open.
+      -- `nvim <dir>` (e.g. `nvim .`): build the first workspace -- the tree
+      -- beside a real editor window, side terminal on the right. Same open() the
+      -- <leader>tn picker calls for a second project, minus the new tabpage: this
+      -- one takes the tabpage nvim started in, and the global cwd with it.
       vim.api.nvim_create_autocmd("VimEnter", {
         nested = true,
         callback = function(data)
-          -- config.ide is the single owner of the "opened on a directory"
-          -- detection (same check the terminal auto-open uses).
+          -- config.ide is the single owner of the "opened on a directory" detection.
           local dir = require("config.ide").dir()
           if not dir then
             return
           end
-          vim.cmd.cd(vim.fn.fnameescape(dir))
-          vim.cmd.enew() -- empty editor window
-          pcall(vim.api.nvim_buf_delete, data.buf, { force = true }) -- drop the dir buffer
-          -- Capture the editor window now and restore into it explicitly: if
-          -- another window has stolen focus by the time load runs (e.g. Lazy's
-          -- update UI popped up on startup), persistence would otherwise :edit
-          -- the restored files into the wrong window.
-          local editor = vim.api.nvim_get_current_win()
-          vim.api.nvim_set_current_win(editor)
-          pcall(require("persistence").load) -- reopen this dir's files (no-op if none saved)
-          open_sidebar() -- tree + outline stacked in the left column, focus kept here
-          vim.api.nvim_set_current_win(editor) -- leave focus in the editor
+          require("config.workspace").open(dir, { drop_buf = data.buf })
         end,
       })
 

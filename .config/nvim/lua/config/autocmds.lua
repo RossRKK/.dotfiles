@@ -81,3 +81,7 @@ vim.api.nvim_create_autocmd("FileChangedShellPost", {
     vim.notify("File changed on disk — buffer reloaded", vim.log.levels.WARN)
   end,
 })
+
+-- Workspace greeter fallback: a workspace tab whose main window empties out
+-- shows the greeter instead of a blank buffer. See config/greeter.lua.
+require("config.greeter").setup()
