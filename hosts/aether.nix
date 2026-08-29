@@ -20,10 +20,7 @@
   '';
 
   home.shellAliases = {
-    # Primary rebuild for aether — updates both system (syncthing etc.) and home env.
-    drs = "darwin-rebuild switch --flake ~/chaos.nix";
-    # Home-only rebuild (useful during bootstrap before nix-darwin is installed).
-    hms = "home-manager switch --flake ~/.dotfiles/.config/home-manager#rossrkk@aether";
+    # Primary rebuild for aether — this host is home-manager only, no nix-darwin.
     hms = "home-manager switch --flake ~/.dotfiles#rossrkk@aether";
   };
 
