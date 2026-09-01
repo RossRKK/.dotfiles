@@ -123,7 +123,19 @@ return {
           end, "Go to references")
           map("K", vim.lsp.buf.hover, "Hover docs")
           map("<leader>ca", vim.lsp.buf.code_action, "Code action")
-          map("<leader>rn", vim.lsp.buf.rename, "Rename")
+          -- inc-rename (plugins/inc-rename.lua) instead of vim.lsp.buf.rename:
+          -- an expr mapping, so it drops ":IncRename <cword>" on the cmdline
+          -- with the old name prefilled and previews the edit as you retype it.
+          -- Set directly rather than via `map`, which doesn't pass expr.
+          vim.keymap.set("n", "<leader>rn", function()
+            return ":IncRename " .. vim.fn.expand("<cword>")
+          end, { buffer = ev.buf, expr = true, desc = "Rename" })
+          -- Rename the *file* in the current buffer, letting the server rewrite
+          -- the imports that point at it (workspace/willRenameFiles). Same
+          -- machinery neo-tree's rename fires -- see plugins/explorer.lua.
+          map("<leader>rf", function()
+            Snacks.rename.rename_file()
+          end, "Rename file")
           map("<leader>d", vim.diagnostic.open_float, "Show diagnostic")
           map("[d", function()
             vim.diagnostic.jump({ count = -1, float = true })

@@ -56,4 +56,78 @@ return {
       })
     end,
   },
+  {
+    -- Syntax-aware text objects and motions, driven by treesitter queries, so
+    -- "a function" means the same thing in every language with a parser.
+    "nvim-treesitter/nvim-treesitter-textobjects",
+    branch = "main", -- must match nvim-treesitter's branch; the master API is gone
+    dependencies = { "nvim-treesitter/nvim-treesitter" },
+    event = "VeryLazy",
+    config = function()
+      require("nvim-treesitter-textobjects").setup({
+        select = {
+          -- Jump forward to the nearest text object when the cursor isn't inside
+          -- one, so `dif` works from the blank line above a function.
+          lookahead = true,
+        },
+        move = { set_jumps = true }, -- the motions below are jumps, so <C-o> comes back
+      })
+
+      -- On the main branch there are no default mappings: each one calls the
+      -- module directly with a query capture. The captures come from the
+      -- textobjects.scm queries bundled with this plugin -- more exist
+      -- (@conditional, @loop, @comment, @call); these are the ones worth keys.
+      local select = require("nvim-treesitter-textobjects.select")
+      local move = require("nvim-treesitter-textobjects.move")
+      local swap = require("nvim-treesitter-textobjects.swap")
+
+      -- Text objects. `a` includes the signature/braces, `i` just the body.
+      -- ii/ai are snacks' scope objects (see snacks-ui.lua) -- left alone.
+      -- stylua: ignore
+      local objects = {
+        f = "function",
+        c = "class",
+        a = "parameter",
+      }
+      for key, capture in pairs(objects) do
+        for _, kind in ipairs({ "outer", "inner" }) do
+          local lhs = (kind == "outer" and "a" or "i") .. key
+          vim.keymap.set({ "x", "o" }, lhs, function()
+            select.select_textobject("@" .. capture .. "." .. kind, "textobjects")
+          end, { desc = kind .. " " .. capture })
+        end
+      end
+
+      -- Function motions, on the builtin method-motion keys. These override
+      -- ]m/[m (next/prev method start) and ]M/[M (end), and are a strict
+      -- superset: the builtins find methods by scanning for `{` at the start of
+      -- a line, so they only ever worked in C-like languages and got confused by
+      -- braces in strings. The treesitter version is the same motion, correct,
+      -- in every language with a parser.
+      --
+      -- Not ]f/[f, which look free but are deprecated builtin aliases of gf, and
+      -- not ]c/[c (gitsigns hunks) or ]a/[a (the arglist commands).
+      -- stylua: ignore
+      local motions = {
+        ["]m"] = { move.goto_next_start,     "Next function" },
+        ["[m"] = { move.goto_previous_start, "Prev function" },
+        ["]M"] = { move.goto_next_end,       "Next function end" },
+        ["[M"] = { move.goto_previous_end,   "Prev function end" },
+      }
+      for lhs, spec in pairs(motions) do
+        local goto_fn, desc = spec[1], spec[2]
+        vim.keymap.set({ "n", "x", "o" }, lhs, function()
+          goto_fn("@function.outer", "textobjects")
+        end, { desc = desc })
+      end
+
+      -- Reorder arguments without touching the commas.
+      vim.keymap.set("n", "<leader>a", function()
+        swap.swap_next("@parameter.inner")
+      end, { desc = "Swap parameter with next" })
+      vim.keymap.set("n", "<leader>A", function()
+        swap.swap_previous("@parameter.inner")
+      end, { desc = "Swap parameter with previous" })
+    end,
+  },
 }

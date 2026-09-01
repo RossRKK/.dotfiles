@@ -37,6 +37,12 @@ vim.api.nvim_create_autocmd("FileType", {
   pattern = prose_filetypes,
   callback = function(args)
     vim.opt_local.textwidth = 80
+    -- Spell check prose only; code buffers would be all false positives.
+    -- en_gb rather than plain "en" so US spellings are flagged too, keeping a
+    -- document internally consistent. `z=` suggests, `zg` adds to the wordlist
+    -- (~/.local/share/nvim/site/spell/), `<leader>s` toggles it off.
+    vim.opt_local.spell = true
+    vim.opt_local.spelllang = "en_gb"
     set_prose_formatexpr(args.buf)
   end,
 })
