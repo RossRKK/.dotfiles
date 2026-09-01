@@ -118,6 +118,14 @@ map({ "n", "i" }, "<C-s>", "<cmd>w<cr>", { desc = "Save file" })
 -- <leader>r: that prefix is the review namespace (triage/nitpick).
 map("n", "<leader>R", "<cmd>checktime<cr>", { desc = "Reload file from disk" })
 
+-- Spell check is on by default in prose filetypes (see config/autocmds.lua);
+-- this toggles it per-window, either to silence it in a quote-heavy paragraph
+-- or to turn it on in a buffer that isn't a recognised prose filetype.
+map("n", "<leader>s", function()
+  vim.wo.spell = not vim.wo.spell
+  vim.notify("Spell check " .. (vim.wo.spell and "on" or "off"))
+end, { desc = "Toggle spell check" })
+
 -- Buffer tabs. Switching routes to the main window first (single-main-buffer
 -- layout: cycling from the terminal or explorer must not replace that window's
 -- buffer).

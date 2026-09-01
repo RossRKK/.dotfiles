@@ -2,7 +2,7 @@
 
 ## Contents
 
-- [Editing](#editing) — modes · movement · editing · surround · search · splits & buffers
+- [Editing](#editing) — modes · movement · editing · surround · text objects · search · splits & buffers
 - [Workspaces](#workspaces) — one project per tab · `Space+t`
 - [Navigation](#navigation) — `g` go-to · `]`/`[` next/prev · Flash jumps
 - [Find and lists](#find-and-lists) — `Space+f` find · `Space+l` Trouble
@@ -56,6 +56,7 @@
 | `Ctrl+V`          | Paste clipboard (Neovide only; insert/cmdline/terminal). In a terminal, an image goes to the program inside -- so screenshots paste into Claude Code |
 | `Space+R`         | Reload file from disk                  |
 | `Space+N`         | Toggle relative line numbers (absolute is the default) |
+| `Space+s`         | Toggle spell check (see Spelling below)  |
 | `.`               | Repeat last change                     |
 
 Delete/change (`d D c C x X`) never write the clipboard — only yanks do. To
@@ -64,6 +65,26 @@ with `clipboard=unnamedplus`, `"+d` can't be told apart from a plain delete, so
 it also blackholes — yank to reach the clipboard, or use `"*` for the primary
 selection.) Exception: `p` over a visual selection still yanks the replaced
 text (the swap trick).
+
+### Spelling
+
+On by default in prose filetypes (markdown, text, gitcommit, rst, tex, typst),
+using `en_gb` — so US spellings get flagged too, keeping a document consistent.
+
+| Key             | Action                                                    |
+| --------------- | --------------------------------------------------------- |
+| `]s` / `[s`     | Next / previous misspelling                               |
+| `z=`            | Suggestions for the word under the cursor (a snacks picker) |
+| `1z=`           | Apply the first suggestion outright, no picker            |
+| `zg` / `zw`     | Add the word to the wordlist / mark it wrong              |
+| `zug` / `zuw`   | Undo a `zg` / `zw`                                        |
+| `Space+s`       | Toggle spell check for the current window                 |
+
+The writing loop is `]s` to jump, then `1z=` for an obvious typo or `z=` to
+pick. `.` repeats the last `z=`, which fixes a typo you made consistently.
+
+`zg` writes to `~/.local/share/nvim/site/spell/en.utf-8.add`, outside this
+repo — added words aren't tracked in git.
 
 ### Surround (nvim-surround)
 
@@ -76,6 +97,27 @@ text (the swap trick).
 | `S)` (visual)   | Wrap selection in parens                      |
 | `cs"'`          | Change surrounding `"` to `'`                 |
 | `ds"`           | Delete surrounding quotes                     |
+
+### Text objects & motions (treesitter)
+
+Syntax-aware, so these mean the same thing in every language with a parser.
+Combine with any operator: `dif` deletes a function body, `yac` yanks a class,
+`cia` changes an argument.
+
+| Key             | Action                                          |
+| --------------- | ----------------------------------------------- |
+| `af` / `if`     | A function / just its body                      |
+| `ac` / `ic`     | A class / just its body                         |
+| `aa` / `ia`     | An argument (with comma) / just the argument    |
+| `ai` / `ii`     | Current indent scope (snacks, not treesitter)   |
+| `]m` / `[m`     | Next / prev function start                      |
+| `]M` / `[M`     | Next / prev function end                        |
+| `Space+a`       | Swap argument with the next one                 |
+| `Space+A`       | Swap argument with the previous one             |
+
+The cursor doesn't have to be inside the text object — `dif` from the blank
+line above a function still takes that function. The swaps are dot-repeatable,
+so `Space+a` then `.` walks an argument along the list.
 
 ### Search
 
@@ -305,9 +347,17 @@ groups supported).
 
 ### Space+rn — Rename
 
-| Key        | Action        |
-| ---------- | ------------- |
-| `Space+rn` | Rename symbol |
+| Key        | Action                                     |
+| ---------- | ------------------------------------------ |
+| `Space+rn` | Rename symbol (live preview as you type)   |
+| `Space+rf` | Rename this file, updating imports to it   |
+
+`Space+rn` prefills the cmdline with `:IncRename <word under cursor>`; retype
+the name and every occurrence updates live in view, with the full list of
+changed lines in the preview split. `Esc` aborts without writing anything.
+
+`Space+rf` (and renaming a file with `r` in the explorer) asks the language
+server to rewrite the imports pointing at the old path.
 
 ### Space+d — Diagnostics
 

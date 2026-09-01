@@ -52,8 +52,22 @@ return {
         require("config.workspace").open(dir, { tab = true })
       end
 
+      -- neo-tree renames/moves the file itself, then fires these events. Snacks'
+      -- rename module turns that into the LSP's file-operation handshake
+      -- (workspace/willRenameFiles, apply the returned edit, didRenameFiles), so
+      -- renaming a module in the tree rewrites the imports that point at it.
+      -- Servers without the capability are skipped, and the rename still happens.
+      local events = require("neo-tree.events")
+      local function on_file_moved(args)
+        Snacks.rename.on_rename_file(args.source, args.destination)
+      end
+
       require("neo-tree").setup({
         sources = { "filesystem", "document_symbols", "git_status" },
+        event_handlers = {
+          { event = events.FILE_MOVED, handler = on_file_moved },
+          { event = events.FILE_RENAMED, handler = on_file_moved },
+        },
         -- Keep focus in the editor when neo-tree closes a window, and don't let
         -- opening a directory hijack the current window (the VimEnter handler
         -- below places the tree as a side panel beside a real editor window).
