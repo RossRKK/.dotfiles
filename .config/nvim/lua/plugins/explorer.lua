@@ -91,9 +91,9 @@ return {
             -- `w` is its open_with_window_picker.
             ["gw"] = open_workspace,
             -- `e` toggles neo-tree's auto-expand-width (fit the longest name).
-            -- edgy owns the panel width, but its size now live-tracks the window
-            -- (see edgy.lua left size), so it follows the expand instead of
-            -- snapping back -- no more flicker.
+            -- edgy owns the panel width, but the expand fires WinResized and
+            -- util/edgy_pin.lua writes the new width into edgy's override, so
+            -- it sticks instead of snapping back -- no more flicker.
             ["e"] = "toggle_auto_expand_width",
             -- neo-tree's default <C-r> = clear_clipboard is a filesystem-only
             -- command, but window.mappings apply to every source, so the
