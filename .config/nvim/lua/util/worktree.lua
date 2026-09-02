@@ -125,6 +125,49 @@ function M.add_args(branch, path, locals, remotes)
   return { "worktree", "add", "-b", branch, path }
 end
 
+--- `git worktree add` arguments for forking: a NEW branch at an explicit start
+--- point. add_args deliberately branches new names off the main worktree's HEAD
+--- (its git runs in root); a fork must instead start at the worktree the user is
+--- sitting in, so the base commit is passed explicitly.
+---@param branch string new branch name
+---@param path string worktree directory to create
+---@param base string commit the new branch starts at
+---@return string[]
+function M.fork_args(branch, path, base)
+  return { "worktree", "add", "-b", branch, path, base }
+end
+
+--- The suggested branch name a fork's input prompt is pre-filled with: the
+--- branch being forked, always under the personal `rkk/` prefix (not doubled if
+--- already there), with `-fork` appended so the fork reads as one -- numbered
+--- (-fork-2, -fork-3, …) past names already taken, so accepting the suggestion
+--- never hands git a branch that exists.
+---@param branch string? the current branch ("HEAD" or nil when detached)
+---@param locals table<string, true> existing local branch names
+---@return string
+function M.fork_name(branch, locals)
+  if not branch or branch == "" or branch == "HEAD" then
+    branch = "fork"
+  else
+    branch = branch:gsub("^rkk/", "") .. "-fork"
+  end
+  local name = "rkk/" .. branch
+  local n = 2
+  while locals[name] do
+    name = ("rkk/%s-%d"):format(branch, n)
+    n = n + 1
+  end
+  return name
+end
+
+--- The shell command that forks a Claude Code session: same history, new
+--- session id, leaving the original session untouched.
+---@param session string session id (a UUID, so no quoting needed)
+---@return string
+function M.fork_cmd(session)
+  return ("claude --resume %s --fork-session"):format(session)
+end
+
 --- Existing worktrees of the repo at `dir`, as branch -> path. Branch is the
 --- short name (`refs/heads/x` -> `x`); detached worktrees are skipped, having no
 --- branch to pick them by.
@@ -233,6 +276,97 @@ function M.open(branch, dir)
   end
 
   require("config.workspace").open(path, { tab = true })
+end
+
+--- Fork the current workspace tab (<leader>tf): create a NEW branch off THIS
+--- worktree's HEAD, carry the uncommitted changes over (the original keeps them
+--- too), open the new worktree as its own tab, and re-create every Claude Code
+--- session running in this tab's side terminals -- each forked with its full
+--- conversation history (`claude --resume <id> --fork-session`) into the SAME
+--- fishmonger slot, so "claude 2" stays claude 2 across the fork.
+---
+--- The fork command is typed into a fresh shell (chansend) rather than run as
+--- the terminal's job: the command is visible in the scrollback, and when the
+--- forked claude exits a plain shell remains.
+---
+--- Carried state, deliberately narrow (first pass): tracked modifications via
+--- `git stash create` + `stash apply` in the new worktree (stash create leaves
+--- the source tree untouched), untracked non-ignored files by copying. Staged
+--- hunks arrive unstaged; open editor buffers and plain shells do not travel.
+function M.fork()
+  local cwd = vim.fn.getcwd()
+  local root, err = M.root(cwd)
+  if not root then
+    vim.notify(err or "not a git repository", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Collect this tab's Claude sessions BEFORE any tab switch: fishmonger's
+  -- tabs() answers for the current tabpage.
+  local sessions = {}
+  for _, t in ipairs(require("fishmonger").tabs()) do
+    if t.agent and t.agent.session then
+      sessions[#sessions + 1] = { slot = t.slot, session = t.agent.session }
+    end
+  end
+
+  local suggestion = M.fork_name(git(cwd, { "rev-parse", "--abbrev-ref", "HEAD" }), local_branches(root))
+  vim.ui.input({ prompt = "Fork to new branch: ", default = suggestion }, function(input)
+    local branch = vim.trim(input or "")
+    if branch == "" then
+      return
+    end
+
+    local base = git(cwd, { "rev-parse", "HEAD" })
+    if not base then
+      vim.notify("git rev-parse HEAD failed", vim.log.levels.ERROR)
+      return
+    end
+    -- Snapshot dirty state before creating the worktree; stash create returns
+    -- nothing when the tree is clean.
+    local stash = git(cwd, { "stash", "create", "fork to " .. branch }) or ""
+    local untracked = git(cwd, { "ls-files", "--others", "--exclude-standard" }) or ""
+
+    local path = root .. "/.worktrees/" .. M.slug(branch)
+    local _, add_err = git(root, M.fork_args(branch, path, base))
+    if add_err then
+      vim.notify("git worktree add: " .. add_err, vim.log.levels.ERROR)
+      return
+    end
+
+    if stash ~= "" then
+      -- `stash apply` accepts any stash-shaped commit, stored or not.
+      local _, apply_err = git(path, { "stash", "apply", stash })
+      if apply_err then
+        vim.notify("carrying changes failed (worktree is clean): " .. apply_err, vim.log.levels.WARN)
+      end
+    end
+    for file in vim.gsplit(untracked, "\n") do
+      if file ~= "" then
+        local dest = path .. "/" .. file
+        vim.fn.mkdir(vim.fs.dirname(dest), "p")
+        vim.uv.fs_copyfile(cwd .. "/" .. file, dest)
+      end
+    end
+
+    require("config.workspace").open(path, { tab = true })
+
+    -- Now in the new tab: give each session its old slot back. show() spawns
+    -- the shell synchronously, so the fork command can be sent right away; the
+    -- pty buffers it until the shell reads.
+    local fm = require("fishmonger")
+    for _, s in ipairs(sessions) do
+      fm.show(s.slot, { insert = false })
+      local buf = fm.slots[s.slot] and fm.slots[s.slot].buf
+      local chan = buf and vim.b[buf].terminal_job_id
+      if chan then
+        vim.api.nvim_chan_send(chan, M.fork_cmd(s.session) .. "\n")
+      end
+    end
+    if #sessions > 1 then
+      fm.show(sessions[1].slot, { insert = false })
+    end
+  end)
 end
 
 --- M.open, callable from a lazygit custom command over `nvim --remote-expr`.

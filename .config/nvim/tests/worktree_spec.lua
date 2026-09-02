@@ -115,3 +115,43 @@ describe("worktree.add_args", function()
     )
   end)
 end)
+
+-- Forking (<leader>tf) must branch off the worktree the user is sitting in, not
+-- the main worktree's HEAD -- which is what add_args's new-branch case gives,
+-- since M.open runs git in the repo root. Hence the explicit base commit.
+describe("worktree.fork_args", function()
+  it("creates the branch at the given base commit", function()
+    assert.same(
+      { "worktree", "add", "-b", "feat/y", "/r/.worktrees/feat-y", "abc123" },
+      worktree.fork_args("feat/y", "/r/.worktrees/feat-y", "abc123")
+    )
+  end)
+end)
+
+-- The prompt's pre-filled suggestion: always under rkk/, named after the branch
+-- being forked, and never a name git would reject as existing.
+describe("worktree.fork_name", function()
+  it("prefixes and suffixes a plain branch", function()
+    assert.equals("rkk/main-fork", worktree.fork_name("main", {}))
+  end)
+
+  it("does not double an existing rkk/ prefix", function()
+    assert.equals("rkk/feat-x-fork", worktree.fork_name("rkk/feat-x", {}))
+  end)
+
+  it("numbers past taken names", function()
+    local locals = { ["rkk/main-fork"] = true, ["rkk/main-fork-2"] = true }
+    assert.equals("rkk/main-fork-3", worktree.fork_name("main", locals))
+  end)
+
+  it("falls back for a detached HEAD", function()
+    assert.equals("rkk/fork", worktree.fork_name("HEAD", {}))
+    assert.equals("rkk/fork", worktree.fork_name(nil, {}))
+  end)
+end)
+
+describe("worktree.fork_cmd", function()
+  it("resumes the session as a fork", function()
+    assert.equals("claude --resume 0f1e2d3c --fork-session", worktree.fork_cmd("0f1e2d3c"))
+  end)
+end)

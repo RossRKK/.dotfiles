@@ -176,6 +176,12 @@ end, { desc = "New project tab (browse)" })
 map("n", "<leader>tw", function()
   require("util.worktree").pick()
 end, { desc = "New project tab (git worktree)" })
+-- Fork the current worktree tab: new branch off this tab's HEAD (dirty state
+-- carried over), opened as its own tab, with every Claude session in this tab's
+-- side terminals forked (--fork-session) into its same slot. See util/worktree.lua.
+map("n", "<leader>tf", function()
+  require("util.worktree").fork()
+end, { desc = "Fork project tab (worktree + claude forks)" })
 map("n", "<leader>tt", function()
   require("config.workspace").pick()
 end, { desc = "Switch to open project tab" })
