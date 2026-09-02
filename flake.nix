@@ -15,6 +15,9 @@
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Tracks claude-code releases much faster than nixpkgs; update with
+    # `nix flake update claude-code` + rebuild.
+    claude-code.url = "github:sadjow/claude-code-nix";
     plasma-manager = {
       url = "github:nix-community/plasma-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -22,7 +25,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, plasma-manager, ... }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, plasma-manager, claude-code, ... }:
     let
       # Linux hosts (personal, work) take atmos/poethepoet/opentofu from
       # unstable, see the nixpkgs-unstable input comment above.
@@ -41,12 +44,16 @@
             poethepoet = pkgs-unstable.poethepoet;
             opentofu = pkgs-unstable.opentofu;
             svelte-language-server = pkgs-unstable.svelte-language-server;
+            claude-code = claude-code.packages.${system}.default;
           }) ];
         };
 
       pkgsDarwin = system: import nixpkgs {
         inherit system;
         config.allowUnfree = true;
+        overlays = [ (final: prev: {
+          claude-code = claude-code.packages.${system}.default;
+        }) ];
       };
     in {
       homeConfigurations."rossrkk@personal" = home-manager.lib.homeManagerConfiguration {
