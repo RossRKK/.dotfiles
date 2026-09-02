@@ -15,6 +15,9 @@ return {
   "folke/snacks.nvim",
   ---@type snacks.Config
   opts = {
+    -- Replaces the native cmdline vim.ui.input with a floating input (used by
+    -- e.g. <leader>tf's branch-name prompt, LSP rename).
+    input = { enabled = true },
     notifier = { enabled = true },
     quickfile = { enabled = true },
     -- Default keys: ii/ai select the current scope; [i / ]i jump to its top /

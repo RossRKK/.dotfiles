@@ -151,6 +151,7 @@ that project, its own side terminals, its own cwd. Opening a second project is
 | `Space+tn`  | New project tab — names one from zoxide's list             |
 | `Space+te`  | New project tab — browse the filesystem for one (float)    |
 | `Space+tw`  | New project tab — a git worktree of a branch of this repo   |
+| `Space+tf`  | Fork this tab — new branch + worktree, Claudes forked along |
 | `Space+tt`  | Switch to an open project (picker; matches number or name) |
 | `Space+tx`  | Close this project tab (its terminals shut down with it)   |
 | `gt` / `gT` | Next / prev tab                                            |
@@ -185,6 +186,16 @@ already has a worktree just opens it.
 
 The same thing is reachable from **lazygit**: `w` on a branch (local or remote)
 opens it as a worktree project tab in the surrounding nvim.
+
+`Space+tf` **forks the tab you're in**: it asks for a new branch name (pre-filled
+with `rkk/<current-branch>-fork`, numbered if that's taken), branches
+it off _this worktree's_ `HEAD` (uncommitted changes come along; the original
+tab keeps them too), opens the new worktree as its own tab — and re-creates
+every Claude Code session from this tab's side terminals in the new tab, each
+forked with its full conversation history (`claude --resume … --fork-session`)
+into the **same terminal slot**, so "claude 2" is still claude 2 after the
+fork. Plain shells and open editor buffers do not travel; staged hunks arrive
+unstaged.
 
 So a branch becomes a project tab: its own checkout, terminals and buffer list,
 with your main checkout untouched in the tab next door — no stash, no
