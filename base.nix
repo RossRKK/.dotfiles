@@ -26,6 +26,24 @@ in
         # ends up with no bindings in insert mode; re-run it explicitly.
         _autopair_fish_key_bindings
         any-nix-shell fish --info-right | source
+
+        # Inside an nvim terminal ($NVIM set), `nvim <dir>` would nest a whole
+        # second editor in the terminal buffer. Redirect that case to the
+        # parent instance as a new workspace tab (tabnew + tcd + label, see
+        # .config/nvim/lua/config/workspace.lua). Files and multi-arg calls
+        # still nest as usual (e.g. `git commit`).
+        function nvim --wraps=nvim --description 'directory opens become tabs in the parent nvim'
+            if set -q NVIM; and test (count $argv) -eq 1; and test -d "$argv[1]"
+                set -l dir (path resolve -- $argv[1])
+                # The path lands inside a vimscript single-quoted string;
+                # double any single quotes to escape them.
+                set dir (string replace --all "'" "'''" -- $dir)
+                command nvim --server $NVIM --remote-expr \
+                    "luaeval(\"require('config.workspace').open(_A, {tab = true})\", '$dir')" >/dev/null
+            else
+                command nvim $argv
+            end
+        end
       ''
       # Must run after `zoxide init` (ordered later in this file's output)
       # since it copies and re-wraps the cd function zoxide defines.
