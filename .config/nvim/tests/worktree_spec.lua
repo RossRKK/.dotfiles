@@ -155,3 +155,81 @@ describe("worktree.fork_cmd", function()
     assert.equals("claude --resume 0f1e2d3c --fork-session", worktree.fork_cmd("0f1e2d3c"))
   end)
 end)
+
+-- Git's --progress lines drive the status toast during a checkout (seconds on a
+-- large tree, longer cold). Anything else on stderr must not be mistaken for one.
+describe("worktree.progress", function()
+  it("reads the percentage and phase from a progress line", function()
+    local pct, phase = worktree.progress("Updating files:  45% (3600/7941)")
+    assert.equals(45, pct)
+    assert.equals("Updating files", phase)
+  end)
+
+  it("handles fetch phases too", function()
+    assert.equals(12, worktree.progress("Receiving objects:  12% (120/1000), 1.2 MiB | 3 MiB/s"))
+  end)
+
+  it("ignores non-progress output", function()
+    assert.is_nil(worktree.progress("Preparing worktree (new branch 'x')"))
+    assert.is_nil(worktree.progress("fatal: '.worktrees/x' already exists"))
+    assert.is_nil(worktree.progress(""))
+  end)
+end)
+
+describe("worktree.order", function()
+  local function names(items)
+    return vim.tbl_map(function(it)
+      return it.branch
+    end, items)
+  end
+
+  it("puts worktrees first, most recently opened first", function()
+    local items = {
+      { branch = "old", time = 300, worktree = "/w/old" },
+      { branch = "hot", time = 100, worktree = "/w/hot" },
+      { branch = "main", time = 900 },
+    }
+    local out = names(worktree.order(items, { ["/w/hot"] = 20, ["/w/old"] = 10 }))
+    assert.are.same({ "hot", "old", "main" }, out)
+  end)
+
+  it("orders never-opened worktrees by commit date after opened ones", function()
+    local items = {
+      { branch = "a", time = 900, worktree = "/w/a" },
+      { branch = "b", time = 100, worktree = "/w/b" },
+      { branch = "c", time = 500, worktree = "/w/c" },
+    }
+    local out = names(worktree.order(items, { ["/w/b"] = 5 }))
+    assert.are.same({ "b", "a", "c" }, out)
+  end)
+
+  it("orders plain branches by commit date, newest first", function()
+    local items = {
+      { branch = "x", time = 1 },
+      { branch = "z", time = 3 },
+      { branch = "y", time = 2 },
+    }
+    assert.are.same({ "z", "y", "x" }, names(worktree.order(items, {})))
+  end)
+
+  it("drops a remote ref that duplicates a local branch", function()
+    local items = {
+      { branch = "origin/x", time = 5, remote = true },
+      { branch = "x", time = 1 },
+      { branch = "origin/only-remote", time = 2, remote = true },
+      { branch = "feat/local", time = 3 },
+    }
+    assert.are.same({ "feat/local", "origin/only-remote", "x" }, names(worktree.order(items, {})))
+  end)
+
+  it("shows a remote ref by its bare name, once across remotes, origin first", function()
+    local items = {
+      { branch = "fork/x", time = 9, remote = true },
+      { branch = "origin/x", time = 1, remote = true },
+    }
+    local out = worktree.order(items, {})
+    assert.are.same(1, #out)
+    assert.are.same("origin/x", out[1].branch)
+    assert.are.same("x", out[1].name)
+  end)
+end)
