@@ -681,6 +681,13 @@ function M.pick()
       return ret
     end,
     preview = "git_log",
+    -- Unlike every other picker, open in normal mode: the usual flow here is
+    -- "copy a branch name from a PR/ticket, <leader>tw, p". Snacks enters
+    -- insert on the input window's BufEnter, which fires in the same tick as
+    -- on_show, so the stopinsert has to be scheduled to land after it.
+    on_show = function()
+      vim.schedule(vim.cmd.stopinsert)
+    end,
     confirm = function(picker, item)
       local pattern = picker:filter().pattern
       picker:close()
