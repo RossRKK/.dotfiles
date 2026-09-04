@@ -40,24 +40,37 @@ return {
       on_attach = function(bufnr)
         local gs = require("gitsigns")
         -- Review mode rebases the sign column onto the branch merge-base, per
-        -- repo; make sure buffers that attach after their repo's base was chosen
+        -- repo; buffers that attach after their repo's base was chosen must
         -- inherit it. Buffer-local, never global: a global base would be
         -- revalidated against buffers from other repos (other workspace tabs),
         -- which may not resolve this repo's ref.
         --
-        -- Deferred: gitsigns runs on_attach *before* it registers the buffer in
-        -- its cache, and change_base silently no-ops on an unregistered buffer.
-        -- One tick later the registration (which follows on_attach
-        -- synchronously) has happened. Re-resolve the base then, in case it
-        -- changed in between.
-        vim.schedule(function()
-          local base = require("triage.gitsigns").base_for(bufnr)
-          if base and vim.api.nvim_buf_is_valid(bufnr) then
-            vim.api.nvim_buf_call(bufnr, function()
-              pcall(gs.change_base, base, false)
-            end)
-          end
-        end)
+        -- The base has to be part of the attach itself, not applied afterwards
+        -- with change_base: gitsigns starts its first update (against HEAD)
+        -- right after on_attach, and a change_base that lands while that update
+        -- is fetching HEAD's text gets overwritten -- the queued re-update then
+        -- sees compare text present, skips the fetch, and diffs against HEAD
+        -- with the new revision recorded. Zero hunks for a file whose changes
+        -- are all committed on the branch. So when a base applies, veto this
+        -- attach and redo it with the base in the attach context. The marker
+        -- tells the second pass (same hook) not to veto again, and is consumed
+        -- there so a later re-attach (:e, rename) goes through the veto afresh.
+        local base = require("triage.gitsigns").base_for(bufnr)
+        if base and vim.b[bufnr].gitsigns_review_base == base then
+          vim.b[bufnr].gitsigns_review_base = nil
+        elseif base then
+          vim.b[bufnr].gitsigns_review_base = base
+          vim.schedule(function()
+            if vim.api.nvim_buf_is_valid(bufnr) then
+              -- Only file + base: with an explicit toplevel but no gitdir,
+              -- gitsigns resolves the gitdir from nvim's cwd, which in another
+              -- workspace tab is a different repo. From the file alone it
+              -- resolves both correctly.
+              gs.attach(bufnr, { file = vim.api.nvim_buf_get_name(bufnr), base = base })
+            end
+          end)
+          return false
+        end
         local function map(l, r, desc)
           vim.keymap.set("n", l, r, { buffer = bufnr, desc = desc })
         end
