@@ -158,6 +158,26 @@ map("n", "<leader>X", function()
   require("config.greeter").close_all()
 end, { desc = "Close all buffers (this workspace)" })
 
+-- Scratch pad: this workspace's note file under $TMPDIR (see util/scratch.lua),
+-- opened in the main window like any other file and autosaved, so it can be
+-- read and piped by the shell in the side terminal.
+--
+-- Mapped in terminal mode too, so it works from that terminal -- which rules out
+-- <leader>: a terminal-mode <Space> mapping would make every space wait out
+-- timeoutlen before reaching the shell. Ctrl+/ is one of the few
+-- Ctrl+punctuation chords with a legacy terminal encoding (it arrives as
+-- <C-_>); Ctrl+. only exists under the kitty keyboard protocol, which Windows
+-- Terminal doesn't speak. Both spellings are mapped so it also works in CSI-u
+-- terminals like ghostty.
+for _, key in ipairs({ "<C-/>", "<C-_>" }) do
+  map({ "n", "t" }, key, function()
+    require("util.scratch").toggle()
+  end, { desc = "Toggle scratch file" })
+end
+map("n", "<leader>S", function()
+  require("util.scratch").pick()
+end, { desc = "Pick a scratch file" })
+
 -- Workspaces: one project per tabpage (see config/workspace.lua). Switching
 -- between them is Vim's own gt/gT -- only opening one, listing them, and closing
 -- one down are new. <leader>t is "tab"; the test namespace moved to <leader>T

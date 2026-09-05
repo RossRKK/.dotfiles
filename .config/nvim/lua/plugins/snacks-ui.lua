@@ -7,9 +7,6 @@
 --   plugins load -- the text-editor-mode path (`nvim somefile`), where startup
 --   latency is most visible.
 -- - gh pickers: browse GitHub issues / PRs via the gh CLI (already authed).
--- - scratch: persistent scratch buffers, keyed per project + filetype, in a
---   floating window. `<leader>.` toggles the default one; `<leader>S` picks
---   among all of them (including other projects').
 
 return {
   "folke/snacks.nvim",
@@ -24,39 +21,8 @@ return {
     -- bottom edge. The jumps shadow the [i / ]i builtins (echo the first line
     -- containing the keyword under the cursor) -- an accepted trade-off here.
     scope = { enabled = true },
-    scratch = { enabled = true },
   },
   keys = {
-    -- Toggle scratch buffer. Mapped in terminal mode too, so it works from the
-    -- side terminal -- which rules out <leader>: a terminal-mode <Space>
-    -- mapping would make every space wait out timeoutlen before reaching the
-    -- shell. Ctrl+/ is one of the few Ctrl+punctuation chords with a legacy
-    -- terminal encoding (it arrives as <C-_>); Ctrl+. only exists under the
-    -- kitty keyboard protocol, which Windows Terminal doesn't speak. Both
-    -- spellings are mapped so it also works in CSI-u terminals like ghostty.
-    {
-      "<C-/>",
-      function()
-        Snacks.scratch()
-      end,
-      mode = { "n", "t" },
-      desc = "Toggle scratch buffer",
-    },
-    {
-      "<C-_>",
-      function()
-        Snacks.scratch()
-      end,
-      mode = { "n", "t" },
-      desc = "Toggle scratch buffer",
-    },
-    {
-      "<leader>S",
-      function()
-        Snacks.scratch.select()
-      end,
-      desc = "Select scratch buffer",
-    },
     {
       "<leader>n",
       function()

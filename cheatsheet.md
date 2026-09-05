@@ -97,8 +97,8 @@ text (the swap trick).
 | `Space+h`             | Go to the workspace overview (leftmost tab) |
 | `Space+x`             | Close buffer                                |
 | `Space+X`             | Close all buffers in this workspace         |
-| `Space+.`             | Toggle scratch buffer (per project)         |
-| `Space+S`             | Pick among all scratch buffers              |
+| `Ctrl+/`              | Toggle the scratch pad (per project)        |
+| `Space+S`             | Pick among all scratch pads                 |
 
 The **greeter** is the leftmost buffer tab, labelled `Overview` — one per
 workspace, always there, so going back to it is `Space+h`, a click, or `<S-h>`
@@ -112,6 +112,13 @@ approved, `✗` rejected, `↻` revised) review mode puts in the explorer. Each 
 has a key next to it; press it to open. `Space+X` is the quick way back to the
 greeter. Outside a git repo there's no overview, so it falls back to the pickers
 (`f` find, `g` grep, `n` new file).
+
+The **scratch pad** (`Ctrl+/`, in the terminal too) is a real file, one per
+project, at `$TMPDIR/nvim-scratch/<project>.md` — it opens in the main window
+like any other file and saves itself as you type, so the side terminal can read
+it: `jq . "$TMPDIR/nvim-scratch/myproject.md"`, `wc -l < ...`, or pipe it into
+anything. `Ctrl+/` again goes back to the previous buffer; `Space+S` picks among
+every project's. It is markdown by default — `:saveas` for another format.
 
 ### Layout (edgy)
 

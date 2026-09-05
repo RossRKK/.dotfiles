@@ -22,8 +22,8 @@ return {
         -- Vim's buffer list is global, but a workspace tabpage is one project
         -- (see config/workspace.lua) -- so show only the buffers under this
         -- tab's cwd, and let the rest belong to their own tab. Buffers with no
-        -- file on disk (terminals, scratch) are kept: they're not another
-        -- project's, and hiding them would make them unreachable from the bar.
+        -- file on disk (terminals) are kept: they're not another project's, and
+        -- hiding them would make them unreachable from the bar.
         -- <S-l>/<S-h> are mapped to BufferLineCycleNext/Prev (not bnext) so
         -- cycling honours this filter instead of walking the global list.
         custom_filter = function(buf)
@@ -34,6 +34,14 @@ return {
           local root = vim.b[buf].greeter_root
           if root then
             return root == vim.fs.normalize(require("config.workspace").cwd())
+          end
+          -- The scratch pad (util/scratch.lua) is a real file, but it lives in
+          -- the temp directory rather than under any project -- so it is matched
+          -- on the workspace it belongs to, like the greeter above, instead of
+          -- by the cwd test below.
+          local scratch = vim.b[buf].scratch_root
+          if scratch then
+            return scratch == vim.fs.normalize(require("config.workspace").cwd())
           end
           local file = vim.api.nvim_buf_get_name(buf)
           if file == "" or vim.bo[buf].buftype ~= "" then
