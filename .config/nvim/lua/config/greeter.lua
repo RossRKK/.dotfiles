@@ -146,27 +146,35 @@ function M.fetch(root)
     if report then
       M.watch(root, report)
     end
-    report = report or false
-    -- Only redraw on an actual change: re-rendering an identical dashboard
-    -- fights the cursor for no benefit.
-    if vim.deep_equal(M.reports[root], report) then
-      return
-    end
-    M.reports[root] = report
-    -- Re-resolves every open dashboard's sections, which is how the overview
-    -- appears without reopening the greeter.
-    M.update_dashboards()
-    -- The tab labels carry the same "<repo> - <branch>" name
-    -- (workspace.display_name reads this cache), so a fresh report -- the
-    -- first one, or a checkout moving the branch -- has to repaint them too.
-    for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
-      require("config.workspace").set_label(tab)
-    end
-    -- The OS title carries the same names (see plugins/fishmonger.lua), but
-    -- its repaints hang off fishmonger and tabpage events, none of which fire
-    -- for a checkout. Announce the fresh report so it can repaint too.
-    vim.api.nvim_exec_autocmds("User", { pattern = "GreeterReportChanged" })
+    M.cache_report(root, report or false)
   end)
+end
+
+--- Store `report` as `root`'s overview and repaint everything drawing off it.
+--- Split out of fetch() because the jj branch lookup above lands a callback
+--- later than the triage report, and both finish here.
+---@param root string workspace cwd
+---@param report table|false
+function M.cache_report(root, report)
+  -- Only redraw on an actual change: re-rendering an identical dashboard
+  -- fights the cursor for no benefit.
+  if vim.deep_equal(M.reports[root], report) then
+    return
+  end
+  M.reports[root] = report
+  -- Re-resolves every open dashboard's sections, which is how the overview
+  -- appears without reopening the greeter.
+  M.update_dashboards()
+  -- The tab labels carry the same "<repo> - <branch>" name
+  -- (workspace.display_name reads this cache), so a fresh report -- the
+  -- first one, or a checkout moving the branch -- has to repaint them too.
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    require("config.workspace").set_label(tab)
+  end
+  -- The OS title carries the same names (see plugins/fishmonger.lua), but
+  -- its repaints hang off fishmonger and tabpage events, none of which fire
+  -- for a checkout. Announce the fresh report so it can repaint too.
+  vim.api.nvim_exec_autocmds("User", { pattern = "GreeterReportChanged" })
 end
 
 -- Per-root debounce timers for the watcher-driven fetches below.
@@ -230,10 +238,12 @@ end
 -- root -> list of uv fs_event handles.
 local watchers = {}
 
---- Watch a repo's git directories, so the overview follows the branch instead of
---- describing where it was when the greeter opened. Nothing that moves a branch
---- raises an autocmd -- a commit or rebase in the side terminal, a lazygit
---- session, a fetch, another nvim, a plain shell -- but all of it writes here.
+--- Watch the directories the report names, so the overview follows the branch
+--- instead of describing where it was when the greeter opened. Nothing that
+--- moves a branch raises an autocmd -- a commit or rebase in the side terminal,
+--- a lazygit session, a fetch, another nvim, a plain shell -- but all of it
+--- writes here. triage names them per VCS: git's two git dirs, or in a jj repo
+--- the operation head, which every jj command rewrites.
 ---
 --- Two directories, non-recursively: the worktree's own git dir (HEAD, index,
 --- reflog: commit, stage, checkout, rebase) and the shared common dir

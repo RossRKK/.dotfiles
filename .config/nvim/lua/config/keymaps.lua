@@ -179,17 +179,19 @@ map("n", "<leader>te", function()
   require("config.workspace").explore()
 end, { desc = "New project tab (browse)" })
 -- The same thing for a branch of the project you're in: create (or reuse) a
--- worktree for it under .worktrees/ and open that as its own tab. See
--- util/worktree.lua.
+-- worktree (jj repos: a jj workspace) for it under .worktrees/ and open that as
+-- its own tab. util/vcs.lua picks the backend; util/worktree.lua and
+-- util/jjworkspace.lua implement them.
 map("n", "<leader>tw", function()
-  require("util.worktree").pick()
-end, { desc = "New project tab (git worktree)" })
--- Fork the current worktree tab: new branch off this tab's HEAD (dirty state
--- carried over), opened as its own tab, with every Claude session in this tab's
--- side terminals forked (--fork-session) into its same slot. See util/worktree.lua.
+  require("util.vcs").pick_tab()
+end, { desc = "New project tab (worktree / jj workspace)" })
+-- Fork the current worktree tab: new branch (jj: bookmark) off this tab's
+-- current state, dirty changes carried over, opened as its own tab, with every
+-- Claude session in this tab's side terminals forked (--fork-session) into its
+-- same slot. See util/worktree.lua and util/jjworkspace.lua.
 map("n", "<leader>tf", function()
-  require("util.worktree").fork()
-end, { desc = "Fork project tab (worktree + claude forks)" })
+  require("util.vcs").fork_tab()
+end, { desc = "Fork project tab (worktree/workspace + claude forks)" })
 map("n", "<leader>tt", function()
   require("config.workspace").pick()
 end, { desc = "Switch to open project tab" })

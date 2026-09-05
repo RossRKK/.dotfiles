@@ -101,6 +101,36 @@ return {
     },
   },
   {
+    -- The sign column for jj workspaces, where gitsigns cannot go: it needs a
+    -- git repo, and a SECONDARY jj workspace has none and can never have one
+    -- (`jj git colocation enable` refuses outside the main workspace). jjsigns
+    -- attaches only where no git repo is visible, so a colocated main workspace
+    -- keeps gitsigns above -- there `@-` is git's HEAD, the gutters agree, and
+    -- gitsigns additionally does blame.
+    --
+    -- Keys mirror the gitsigns maps above so the gutter behaves the same either
+    -- side. There is no `<leader>gs`: jj has no index -- the working copy IS a
+    -- commit -- so "stage hunk" has nothing to mean.
+    "RossRKK/jjsigns.nvim",
+    dev = true,
+    event = { "BufReadPre", "BufNewFile" },
+    config = function()
+      local jjs = require("jjsigns")
+      jjs.setup({})
+      local function map(l, r, desc)
+        vim.keymap.set("n", l, r, { desc = desc })
+      end
+      map("]h", function()
+        jjs.next_hunk()
+      end, "Next hunk (jj)")
+      map("[h", function()
+        jjs.next_hunk(true)
+      end, "Prev hunk (jj)")
+      map("<leader>gp", jjs.preview_hunk, "Preview hunk (jj)")
+      map("<leader>gr", jjs.reset_hunk, "Reset hunk (jj)")
+    end,
+  },
+  {
     -- In-buffer conflict resolution that respects a fixed window layout: it
     -- highlights ours/theirs regions and picks a side in place (co/ct/cb/c0,
     -- ]x/[x) instead of spawning 3-way diff splits.
