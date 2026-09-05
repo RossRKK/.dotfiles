@@ -147,7 +147,10 @@ workspace, always there, so going back to it is `Space+h`, a click, or `<S-h>`
 off the left end. It's also what the main window falls back to when the last
 buffer closes, rather than a blank `[No Name]`. It shows a branch overview:
 `repo - branch`
-(a worktree reads as its repo, not its checkout directory), how far ahead/behind
+(a worktree reads as its repo, not its checkout directory; in a jj repo the
+branch half is the nearest bookmark, else the change's description, else its
+change id — jj has no current branch, and colocated git sits on a detached
+HEAD), how far ahead/behind
 its remote it is, the review base and commits on top of it, and the files this
 branch changes — the same merge-result diff and triage marks (`●` changed, `✓`
 approved, `✗` rejected, `↻` revised) review mode puts in the explorer. Each file
@@ -192,8 +195,8 @@ that project, its own side terminals, its own cwd. Opening a second project is
 | ----------- | ---------------------------------------------------------- |
 | `Space+tn`  | New project tab — names one from zoxide's list             |
 | `Space+te`  | New project tab — browse the filesystem for one (float)    |
-| `Space+tw`  | New project tab — a git worktree of a branch of this repo   |
-| `Space+tf`  | Fork this tab — new branch + worktree, Claudes forked along |
+| `Space+tw`  | New project tab — a worktree/jj workspace of a branch here  |
+| `Space+tf`  | Fork this tab — new branch + checkout, Claudes forked along |
 | `Space+tt`  | Switch to an open project (picker; matches number or name) |
 | `Space+tx`  | Close this project tab (its terminals shut down with it)   |
 | `gt` / `gT` | Next / prev tab                                            |
@@ -226,6 +229,20 @@ it on the remotes — fetching `origin/<name>` if it isn't known yet — and onl
 makes a new branch off `HEAD` when no remote has it. Picking a branch that
 already has a worktree just opens it.
 
+**In a jj repo** the same key does the same thing through `jj workspace` instead:
+it lists bookmarks (local and remote) and `Enter` adds a workspace for one. jj
+doesn't understand git worktrees, so the backend is chosen per repo on `.jj` —
+the same rule that picks jjui over lazygit for `Ctrl+G`.
+
+jj workspaces live **outside** the repo, at `../.jj-workspaces/<repo>/<slug>`,
+where git worktrees live inside it. That asymmetry is forced: a git worktree gets
+a `.git` file, but a secondary jj workspace can never have one, so a workspace
+placed inside the repo makes every git tool walk up and report the *parent's*
+state — every file painted as ignored, gitsigns diffing the wrong tree. Outside
+the repo, git finds nothing rather than something wrong. A name nothing matches needs no fetch guess (jj bookmarks are one
+namespace): it becomes a new workspace on top of the current change, with a
+bookmark of that name so the tab has something to be called.
+
 The same thing is reachable from **lazygit**: `w` on a branch (local or remote)
 opens it as a worktree project tab in the surrounding nvim.
 
@@ -239,11 +256,19 @@ into the **same terminal slot**, so "claude 2" is still claude 2 after the
 fork. Plain shells and open editor buffers do not travel; staged hunks arrive
 unstaged.
 
+In a jj repo the fork asks for a **bookmark** name and carries the uncommitted
+work by construction rather than by stashing: the new workspace's working copy
+is parented on this tab's current change, so it inherits everything in it and
+the original keeps it too. The Claude session forking is identical — it's the
+same code either way.
+
 So a branch becomes a project tab: its own checkout, terminals and buffer list,
 with your main checkout untouched in the tab next door — no stash, no
 `git checkout` dance, and an agent can work a branch while you work another.
-`.worktrees/` is in the global gitignore, so it never shows up in `git status`.
-Removing one is still plain `git worktree remove` in the terminal.
+`.worktrees/` is in the global gitignore, which jj honours too, so it never shows
+up in `git status` or `jj status`; jj workspaces sit outside the repo and so
+never appear in it either. Removing one is still plain `git worktree remove`
+(jj: `jj workspace forget`, then delete the directory) in the terminal.
 
 Separately, `gw` in the **docked explorer** opens the node's directory as its own
 workspace tab — how a subdirectory of the current project, or a sibling repo you
@@ -432,7 +457,7 @@ Pass/fail signs render in the gutter; driven by rust-analyzer runnables.
 
 ## Git
 
-### Space+g — Git hunks (gitsigns)
+### Space+g — Hunks (gitsigns / jjsigns)
 
 | Key        | Action                    |
 | ---------- | ------------------------- |
@@ -445,6 +470,14 @@ Pass/fail signs render in the gutter; driven by rust-analyzer runnables.
 | `Space+gt` | Swap explorer to the git status view |
 | `Space+ghi` | Browse GitHub issues (snacks picker + `gh` CLI) |
 | `Space+ghp` | Browse GitHub PRs (snacks picker + `gh` CLI) |
+
+In a **jj workspace** the gutter is drawn by jjsigns instead. gitsigns needs a
+git repo, and a secondary jj workspace has none — so jjsigns takes over there,
+with the same `]h`/`[h`, `Space+gp` and `Space+gr`. Two keys have no jj meaning
+and are absent: `Space+gs` (jj has no index — the working copy *is* a commit, so
+there is nothing to stage) and the blame pair, which jj answers differently. In a
+*colocated* main workspace gitsigns still owns the gutter: there `@-` is git's
+HEAD, so the two agree, and gitsigns additionally does blame.
 
 `Space+gt` swaps the explorer's top pane to neo-tree's `git_status` source (and
 back) — a changed-files list where you stage / commit per file:

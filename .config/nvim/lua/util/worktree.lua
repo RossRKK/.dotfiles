@@ -490,23 +490,31 @@ function M.fork()
 
       require("config.workspace").open(path, { tab = true })
 
-      -- Now in the new tab: give each session its old slot back. show() spawns
-      -- the shell synchronously, so the fork command can be sent right away; the
-      -- pty buffers it until the shell reads.
-      local fm = require("fishmonger")
-      for _, s in ipairs(sessions) do
-        fm.show(s.slot, { insert = false })
-        local buf = fm.slots[s.slot] and fm.slots[s.slot].buf
-        local chan = buf and vim.b[buf].terminal_job_id
-        if chan then
-          vim.api.nvim_chan_send(chan, M.fork_cmd(s.session) .. "\n")
-        end
-      end
-      if #sessions > 1 then
-        fm.show(sessions[1].slot, { insert = false })
-      end
+      M.restore_sessions(sessions)
     end)
   end)
+end
+
+--- In the tab just opened by a fork, give each collected Claude session its old
+--- slot back. show() spawns the shell synchronously, so the fork command can be
+--- sent right away; the pty buffers it until the shell reads.
+---
+--- Nothing here is git-specific, so the jj backend (util/jjworkspace.lua) forks
+--- sessions by calling this rather than repeating it.
+---@param sessions { slot: integer, session: string }[]
+function M.restore_sessions(sessions)
+  local fm = require("fishmonger")
+  for _, s in ipairs(sessions) do
+    fm.show(s.slot, { insert = false })
+    local buf = fm.slots[s.slot] and fm.slots[s.slot].buf
+    local chan = buf and vim.b[buf].terminal_job_id
+    if chan then
+      vim.api.nvim_chan_send(chan, M.fork_cmd(s.session) .. "\n")
+    end
+  end
+  if #sessions > 1 then
+    fm.show(sessions[1].slot, { insert = false })
+  end
 end
 
 --- M.open, callable from a lazygit custom command over `nvim --remote-expr`.
@@ -540,8 +548,11 @@ end
 --- the reflog says nothing about which branch you were in yesterday.
 local recent_file = vim.fn.stdpath("state") .. "/worktree-recent.json"
 
+--- The recency record, path -> unix time of the last open. Shared with the jj
+--- backend (util/jjworkspace.lua): one list, so the ordering is the same
+--- whichever kind of repo a project is.
 ---@return table<string, integer>
-local function recent_load()
+function M.recent_load()
   local f = io.open(recent_file, "r")
   if not f then
     return {}
@@ -554,7 +565,7 @@ end
 --- Record that `path`'s worktree was opened just now.
 ---@param path string
 function M.touch(path)
-  local recent = recent_load()
+  local recent = M.recent_load()
   recent[path] = os.time()
   local f = io.open(recent_file, "w")
   if f then
@@ -661,7 +672,7 @@ function M.pick()
     vim.notify(err or "not a git repository", vim.log.levels.ERROR)
     return
   end
-  local items = M.order(candidates(root), recent_load())
+  local items = M.order(candidates(root), M.recent_load())
   for i, it in ipairs(items) do
     it.text = (it.name or it.branch) .. " " .. (it.msg or "")
     it.cwd = root

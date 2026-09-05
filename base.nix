@@ -215,6 +215,7 @@ in
         ".tmux.conf"
         ".local/bin/clipboard-copy"
         ".local/bin/nvim-dev"
+        ".local/bin/jj-prompt-name"
         # Claude Code hook publishing each session's state for fishmonger's
         # agent view. Only the script is symlinked here; the settings.json
         # stanza that wires it to the hook events is merged in by the

@@ -25,6 +25,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | ---------------- | ----------------------------------------- |
 | `ide_spec.lua`      | side-terminal width, explorer geometry |
 | `worktree_spec.lua` | worktree dir naming, `git worktree add` flags, git progress-line parsing |
+| `jjworkspace_spec.lua` | jj workspace paths, `jj workspace add` args, bookmark-list parsing |
 | `term_caps_spec.lua` | inline-image capability (Ghostty yes, Neovide/other no) |
 | `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
 
@@ -32,8 +33,10 @@ The side-terminal and branch-review logic now live in external plugins, each
 with its own test suite (developed locally under `~/dev` via lazy's `dev` path):
 [fishmonger.nvim](https://github.com/RossRKK/fishmonger.nvim) (the side terminal),
 [triage.nvim](https://github.com/RossRKK/triage.nvim) (per-file review status +
-verdict rollup), and [nitpick.nvim](https://github.com/RossRKK/nitpick.nvim)
-(inline GitHub comments).
+verdict rollup; carries the git/jj backends in `lua/triage/vcs/`),
+[nitpick.nvim](https://github.com/RossRKK/nitpick.nvim) (inline GitHub comments),
+and [jjsigns.nvim](https://github.com/RossRKK/jjsigns.nvim) (the sign column in
+jj workspaces, where gitsigns cannot attach).
 
 `tests/minimal_init.lua` loads this config plus plenary, and deliberately does
 **not** load lazy.nvim — no plugin `config()` runs. A spec that needs a plugin

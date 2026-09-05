@@ -48,4 +48,28 @@ function M.pick()
   })
 end
 
+--- The workspace-tab backend for a repo: jj workspaces in a jj repo, git
+--- worktrees otherwise. Same rule as driver() above -- a colocated repo carries
+--- both .jj and .git, and jj wins, because git worktrees and jj workspaces are
+--- not interchangeable and a repo with jj set up is one we drive through jj.
+---@param dir? string default: the tab's cwd
+---@return table
+local function tabs(dir)
+  dir = dir or vim.fn.getcwd()
+  if vim.fs.root(dir, ".jj") then
+    return require("util.jjworkspace")
+  end
+  return require("util.worktree")
+end
+
+--- <leader>tw: pick a branch/bookmark and open it as its own workspace tab.
+function M.pick_tab()
+  tabs().pick()
+end
+
+--- <leader>tf: fork the current workspace tab.
+function M.fork_tab()
+  tabs().fork()
+end
+
 return M
