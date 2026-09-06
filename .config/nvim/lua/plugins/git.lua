@@ -126,6 +126,9 @@ return {
       map("[h", function()
         jjs.next_hunk(true)
       end, "Prev hunk (jj)")
+      map("<leader>gd", function()
+        jjs.toggle_inline()
+      end, "Toggle inline diff vs @- (jj)")
       map("<leader>gp", jjs.preview_hunk, "Preview hunk (jj)")
       map("<leader>gr", jjs.reset_hunk, "Reset hunk (jj)")
     end,
