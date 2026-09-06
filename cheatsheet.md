@@ -365,17 +365,17 @@ server to rewrite the imports pointing at the old path.
 | --------- | --------------------- |
 | `Space+d` | Show diagnostic popup |
 
-### Format on save (conform)
+### Space+cf — Format (conform)
 
-Files are formatted on save (see `lua/plugins/conform.lua` for the
-formatter-per-filetype table). To save without reformatting:
+Formatting is manual — nothing runs on save. See `lua/plugins/conform.lua` for
+the formatter-per-filetype table; filetypes with no CLI formatter fall back to
+the LSP formatter.
 
-| Command          | Action                                            |
-| ---------------- | ------------------------------------------------- |
-| `:FormatDisable` | Turn off format-on-save everywhere                |
-| `:FormatDisable!`| Turn off format-on-save for this buffer only      |
-| `:FormatEnable`  | Turn it back on (clears both flags)               |
-| `:noa w`         | One-off: write skipping all autocmds (no toggle)  |
+| Key                | Action                        |
+| ------------------ | ----------------------------- |
+| `Space+cf`         | Format the buffer             |
+| `Space+cf` (visual)| Format the selection only     |
+| `:ConformInfo`     | Show formatters for this buffer |
 
 ### Space+u — Undo tree
 
