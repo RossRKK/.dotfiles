@@ -13,15 +13,7 @@
 return {
   {
     "RossRKK/triage.nvim",
-    -- Pinned to triage's own jj-support checkout rather than `dev = true`
-    -- (~/dev/triage.nvim, which tracks main). The nvim config is a live symlink
-    -- into ~/.dotfiles, so this spec IS per-dotfiles-branch: on main the plugin
-    -- resolves to ~/dev/triage.nvim as usual, and only here does it pick up the
-    -- jj backend. Both checkouts exist at once -- ~/dev/triage.nvim-jj is a jj
-    -- workspace of the same repo -- so neither branch has to mutate the other's
-    -- tree to switch. Fold this back to `dev = true` once jj-support lands on
-    -- triage's main.
-    dir = vim.fn.expand("~/dev/triage.nvim-jj"),
+    dev = true,
     config = function()
       require("triage").setup({
         -- Review mode is per repo, so the toggle carries the root it applies
