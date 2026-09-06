@@ -7,64 +7,10 @@
 -- is unchanged -- it only ever shows one terminal window at a time, which edgy
 -- just positions in the right edgebar.
 
--- edgy re-applies each panel's `size` on every layout, so a plain fraction
--- snaps the panel back after any manual resize. live_size instead reports the
--- window's CURRENT size, so edgy's re-apply is a no-op and drags stick.
---
--- The catch: a freshly opened window is briefly parked at a transient size
--- (edgy rebuilds the splits before proportioning them), and latching that would
--- wedge the panel near-empty. So for the first WARMUP_MS of a given window's
--- life we hand back the opening size and let edgy proportion the panel; only
--- after that do we start tracking the live size.
-local WARMUP_MS = 1000
-
--- Birth tick per panel window id (shared across panels); cleared on reset so
--- panels re-warm to their opening sizes.
-local births = {}
-
-local function find_win(predicate)
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    -- Skip floats (relative ~= ""): lazygit etc. must never be mistaken for the
-    -- panel window whose size we track.
-    if vim.api.nvim_win_get_config(win).relative == "" then
-      if predicate(vim.api.nvim_win_get_buf(win)) then
-        return win
-      end
-    end
-  end
-end
-
--- Reset callbacks, one per live_size panel; :EdgyResetSizes / the keymap below
--- clear every panel back to its opening size.
-local resets = {}
-
----@param initial number opening size (fraction < 1, or absolute columns/lines)
----@param dim "width" | "height"
----@param predicate fun(buf: integer): boolean identifies the panel's buffer
-local function live_size(initial, dim, predicate)
-  local size ---@type number?
-  table.insert(resets, function()
-    size = nil
-  end)
-  return function()
-    local win = find_win(predicate)
-    if not win then
-      return size or initial
-    end
-    local now = (vim.uv or vim.loop).now()
-    births[win] = births[win] or now
-    -- Warm-up window: let edgy proportion the panel from the opening size before
-    -- we start latching, so a startup/open transient can't wedge it.
-    if now - births[win] < WARMUP_MS then
-      return initial
-    end
-    local live = vim.api["nvim_win_get_" .. dim](win)
-    if live > 1 then -- ignore edgy's collapsed 1-line/col parking size
-      size = live
-    end
-    return size or initial
-  end
-end
+-- Manual resizes (drag, :resize, neo-tree auto-expand) are written into edgy's
+-- per-window size override by util/edgy_pin.lua, so they stick instead of
+-- snapping back to the view's opening size.
+local edgy_pin = require("util.edgy_pin")
 
 local function reset_sizes()
   -- Turn off neo-tree's auto-expand-width first: otherwise it keeps widening the
@@ -78,28 +24,12 @@ local function reset_sizes()
       end
     end
   end
-  for win in pairs(births) do
-    births[win] = nil
-  end
-  for _, reset in ipairs(resets) do
-    reset()
-  end
-  require("edgy.layout").update()
-end
-
-local function is_terminal(buf)
-  return vim.bo[buf].filetype == "fishmonger"
+  edgy_pin.reset()
 end
 
 local function is_explorer(buf)
   local src = vim.b[buf].neo_tree_source
   return src == "filesystem" or src == "git_status"
-end
-
--- Any window in the left column. Floats are excluded by find_win, so the
--- outline popup (also filetype neo-tree) never stands in for the tree here.
-local function is_left(buf)
-  return vim.bo[buf].filetype == "neo-tree"
 end
 
 return {
@@ -117,39 +47,41 @@ return {
       vim.opt.splitkeep = "screen"
     end,
     config = function(_, opts)
+      -- Before edgy's setup: its WinResized handler must run after ours.
+      edgy_pin.setup()
       require("edgy").setup(opts)
       vim.api.nvim_create_user_command("EdgyResetSizes", reset_sizes, {
-        desc = "Reset edgy panel sizes to their opening fractions",
+        desc = "Reset edgy panel sizes to their opening sizes",
       })
       vim.keymap.set("n", "<leader>wr", reset_sizes, { desc = "Reset edgy panel sizes" })
     end,
     ---@type Edgy.Config
     opts = {
-      -- Arrow-key resizing for edge windows. Plain :resize (not edgy's
-      -- win:resize) so it flows through the same live_size tracking as a mouse
-      -- drag -- win:resize stores its own width and would re-introduce a floor
-      -- that blocks shrinking. Convention: Right/Up grow, Left/Down shrink.
+      -- Panels snap to size. The glide is distracting, and every frame of it is
+      -- a resize that edgy_pin has to recognise and ignore.
+      animate = { enabled = false },
+      -- Arrow-key resizing for edge windows, through edgy's own resize so the
+      -- new size lands straight in its override. Right/Up grow, Left/Down shrink.
       keys = {
         ["<C-Right>"] = function(win)
-          vim.api.nvim_win_call(win.win, function() vim.cmd("vertical resize +2") end)
+          win:resize("width", 2)
         end,
         ["<C-Left>"] = function(win)
-          vim.api.nvim_win_call(win.win, function() vim.cmd("vertical resize -2") end)
+          win:resize("width", -2)
         end,
         ["<C-Up>"] = function(win)
-          vim.api.nvim_win_call(win.win, function() vim.cmd("resize +2") end)
+          win:resize("height", 2)
         end,
         ["<C-Down>"] = function(win)
-          vim.api.nvim_win_call(win.win, function() vim.cmd("resize -2") end)
+          win:resize("height", -2)
         end,
       },
       options = {
-        -- Open at 35 cols, then follow resizes. Live-tracking (not a constant)
-        -- is what lets neo-tree's `e` (toggle_auto_expand_width) stick instead
-        -- of fighting winfixwidth -- see explorer.lua.
-        left = { size = live_size(35, "width", is_left) },
-        -- Open at ~40% width, then follow whatever the user resizes it to.
-        right = { size = live_size(0.4, "width", is_terminal) },
+        -- These are MINIMUMS, not opening sizes: edgy sizes a bar as
+        -- max(this, each window's override or view size). Opening sizes sit on
+        -- the views below; these just stop a panel being dragged to nothing.
+        left = { size = 10 },
+        right = { size = 10 },
       },
       left = {
         -- The file tree, sole occupant of the column (the symbols outline is a
@@ -161,8 +93,11 @@ return {
           title = "Explorer",
           ft = "neo-tree",
           filter = is_explorer,
+          -- Opening width; neo-tree's `e` (toggle_auto_expand_width) and drags
+          -- then override it via edgy_pin -- see explorer.lua.
+          size = { width = 35 },
         },
-},
+      },
       right = {
         -- The fishmonger side terminal. Exclude floats so lazygit (a float) is
         -- never pulled into the edgebar. fishmonger draws its own tmux-style tab
@@ -182,6 +117,7 @@ return {
         {
           ft = "fishmonger",
           wo = { winbar = false },
+          size = { width = 0.4 }, -- opening width, ~40% of the screen
           filter = function(_, win)
             return vim.api.nvim_win_get_config(win).relative == ""
           end,
