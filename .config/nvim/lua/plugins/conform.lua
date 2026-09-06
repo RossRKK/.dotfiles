@@ -1,24 +1,19 @@
 return {
   {
     "stevearc/conform.nvim",
-    event = { "BufWritePre" },
     cmd = { "ConformInfo" },
-    -- The commands live in init (not config) so they exist before the plugin
-    -- loads — otherwise :FormatDisable errors until the first save, which is
-    -- exactly when you want it. The flags need nothing from conform.
-    init = function()
-      vim.api.nvim_create_user_command("FormatDisable", function(args)
-        if args.bang then
-          vim.b.disable_autoformat = true
-        else
-          vim.g.disable_autoformat = true
-        end
-      end, { desc = "Disable format-on-save (! = this buffer only)", bang = true })
-      vim.api.nvim_create_user_command("FormatEnable", function()
-        vim.b.disable_autoformat = false
-        vim.g.disable_autoformat = false
-      end, { desc = "Re-enable format-on-save" })
-    end,
+    -- Formatting is manual only. In visual mode conform formats just the
+    -- selection, so this composes like an operator on a range.
+    keys = {
+      {
+        "<leader>cf",
+        function()
+          require("conform").format({ timeout_ms = 1000, lsp_format = "fallback" })
+        end,
+        mode = { "n", "v" },
+        desc = "Format buffer (or selection)",
+      },
+    },
     opts = {
       -- prettierd takes no CLI options -- it reads a project prettier config, or
       -- falls back to PRETTIERD_DEFAULT_CONFIG when a project has none. Point that
@@ -31,6 +26,7 @@ return {
           },
         },
       },
+      -- No format_on_save: formatting is manual, via <leader>cf (see keys).
       -- Formatter CLIs are installed via Nix (home-manager base.nix), except
       -- rustfmt (rust toolchain) and terraform (terraform CLI), expected
       -- on PATH. Any filetype not listed falls back to the LSP formatter.
@@ -60,16 +56,6 @@ return {
         html = { "prettierd" },
         markdown = { "prettierd" },
       },
-      -- Format on save; fall back to the LSP formatter when no CLI formatter is
-      -- configured for the filetype. :FormatDisable / :FormatEnable toggle it
-      -- (see init above); delete this block to make formatting manual-only
-      -- (:lua require("conform").format()).
-      format_on_save = function(bufnr)
-        if vim.g.disable_autoformat or vim.b[bufnr].disable_autoformat then
-          return
-        end
-        return { timeout_ms = 1000, lsp_format = "fallback" }
-      end,
     },
   },
 }
