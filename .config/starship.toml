@@ -1,44 +1,29 @@
 # Explicit format: only directory + git, no language/runtime modules.
 # Prompt character on its own line so typing starts at column 0.
-format = "$directory${custom.git_branch}${custom.jj}$git_state$git_status$kubernetes$line_break$character"
+format = "$directory${custom.vcs}$git_state$git_status$kubernetes$line_break$character"
 
 [directory]
 truncation_length = 3
 truncate_to_repo = true
 
-# Both branch modules are custom, because the built-in git_branch has no way to
-# stand down in a jj repo. jj repos are colocated, so git can see them -- but jj
-# has no current branch and git's HEAD sits detached, so git_branch would render
-# a bare sha there. `jj root` is the discriminator: it succeeds anywhere inside a
-# jj repo (including subdirectories) and fails everywhere else, so exactly one of
-# these two fires.
+# One custom module covers both git and jj repos: jj-starship (nixpkgs, on
+# starship's PATH via programs.starship.extraPackages). The built-in git_branch
+# can't stand down in a jj repo -- jj repos are colocated, git's HEAD sits
+# detached, and git_branch would render a bare sha. jj-starship detects which
+# VCS is driving and prints branch, or change id + nearest bookmark (main~1).
+# It colours its own output, so there is no $style here.
 #
-# git_state and git_status are deliberately left built-in and unconditional --
-# jj keeps the index in sync, so what they say about a rebase in flight or a
-# dirty tree is true in either kind of repo.
-
-[custom.git_branch]
-description = "current git branch, in repos jj isn't driving"
-# Also requires a git repo: without that, an ordinary directory renders the
-# format with an empty $output -- a stray "on " with nothing after it.
-when = "! jj root --ignore-working-copy && git rev-parse --git-dir"
-# Detached HEAD has no branch to name, so fall back to the short sha rather than
-# rendering that same empty "on ".
-command = "git symbolic-ref --quiet --short HEAD || git rev-parse --short HEAD"
-format = "on [$symbol$output]($style) "
-symbol = "\ue0a0 "
-style = "bold purple"
-
-# The branch equivalent in a jj repo: nearest bookmark, else the change's
-# description, else its id. ~/.local/bin/jj-prompt-name mirrors util/jj.lua,
-# which answers the same question for neovim's tab labels.
-[custom.jj]
-description = "jj bookmark / change, in place of a git branch"
-when = "jj root --ignore-working-copy"
-command = "jj-prompt-name"
-format = "on [$symbol$output]($style) "
-symbol = "\uf418 "
-style = "bold purple"
+# git_state and git_status stay built-in and unconditional -- jj keeps the
+# index in sync, so what they say about a rebase in flight or a dirty tree is
+# true in either kind of repo. jj-starship's own [status] is switched off so
+# it isn't shown twice.
+[custom.vcs]
+description = "git branch, or jj change + bookmark"
+when = "jj-starship detect"
+# --truncate-name matches util/jj.lua so long names cut at the same place in
+# the prompt and in neovim's tab labels.
+command = "jj-starship --truncate-name 32 --jj-symbol '\uf418' --no-jj-status --no-git-status"
+format = "$output "
 
 [kubernetes]
 disabled = false

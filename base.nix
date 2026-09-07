@@ -99,7 +99,12 @@ in
     ];
   };
 
-  programs.starship.enable = true;
+  programs.starship = {
+    enable = true;
+    # Put on starship's own PATH (via a wrapper), not the shell's: the binary
+    # exists only to serve [custom.vcs] in .config/starship.toml.
+    extraPackages = [ pkgs.jj-starship ];
+  };
 
   programs.git = {
     enable = true;
@@ -215,7 +220,6 @@ in
         ".tmux.conf"
         ".local/bin/clipboard-copy"
         ".local/bin/nvim-dev"
-        ".local/bin/jj-prompt-name"
         # Claude Code hook publishing each session's state for fishmonger's
         # agent view. Only the script is symlinked here; the settings.json
         # stanza that wires it to the hook events is merged in by the
