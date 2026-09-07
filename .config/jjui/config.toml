@@ -61,3 +61,27 @@ if os.getenv("NVIM") == nil then
 end
 exec_shell("nvim --server \\"$NVIM\\" --remote-expr \\"v:lua.require'util.jjworkspace'.open_from_jjui('" .. b .. "')\\"")
 """
+
+# shift+b: the built-in set-bookmark prompt, prefilled like lazygit's `n`:
+# `rkk/` plus the selected revision's bookmark name with any `<prefix>/`
+# dropped; trunk names (main/master/develop/trunk) contribute nothing. The
+# first bookmark that yields a non-empty suffix wins. Always editable.
+[[actions]]
+name = "bookmark.set_rkk"
+key = "shift+b"
+scope = "revisions"
+desc = "set bookmark (rkk/)"
+lua = """
+local id = context.change_id()
+if not id then return end
+local out, err = jj("log", "--no-graph", "-r", id, "-T",
+  'bookmarks.map(|b| b.name()).join("\\\\n")')
+if err then flash({ text = err, error = true }); return end
+local suffix = ""
+for _, name in ipairs(split_lines(out or "")) do
+  local s = name:gsub("^[^/]+/", "")
+  if s == "main" or s == "master" or s == "develop" or s == "trunk" then s = "" end
+  if s ~= "" then suffix = s; break end
+end
+jjui.revisions.open_set_bookmark({ value = "rkk/" .. suffix })
+"""
