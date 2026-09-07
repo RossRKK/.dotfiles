@@ -1,0 +1,6 @@
+# jj-bond (jb) config. Only this file is read; keymap.toml in the upstream
+# templates is help text, not a loadable keymap.
+
+# Off: the default fetches from every remote each time jb opens, which adds
+# network latency to the <C-g> float and touches the repo on a mere look.
+launch_fetch = false

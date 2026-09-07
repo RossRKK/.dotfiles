@@ -206,6 +206,7 @@ in
         "nvim"
         "lazygit"
         "jjui"
+        "jj-bond"
         "starship.toml"
         "nix/nix.conf"
       ]
