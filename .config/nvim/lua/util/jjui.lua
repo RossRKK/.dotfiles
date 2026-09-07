@@ -5,7 +5,14 @@ local M = {}
 -- one the picker opened for another repo), mirroring lazygit.lua.
 local term = nil
 
--- Float jjui at `cwd` (nil = nvim's cwd), with our shared window behaviour.
+-- Float jjui at `cwd` (nil = the current tab's cwd), with our shared window
+-- behaviour.
+--
+-- The default MUST be the tab-local cwd, not nil: snacks passes a nil cwd
+-- straight to jobstart, which inherits nvim's global cwd. Workspace tabs scope
+-- their directory with :tcd, so a nil cwd runs jjui in the main workspace and
+-- `@` there is the main workspace's working copy, not this tab's. snacks keys
+-- its resident terminal on cmd+cwd, so each workspace tab gets its own jjui.
 --
 -- Snacks.terminal already runs checktime when the process *exits* (`q` in jjui),
 -- but we hide the float on WinLeave rather than quitting it, so jjui stays
@@ -16,7 +23,7 @@ local term = nil
 ---@param cwd? string
 function M.float(cwd)
   term = Snacks.terminal.toggle("jjui", {
-    cwd = cwd,
+    cwd = cwd or vim.fn.getcwd(0),
     win = {
       on_win = function(self)
         self:on("WinLeave", function()

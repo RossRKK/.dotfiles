@@ -38,6 +38,15 @@ return {
       current_line_blame_opts = { virt_text_pos = "eol", delay = 0 },
       current_line_blame_formatter = "  <author>, <author_time:%R> · <summary>",
       on_attach = function(bufnr)
+        -- jj owns the gutter wherever a .jj exists, colocated repos included:
+        -- jjsigns attaches there (only_without_git = false, below) and two sign
+        -- columns over one file would disagree the moment `@-` and git's HEAD
+        -- drift apart. This also covers a jj workspace under <repo>/.worktrees/,
+        -- where gitsigns would otherwise find the PARENT repo's .git and diff
+        -- against the wrong tree. Blame is the cost: jjsigns has none.
+        if vim.fs.root(vim.api.nvim_buf_get_name(bufnr), ".jj") then
+          return false
+        end
         local gs = require("gitsigns")
         -- Review mode rebases the sign column onto the branch merge-base, per
         -- repo; buffers that attach after their repo's base was chosen must
@@ -101,22 +110,24 @@ return {
     },
   },
   {
-    -- The sign column for jj workspaces, where gitsigns cannot go: it needs a
-    -- git repo, and a SECONDARY jj workspace has none and can never have one
-    -- (`jj git colocation enable` refuses outside the main workspace). jjsigns
-    -- attaches only where no git repo is visible, so a colocated main workspace
-    -- keeps gitsigns above -- there `@-` is git's HEAD, the gutters agree, and
-    -- gitsigns additionally does blame.
+    -- The sign column wherever a .jj exists. Policy: jj answers every VCS
+    -- question in a jj repo, colocated or not, so jjsigns takes the gutter and
+    -- gitsigns (above) vetoes its own attach there. `only_without_git = false`
+    -- is the switch; triage.gitsigns.jj_owns() reads the same flag to route
+    -- re-base and inline-diff calls to the backend that is actually attached.
+    -- It is also what makes a jj workspace under <repo>/.worktrees/ safe: a
+    -- secondary workspace has no .git, and with git-based signs off nothing
+    -- there diffs against the parent repo by mistake.
     --
     -- Keys mirror the gitsigns maps above so the gutter behaves the same either
     -- side. There is no `<leader>gs`: jj has no index -- the working copy IS a
-    -- commit -- so "stage hunk" has nothing to mean.
+    -- commit -- so "stage hunk" has nothing to mean. Nor blame, yet.
     "RossRKK/jjsigns.nvim",
     dev = true,
     event = { "BufReadPre", "BufNewFile" },
     config = function()
       local jjs = require("jjsigns")
-      jjs.setup({})
+      jjs.setup({ only_without_git = false })
       local function map(l, r, desc)
         vim.keymap.set("n", l, r, { desc = desc })
       end
@@ -160,7 +171,10 @@ return {
           return
         end
         local sep = vim.fn.search("^=======", "bnW")
-        vim.cmd(vim.api.nvim_win_get_cursor(0)[1] > sep and "GitConflictChooseTheirs" or "GitConflictChooseOurs")
+        vim.cmd(
+          vim.api.nvim_win_get_cursor(0)[1] > sep and "GitConflictChooseTheirs"
+            or "GitConflictChooseOurs"
+        )
       end
 
       local grp = vim.api.nvim_create_augroup("GitConflictDiagnostics", { clear = true })
@@ -174,7 +188,12 @@ return {
           local function map(lhs, cmd, desc)
             vim.keymap.set("n", lhs, "<cmd>" .. cmd .. "<cr>", { buffer = ev.buf, desc = desc })
           end
-          vim.keymap.set("n", "<leader>cc", choose_here, { buffer = ev.buf, desc = "Conflict: keep this one (under cursor)" })
+          vim.keymap.set(
+            "n",
+            "<leader>cc",
+            choose_here,
+            { buffer = ev.buf, desc = "Conflict: keep this one (under cursor)" }
+          )
           map("<leader>co", "GitConflictChooseOurs", "Conflict: keep ours (HEAD)")
           map("<leader>ct", "GitConflictChooseTheirs", "Conflict: keep theirs")
           map("<leader>cb", "GitConflictChooseBoth", "Conflict: keep both")
@@ -188,7 +207,15 @@ return {
         pattern = "GitConflictResolved",
         callback = function(ev)
           vim.diagnostic.enable(true, { bufnr = ev.buf })
-          for _, lhs in ipairs({ "<leader>cc", "<leader>co", "<leader>ct", "<leader>cb", "<leader>c0", "]x", "[x" }) do
+          for _, lhs in ipairs({
+            "<leader>cc",
+            "<leader>co",
+            "<leader>ct",
+            "<leader>cb",
+            "<leader>c0",
+            "]x",
+            "[x",
+          }) do
             pcall(vim.keymap.del, "n", lhs, { buffer = ev.buf })
           end
         end,

@@ -7,14 +7,63 @@ local jjw = require("util.jjworkspace")
 
 describe("jjworkspace.path", function()
   it("flattens a bookmark path to one directory component", function()
-    assert.equals("/dev/.jj-workspaces/repo/feat-x", jjw.path("/dev/repo", "feat/x"))
+    assert.equals("/dev/repo/.worktrees/feat-x", jjw.path("/dev/repo", "feat/x"))
   end)
 
-  -- The whole point: a secondary jj workspace can't hold a .git, so anything
-  -- inside the repo makes git resolve upward and report the parent's state.
-  it("puts the workspace outside the repo, never under it", function()
-    local path = jjw.path("/dev/repo", "feat/x")
-    assert.is_nil(path:match("^/dev/repo/"))
+  -- Same layout as the git side: one project directory, so cwd-scoped tools
+  -- (Claude Code's permission prompt among them) see the workspace as part of
+  -- the repo. jj owns every VCS question under a .jj, so git finding the parent
+  -- repo from in here does no harm.
+  it("puts the workspace under the repo's .worktrees, like a git worktree", function()
+    assert.truthy(jjw.path("/dev/repo", "feat/x"):match("^/dev/repo/%.worktrees/"))
+  end)
+end)
+
+describe("jjworkspace.lookup_revset", function()
+  -- Regression: bookmarks() matches LOCAL bookmarks only. A bookmark that
+  -- existed only as origin/x therefore looked new, and the workspace was forked
+  -- off @ (master) with a local bookmark literally named origin/x on it.
+  it("asks for remote bookmarks too", function()
+    local rs = jjw.lookup_revset("infra/x")
+    assert.truthy(rs:find('bookmarks(exact:"infra/x")', 1, true))
+    assert.truthy(rs:find('remote_bookmarks(exact:"infra/x")', 1, true))
+  end)
+
+  it("is safe for an unknown name", function()
+    assert.matches("^present%(", jjw.lookup_revset("nope"))
+  end)
+end)
+
+describe("jjworkspace.parse_lookup", function()
+  it("finds a remote-only bookmark and names its remote", function()
+    local found = jjw.parse_lookup("infra/x@origin\n", "infra/x")
+    assert.is_false(found.is_local)
+    assert.same({ "origin" }, found.remotes)
+  end)
+
+  it("finds a local bookmark that is also on a remote, minus the git mirror", function()
+    local found = jjw.parse_lookup("master\nmaster@origin\nmaster@git\n", "master")
+    assert.is_true(found.is_local)
+    assert.same({ "origin" }, found.remotes)
+  end)
+
+  -- Other bookmarks on the same commit come through the template as well.
+  it("ignores other bookmarks that share the commit", function()
+    local found = jjw.parse_lookup("cv-2026.09.6\nmaster@origin\n", "master")
+    assert.is_false(found.is_local)
+    assert.same({ "origin" }, found.remotes)
+  end)
+
+  it("reports nothing for an unknown name", function()
+    local found = jjw.parse_lookup("", "nope")
+    assert.is_false(found.is_local)
+    assert.same({}, found.remotes)
+  end)
+end)
+
+describe("jjworkspace.track_args", function()
+  it("tracks the bookmark on the remote it was found on", function()
+    assert.same({ "bookmark", "track", "infra/x@origin" }, jjw.track_args("infra/x", "origin"))
   end)
 end)
 
@@ -82,7 +131,7 @@ describe("jjworkspace.parse_candidates", function()
   -- second workspace by a name jj would reject.
   it("points a bookmark at its existing workspace, by slug", function()
     local items = jjw.parse_candidates(out, { ["feat-x"] = true }, "/dev/repo")
-    assert.equals("/dev/.jj-workspaces/repo/feat-x", items[1].worktree)
+    assert.equals("/dev/repo/.worktrees/feat-x", items[1].worktree)
     assert.is_nil(items[#items].worktree)
   end)
 end)

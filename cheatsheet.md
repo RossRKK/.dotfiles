@@ -234,14 +234,22 @@ it lists bookmarks (local and remote) and `Enter` adds a workspace for one. jj
 doesn't understand git worktrees, so the backend is chosen per repo on `.jj` —
 the same rule that picks jjui over lazygit for `Ctrl+G`.
 
-jj workspaces live **outside** the repo, at `../.jj-workspaces/<repo>/<slug>`,
-where git worktrees live inside it. That asymmetry is forced: a git worktree gets
-a `.git` file, but a secondary jj workspace can never have one, so a workspace
-placed inside the repo makes every git tool walk up and report the *parent's*
-state — every file painted as ignored, gitsigns diffing the wrong tree. Outside
-the repo, git finds nothing rather than something wrong. A name nothing matches needs no fetch guess (jj bookmarks are one
+jj workspaces live in the same place as git worktrees, `<repo>/.worktrees/<slug>`.
+A secondary jj workspace has no `.git`, so git tools run inside it find the
+*parent* repo — which is harmless, because wherever a `.jj` exists jj owns the
+answer: jjsigns paints the gutter, gitsigns stands down, and neo-tree's git
+glyphs are switched off in secondary workspaces (in the colocated main workspace
+they stay on: jj keeps git's HEAD on `@-`, so git's view there is jj's).
+A bookmark that exists only on a remote is tracked first (`jj bookmark track
+<name>@origin`), so the workspace sits on that commit and `jj git push` later
+moves it. A name nothing matches needs no fetch guess (jj bookmarks are one
 namespace): it becomes a new workspace on top of the current change, with a
 bookmark of that name so the tab has something to be called.
+
+The new working copy is a **new empty change on top of** the bookmark; the
+bookmark itself does not advance as you commit, unlike a checked-out git
+branch. Run `jj bookmark set <name>` (or `jj bookmark move --from ... --to @-`)
+before pushing.
 
 The same thing is reachable from **lazygit**: `w` on a branch (local or remote)
 opens it as a worktree project tab in the surrounding nvim.
@@ -471,13 +479,12 @@ Pass/fail signs render in the gutter; driven by rust-analyzer runnables.
 | `Space+ghi` | Browse GitHub issues (snacks picker + `gh` CLI) |
 | `Space+ghp` | Browse GitHub PRs (snacks picker + `gh` CLI) |
 
-In a **jj workspace** the gutter is drawn by jjsigns instead. gitsigns needs a
-git repo, and a secondary jj workspace has none — so jjsigns takes over there,
-with the same `]h`/`[h`, `Space+gp` and `Space+gr`. Two keys have no jj meaning
-and are absent: `Space+gs` (jj has no index — the working copy *is* a commit, so
-there is nothing to stage) and the blame pair, which jj answers differently. In a
-*colocated* main workspace gitsigns still owns the gutter: there `@-` is git's
-HEAD, so the two agree, and gitsigns additionally does blame.
+In a **jj repo** — any directory under a `.jj`, colocated or not — the gutter is
+drawn by jjsigns instead, diffing against `@-`, with the same `]h`/`[h`,
+`Space+gp` and `Space+gr`. gitsigns vetoes its own attach there so the two never
+paint the same file. Two keys have no jj meaning and are absent: `Space+gs` (jj
+has no index — the working copy *is* a commit, so there is nothing to stage) and
+the blame pair, which jjsigns does not do yet.
 
 `Space+gt` swaps the explorer's top pane to neo-tree's `git_status` source (and
 back) — a changed-files list where you stage / commit per file:

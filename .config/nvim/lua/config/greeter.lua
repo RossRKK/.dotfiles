@@ -130,6 +130,14 @@ end
 -- first one rather than stacking git processes.
 local fetching = {}
 
+-- How many lines of `jj log` to ask for. More than the greeter usually shows,
+-- so a tall window fills; graph() cuts the rest to what fits.
+local GRAPH_LINES = 20
+
+-- The dashboard pane width (snacks' default). Graph lines are cut to this so a
+-- long description cannot widen the pane and shift everything else.
+local PANE_WIDTH = 60
+
 --- Kick off a branch overview for `root` and redraw the greeters if it says
 --- something new. Safe to call as often as you like -- the expensive step (the
 --- merge-result diff) is memoised inside triage on the base/HEAD shas, so a
@@ -141,6 +149,13 @@ function M.fetch(root)
     return
   end
   fetching[root] = true
+  -- jj repos show `jj log` in place of the ahead/behind summary (see graph()).
+  -- Same rule as triage's backend pick: a .jj at the root means jj.
+  if vim.uv.fs_stat(root .. "/.jj") then
+    require("util.jjlog").fetch(root, GRAPH_LINES, function()
+      M.update_dashboards()
+    end)
+  end
   triage.report({ root = root }, function(report)
     fetching[root] = nil
     if report then
@@ -382,6 +397,37 @@ local function overview(report)
   return items
 end
 
+--- The `jj log` graph for a jj repo, in the summary's place. Left-aligned as a
+--- block (no `align`): the rails in one line continue into the next, so every
+--- line must keep the same left edge. Snacks centres the pane itself, so the
+--- block still sits where the summary did. Nil in a git repo, or before the
+--- first run lands.
+---@param root string normalized workspace root
+---@param buf integer the greeter's buffer
+---@return table[]?
+local function graph(root, buf)
+  local output = require("util.jjlog").cache[root]
+  if not output then
+    return nil
+  end
+  -- Share the window with the file list: about half the rows below the header
+  -- each, on the same sizing rule as files().
+  local height = 30
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_buf(w) == buf then
+      height = vim.api.nvim_win_get_height(w)
+      break
+    end
+  end
+  local limit = math.max(4, math.floor((height - 12) / 2))
+  local items = require("util.jjlog").items(output, PANE_WIDTH)
+  if #items > limit then
+    items = vim.list_slice(items, 1, limit)
+    items[#items + 1] = { text = { { "\xe2\x80\xa6", hl = "SnacksDashboardDesc" } } }
+  end
+  return items
+end
+
 --- The changed-file list: every file the branch is responsible for, marked with
 --- its triage glyph, each a keypress from opening. Long branches are cut to what
 --- the window can show, with the remainder counted -- the list is a way into the
@@ -583,8 +629,9 @@ function M.open(win)
           padding = 1,
         }
       end,
+      -- jj: the log graph. git: the two-line ahead/behind summary.
       function()
-        local items = overview(report())
+        local items = graph(root, buf) or overview(report())
         return items and vim.list_extend(items, { { padding = 1 } }) or nil
       end,
       {
