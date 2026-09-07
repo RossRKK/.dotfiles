@@ -443,8 +443,24 @@ function M.pick()
       table.insert(ret, 2, { item.worktree and "\u{f0e8e} " or "   ", "SnacksPickerGitBranch" })
       return ret
     end,
-    -- No preview: snacks' git_log preview shells out to git, which can say
-    -- nothing useful about a jj change id.
+    -- Snacks' git_log preview shells out to git, which knows nothing about a
+    -- jj change id, and leaving `preview` unset does NOT mean no preview: the
+    -- default `file` previewer runs and reports "Item has no `file`". With no
+    -- `ft` the cmd previewer runs in a terminal buffer, so jj's graph and
+    -- colours come through as they do in a shell.
+    preview = function(ctx)
+      Snacks.picker.preview.cmd({
+        "jj",
+        "--no-pager",
+        "--color=always",
+        "--ignore-working-copy",
+        "log",
+        "-r",
+        "::" .. ctx.item.commit,
+        "--limit",
+        "30",
+      }, ctx)
+    end,
     on_show = function()
       vim.schedule(vim.cmd.stopinsert)
     end,
