@@ -3,3 +3,30 @@
 show_at_start = true
 # position         = "auto"  # auto | right | bottom
 # width_percentage = 50.0
+
+# shift+o: open the pull request for the selected revision's bookmark, like
+# lazygit's `o` on a branch. Acts only on a revision that carries a bookmark
+# (no ancestor search). Opens the existing PR, else the prefilled compare page.
+[[actions]]
+name = "pr.open"
+key = "shift+o"
+scope = "revisions"
+desc = "open PR"
+lua = """
+local id = context.change_id()
+if not id then return end
+local out, err = jj("log", "--no-graph", "-r", id, "-T",
+  'bookmarks.map(|b| b.name()).join("\\\\n")')
+if err then flash({ text = err, error = true }); return end
+local names = split_lines(out or "")
+if #names == 0 then
+  flash({ text = "no bookmark on " .. id, error = true })
+  return
+end
+local b = names[1]
+if #names > 1 then
+  b = choose({ options = names, title = "open PR for bookmark" })
+  if not b then return end
+end
+exec_shell("gh pr view --web --head '" .. b .. "' 2>/dev/null || gh pr create --web --head '" .. b .. "'")
+"""
