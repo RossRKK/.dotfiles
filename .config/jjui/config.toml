@@ -30,3 +30,34 @@ if #names > 1 then
 end
 exec_shell("gh pr view --web --head '" .. b .. "' 2>/dev/null || gh pr create --web --head '" .. b .. "'")
 """
+
+# w: open the selected revision's bookmark as a jj workspace project tab in the
+# surrounding nvim (util/jjworkspace.lua), like lazygit's `w` on a branch.
+# Bookmark-only, like pr.open. No-op outside nvim, where $NVIM is unset.
+[[actions]]
+name = "workspace.open"
+key = "w"
+scope = "revisions"
+desc = "open workspace tab"
+lua = """
+local id = context.change_id()
+if not id then return end
+local out, err = jj("log", "--no-graph", "-r", id, "-T",
+  'bookmarks.map(|b| b.name()).join("\\\\n")')
+if err then flash({ text = err, error = true }); return end
+local names = split_lines(out or "")
+if #names == 0 then
+  flash({ text = "no bookmark on " .. id, error = true })
+  return
+end
+local b = names[1]
+if #names > 1 then
+  b = choose({ options = names, title = "open workspace for bookmark" })
+  if not b then return end
+end
+if os.getenv("NVIM") == nil then
+  flash({ text = "not inside nvim", error = true })
+  return
+end
+exec_shell("nvim --server \\"$NVIM\\" --remote-expr \\"v:lua.require'util.jjworkspace'.open_from_jjui('" .. b .. "')\\"")
+"""
