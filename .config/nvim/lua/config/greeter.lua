@@ -134,9 +134,13 @@ local fetching = {}
 -- so a tall window fills; graph() cuts the rest to what fits.
 local GRAPH_LINES = 20
 
--- The dashboard pane width (snacks' default). Graph lines are cut to this so a
--- long description cannot widen the pane and shift everything else.
-local PANE_WIDTH = 60
+-- The dashboard pane width. Wider than snacks' default of 60: a `jj log` line
+-- carries rails, change id, author, time and bookmarks, and at 60 the
+-- description under it lost most of its words. Graph lines are cut to this (or
+-- to the window, when that is narrower) so a long description cannot widen the
+-- pane and shift everything else.
+local PANE_WIDTH = 90
+M.PANE_WIDTH = PANE_WIDTH
 
 --- Kick off a branch overview for `root` and redraw the greeters if it says
 --- something new. Safe to call as often as you like -- the expensive step (the
@@ -412,21 +416,25 @@ local function graph(root, buf)
   end
   -- Share the window with the file list: about half the rows below the header
   -- each, on the same sizing rule as files().
-  local height = 30
+  local height, width = 30, PANE_WIDTH
   for _, w in ipairs(vim.api.nvim_list_wins()) do
     if vim.api.nvim_win_get_buf(w) == buf then
       height = vim.api.nvim_win_get_height(w)
+      -- A window narrower than the pane would otherwise show lines cut off at
+      -- its right edge, with no ellipsis to say so.
+      width = math.min(PANE_WIDTH, vim.api.nvim_win_get_width(w))
       break
     end
   end
   local limit = math.max(4, math.floor((height - 12) / 2))
-  local items = require("util.jjlog").items(output, PANE_WIDTH)
+  local items = require("util.jjlog").items(output, width)
   if #items > limit then
     items = vim.list_slice(items, 1, limit)
     items[#items + 1] = { text = { { "\xe2\x80\xa6", hl = "SnacksDashboardDesc" } } }
   end
   return items
 end
+M.graph = graph
 
 --- The changed-file list: every file the branch is responsible for, marked with
 --- its triage glyph, each a keypress from opening. Long branches are cut to what
@@ -539,6 +547,78 @@ local function agents()
   return section
 end
 
+--- The greeter's sections, top to bottom. Split out of open() so a test can
+--- check the layout without a live snacks dashboard.
+---@param root string normalized workspace root
+---@param buf integer the greeter's buffer
+---@param tab integer the workspace tabpage
+---@param report fun(): table? the cached TriageReport, or nil while in flight
+---@return table[]
+function M.sections(root, buf, tab, report)
+  return {
+    -- A blank line first. Snacks centres the content vertically, but only while
+    -- it fits: once the graph and file list overrun the window it starts at row
+    -- 0, and the Agents list sat hard against the top edge.
+    { padding = 1 },
+    -- Agents first, ABOVE the header: everything below it is about this
+    -- project, and this list deliberately isn't -- it's every workspace's
+    -- agents. Sitting under a "<repo> - <branch>" heading would read as a
+    -- claim that these belong to this repo.
+    agents,
+    -- "<repo> - <branch>", the workspace's display name everywhere (tab
+    -- labels, agent view): workspace.display_name reads the same report
+    -- cache this greeter fills, with the plain workspace name as the
+    -- fallback for a directory git can't tell us anything about.
+    function()
+      return {
+        text = { { require("config.workspace").display_name(tab), hl = "SnacksDashboardHeader" } },
+        align = "center",
+        padding = 1,
+      }
+    end,
+    -- jj: the log graph. git: the two-line ahead/behind summary.
+    function()
+      local items = graph(root, buf) or overview(report())
+      return items and vim.list_extend(items, { { padding = 1 } }) or nil
+    end,
+    {
+      icon = " ",
+      title = "Changed Files",
+      indent = 2,
+      function()
+        return files(report(), buf)
+      end,
+    },
+    -- Not a git repo: there's no overview to show, so fall back to the
+    -- pickers -- the only case where the greeter still needs a menu.
+    function()
+      if M.reports[root] ~= false then
+        return nil
+      end
+      return {
+        padding = 1,
+        {
+          icon = " ",
+          key = "f",
+          desc = "Find file",
+          action = function()
+            Snacks.picker.files()
+          end,
+        },
+        {
+          icon = " ",
+          key = "g",
+          desc = "Live grep",
+          action = function()
+            Snacks.picker.grep()
+          end,
+        },
+        { icon = " ", key = "n", desc = "New file", action = M.new_file },
+      }
+    end,
+  }
+end
+
 --- Show this workspace's greeter in `win` (default: the current window).
 ---
 --- The buffer is listed and kept for the life of the workspace, so it holds a
@@ -612,64 +692,8 @@ function M.open(win)
   instances[buf] = Snacks.dashboard.open({
     win = win,
     buf = buf,
-    sections = {
-      -- Agents first, ABOVE the header: everything below it is about this
-      -- project, and this list deliberately isn't -- it's every workspace's
-      -- agents. Sitting under a "<repo> - <branch>" heading would read as a
-      -- claim that these belong to this repo.
-      agents,
-      -- "<repo> - <branch>", the workspace's display name everywhere (tab
-      -- labels, agent view): workspace.display_name reads the same report
-      -- cache this greeter fills, with the plain workspace name as the
-      -- fallback for a directory git can't tell us anything about.
-      function()
-        return {
-          text = { { workspace.display_name(tab), hl = "SnacksDashboardHeader" } },
-          align = "center",
-          padding = 1,
-        }
-      end,
-      -- jj: the log graph. git: the two-line ahead/behind summary.
-      function()
-        local items = graph(root, buf) or overview(report())
-        return items and vim.list_extend(items, { { padding = 1 } }) or nil
-      end,
-      {
-        icon = " ",
-        title = "Changed Files",
-        indent = 2,
-        function()
-          return files(report(), buf)
-        end,
-      },
-      -- Not a git repo: there's no overview to show, so fall back to the
-      -- pickers -- the only case where the greeter still needs a menu.
-      function()
-        if M.reports[root] ~= false then
-          return nil
-        end
-        return {
-          padding = 1,
-          {
-            icon = " ",
-            key = "f",
-            desc = "Find file",
-            action = function()
-              Snacks.picker.files()
-            end,
-          },
-          {
-            icon = " ",
-            key = "g",
-            desc = "Live grep",
-            action = function()
-              Snacks.picker.grep()
-            end,
-          },
-          { icon = " ", key = "n", desc = "New file", action = M.new_file },
-        }
-      end,
-    },
+    width = PANE_WIDTH,
+    sections = M.sections(root, buf, tab, report),
   })
 
   -- Undo the two pieces of snacks' styling that assume a throwaway dashboard.
