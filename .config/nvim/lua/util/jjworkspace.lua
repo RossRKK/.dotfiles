@@ -57,7 +57,14 @@ local function jj(dir, args)
   return vim.trim(out.stdout or "")
 end
 
---- The jj repo root containing `dir`, or nil plus a message.
+--- The MAIN workspace root for the repo containing `dir`, or nil plus a message.
+---
+--- A secondary workspace has a `.jj` of its own, so the nearest `.jj` is not
+--- the answer from inside one: taking it nested each new workspace inside the
+--- one it was picked from (`.worktrees/a/.worktrees/b/...`). In a secondary
+--- workspace `.jj/repo` is a FILE holding the path of the main `.jj/repo`
+--- directory, relative to the workspace's own `.jj`; in the main workspace it
+--- is that directory itself.
 ---@param dir string
 ---@return string? root, string? err
 function M.root(dir)
@@ -65,7 +72,29 @@ function M.root(dir)
   if not root then
     return nil, "not a jj repository"
   end
-  return root
+  return M.main_root(root, function(path)
+    local f = io.open(path, "r")
+    if not f then
+      return nil
+    end
+    local content = f:read("*a")
+    f:close()
+    return content
+  end)
+end
+
+--- The pure half of M.root: follow `<root>/.jj/repo` to the main workspace.
+---@param root string a workspace root (has a `.jj`)
+---@param read fun(path: string): string? file contents, nil for a directory/absent
+---@return string
+function M.main_root(root, read)
+  local pointer = read(root .. "/.jj/repo")
+  if not pointer or vim.trim(pointer) == "" then
+    return root
+  end
+  local repo = vim.fs.normalize(vim.fs.joinpath(root, ".jj", vim.trim(pointer)))
+  -- repo is `<main>/.jj/repo`
+  return vim.fs.dirname(vim.fs.dirname(repo))
 end
 
 --- Where a workspace for `name` lives: `<repo>/.worktrees/<slug>`, the same
