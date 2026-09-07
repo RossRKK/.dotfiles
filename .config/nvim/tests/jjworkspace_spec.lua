@@ -19,6 +19,24 @@ describe("jjworkspace.path", function()
   end)
 end)
 
+describe("jjworkspace.main_root", function()
+  -- Regression: from inside .worktrees/a, the nearest .jj was a's own, so the
+  -- next workspace landed at .worktrees/a/.worktrees/b.
+  it("follows a secondary workspace's .jj/repo pointer to the main root", function()
+    local files = { ["/dev/repo/.worktrees/a/.jj/repo"] = "../../../.jj/repo\n" }
+    local root = jjw.main_root("/dev/repo/.worktrees/a", function(p)
+      return files[p]
+    end)
+    assert.equals("/dev/repo", root)
+  end)
+
+  it("keeps the main workspace, whose .jj/repo is a directory", function()
+    assert.equals("/dev/repo", jjw.main_root("/dev/repo", function()
+      return nil
+    end))
+  end)
+end)
+
 describe("jjworkspace.lookup_revset", function()
   -- Regression: bookmarks() matches LOCAL bookmarks only. A bookmark that
   -- existed only as origin/x therefore looked new, and the workspace was forked
