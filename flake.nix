@@ -45,6 +45,9 @@
             opentofu = pkgs-unstable.opentofu;
             svelte-language-server = pkgs-unstable.svelte-language-server;
             claude-code = claude-code.packages.${system}.default;
+            # Not in nixpkgs; its build deps want rustc >= 1.96, which only
+            # unstable carries, so build it with the unstable toolchain.
+            jj-bond = pkgs-unstable.callPackage ./pkgs/jj-bond.nix {};
           }) ];
         };
 

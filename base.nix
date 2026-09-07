@@ -343,5 +343,8 @@ in
       # too so locally-built nvim (e.g. ~/dev/neovim) gets a clipboard provider.
       # Wayland-only, so skip it on hosts (e.g. macOS) that can't build it.
       wl-clipboard
+      # jj-bond (`jb`), a second jj TUI on trial beside jjui. Linux-only because
+      # only the Linux overlay in flake.nix defines it (see there).
+      jj-bond
     ];
 }
