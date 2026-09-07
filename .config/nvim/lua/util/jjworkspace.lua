@@ -7,16 +7,16 @@
 -- Deliberately parallel to worktree.lua -- same recency ordering, same picker
 -- shape -- and it reuses that module for the parts that aren't about git at all.
 --
--- It does NOT share the `.worktrees/<slug>` layout, and that is the one place
--- the two must differ. A git worktree gets a `.git` file, so git commands run
--- inside it resolve to that worktree. A secondary jj workspace can never have
--- one -- `jj git colocation enable` refuses outside the main workspace -- so
--- every git tool run inside a jj workspace walks UP to the enclosing repo. Put
--- the workspace under `<repo>/.worktrees/` and the consequences are: neo-tree
--- paints every file as ignored (it matches the global `.worktrees/` rule),
--- gitsigns diffs against the PARENT repo's HEAD, and triage's overview
--- describes the parent's branch. Keeping workspaces outside any repo means git
--- finds nothing rather than finding the wrong thing.
+-- It shares the `.worktrees/<slug>` layout too. A secondary jj workspace has no
+-- `.git` (`jj git colocation enable` refuses outside the main workspace), so a
+-- git tool run inside `<repo>/.worktrees/x` walks UP and finds the main
+-- workspace's repo. That is harmless by policy: wherever a `.jj` exists, jj
+-- owns the answer -- jjsigns paints the gutter (only_without_git = false),
+-- gitsigns stands down, neo-tree's git glyphs are off in secondary workspaces
+-- -- so nothing that matters asks git there. Keeping the workspace inside the
+-- repo is what lets tools that
+-- scope themselves to a project directory (Claude Code's permission prompt,
+-- pickers rooted on cwd) treat it as part of the same project.
 --
 -- Three things collapse compared to the git side:
 --   * No local-vs-remote branch resolution. jj bookmarks are one namespace, so
@@ -68,9 +68,8 @@ function M.root(dir)
   return root
 end
 
---- Where a workspace for `name` lives: a sibling of the repo, never inside it
---- (see the note at the top of this file). Grouped by repo directory name, which
---- cannot collide because two repos can't share a basename in one parent.
+--- Where a workspace for `name` lives: `<repo>/.worktrees/<slug>`, the same
+--- place the git side puts its worktrees (see the note at the top of this file).
 ---
 --- The workspace is NAMED for the slug too -- `jj workspace list` gives no path,
 --- so the name is what lets us find the directory again.
@@ -78,9 +77,7 @@ end
 ---@param name string bookmark or new name
 ---@return string
 function M.path(root, name)
-  local parent = vim.fs.dirname(root)
-  local repo = vim.fs.basename(root)
-  return table.concat({ parent, ".jj-workspaces", repo, worktree.slug(name) }, "/")
+  return table.concat({ root, ".worktrees", worktree.slug(name) }, "/")
 end
 
 --- Create the workspace at `path`, parented on `rev`.
@@ -204,11 +201,15 @@ function M.open(name, dir)
 
   -- A remote bookmark is opened under its bare name: `origin/x` and `x` are the
   -- same line of work, and the local name is what the workspace should be
-  -- called. jj resolves the bare name to the remote bookmark on its own.
+  -- called.
   local local_name = name
+  local found = M.lookup(root, name)
   local bare = name:match("^[^/]+/(.+)$")
-  if bare and M.exists(root, bare) then
-    local_name = bare
+  if bare then
+    local bare_found = M.lookup(root, bare)
+    if bare_found.is_local or #bare_found.remotes > 0 then
+      local_name, found = bare, bare_found
+    end
   end
 
   local path = M.path(root, local_name)
@@ -219,9 +220,23 @@ function M.open(name, dir)
   end
 
   -- An existing bookmark is what the new working copy sits on; anything else is
-  -- a new line of work off the current change.
-  local known = M.exists(root, local_name)
-  local add_err = M.add(root, local_name, path, known and local_name or "@")
+  -- a new line of work off the current change (of THIS workspace: jj runs in
+  -- `dir`, not `root`, so `@` means the tab's working copy).
+  --
+  -- A bookmark that exists only on a remote is tracked first. jj does NOT fall
+  -- back from `x` to `x@origin` the way git checkout does -- `-r x` fails with
+  -- "Revision doesn't exist" -- and tracking is what creates the local bookmark
+  -- that `jj git push` later moves. This is where the old code went wrong: it
+  -- saw no LOCAL bookmark, called the name new, and forked master instead.
+  local known = found.is_local or #found.remotes > 0
+  if known and not found.is_local then
+    local _, track_err = jj(dir, M.track_args(local_name, found.remotes[1]))
+    if track_err then
+      status("jj bookmark track: " .. track_err, vim.log.levels.ERROR)
+      return
+    end
+  end
+  local add_err = M.add(dir, local_name, path, known and local_name or "@")
   if add_err then
     status("jj workspace add: " .. add_err, vim.log.levels.ERROR)
     return
@@ -237,21 +252,65 @@ function M.open(name, dir)
   require("config.workspace").open(path, { tab = true })
 end
 
---- Is `name` a bookmark this repo knows (local, or on any remote)?
+---@class jjworkspace.Lookup
+---@field is_local boolean a local bookmark of this name exists
+---@field remotes string[] remotes carrying the bookmark, the `git` mirror excluded
+
+--- Revset selecting every commit that carries bookmark `name`, local or remote.
+--- `bookmarks()` alone matches LOCAL bookmarks only, which is how a remote-only
+--- bookmark used to pass for brand new.
+---@param name string
+---@return string
+function M.lookup_revset(name)
+  local q = vim.json.encode(name)
+  return "present(bookmarks(exact:" .. q .. ") | remote_bookmarks(exact:" .. q .. "))"
+end
+
+--- Where bookmark `name` exists: locally, on which remotes, or nowhere.
 ---@param root string
 ---@param name string
----@return boolean
-function M.exists(root, name)
+---@return jjworkspace.Lookup
+function M.lookup(root, name)
   local out = jj(root, {
     "log",
     "--no-graph",
     "--ignore-working-copy",
     "-r",
-    "present(bookmarks(exact:" .. vim.json.encode(name) .. "))",
+    M.lookup_revset(name),
     "-T",
-    '"x"',
+    'bookmarks.map(|b| b.name() ++ if(b.remote(), "@" ++ b.remote(), "")).join("\\n") ++ "\\n"',
   })
-  return out ~= nil and out ~= ""
+  return M.parse_lookup(out or "", name)
+end
+
+--- The parsing half of lookup(): one `x` or `x@remote` per line. The commit may
+--- carry OTHER bookmarks too (a release tag next to master, say), so the name is
+--- matched exactly rather than assumed.
+---@param out string
+---@param name string
+---@return jjworkspace.Lookup
+function M.parse_lookup(out, name)
+  local found = { is_local = false, remotes = {} }
+  for line in vim.gsplit(out, "\n") do
+    if line == name then
+      found.is_local = true
+    else
+      local n, remote = line:match("^(.-)@([^@]+)$")
+      if n == name and remote ~= "git" then
+        found.remotes[#found.remotes + 1] = remote
+      end
+    end
+  end
+  return found
+end
+
+--- `jj bookmark track` arguments that give remote-only bookmark `name` a local
+--- counterpart, so `-r name` resolves and `jj git push` has something to move.
+---@param name string
+---@param remote string
+---@return string[]
+function M.track_args(name, remote)
+  return { "bookmark", "track", name .. "@" .. remote }
 end
 
 --- Fork the current workspace tab (<leader>tf): a new workspace whose working
