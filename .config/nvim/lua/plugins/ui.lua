@@ -8,6 +8,24 @@ return {
         globalstatus = true,
       },
       sections = {
+        -- jj-aware VCS fragment: `main+2 umzvrvxs` in a jj repo (stock `branch`
+        -- shows the detached HEAD's hash there), the git branch elsewhere; and
+        -- a `diff` fed by whichever of gitsigns/jjsigns owns the buffer.
+        lualine_b = {
+          {
+            function()
+              return require("util.vcsline").branch()
+            end,
+            icon = "",
+          },
+          {
+            "diff",
+            source = function()
+              return require("util.vcsline").diff_source()
+            end,
+          },
+          "diagnostics",
+        },
         -- Show the path relative to cwd, not just the name, to tell apart
         -- same-named files in different folders.
         lualine_c = {
