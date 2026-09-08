@@ -28,6 +28,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `jjworkspace_spec.lua` | jj workspace paths, `jj workspace add` args, bookmark-list parsing |
 | `term_caps_spec.lua` | inline-image capability (Ghostty yes, Neovide/other no) |
 | `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
+| `vcsline_spec.lua` | statusline VCS fragment from `jj log` (bookmark+distance, change id), diff dict choice |
 
 The side-terminal and branch-review logic now live in external plugins, each
 with its own test suite (developed locally under `~/dev` via lazy's `dev` path):
