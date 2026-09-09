@@ -85,3 +85,17 @@ for _, name in ipairs(split_lines(out or "")) do
 end
 jjui.revisions.open_set_bookmark({ value = "rkk/" .. suffix })
 """
+
+# shift+f: fetch every remote, like lazygit's `f`. One key instead of the git
+# menu's `g` then `f`. Tracked bookmarks (master, main) follow the remote, which
+# is what keeps the "<repo> - <branch>" tab title and the greeter current.
+[[actions]]
+name = "git.fetch"
+key = "shift+f"
+scope = "revisions"
+desc = "git fetch"
+lua = """
+local _, err = jj("git", "fetch")
+if err then flash({ text = err, error = true }); return end
+flash({ text = "fetched" })
+"""
