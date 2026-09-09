@@ -16,6 +16,12 @@ return {
     "akinsho/bufferline.nvim",
     dependencies = { "nvim-tree/nvim-web-devicons" },
     event = "VeryLazy",
+    config = function(_, opts)
+      -- Swap the diagnostics source before the first render: the stock one
+      -- copies every diagnostic in the session per redraw (util/bufferline_diag).
+      require("util.bufferline_diag").install()
+      require("bufferline").setup(opts)
+    end,
     opts = {
       options = {
         diagnostics = "nvim_lsp",
