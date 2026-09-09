@@ -89,20 +89,23 @@ jjui.revisions.open_set_bookmark({ value = "rkk/" .. suffix })
 # shift+f: fetch every remote, like lazygit's `f`. One key instead of the git
 # menu's `g` then `f`. Tracked bookmarks (master, main) follow the remote, which
 # is what keeps the "<repo> - <branch>" tab title and the greeter current.
+# jj_async goes through jjui's own command runner, like the git menu: the UI
+# stays live during the fetch and the graph reloads when it finishes. A plain
+# jj() call blocks and leaves the old graph on screen until you reopen jjui.
 [[actions]]
 name = "git.fetch"
 key = "shift+f"
 scope = "revisions"
 desc = "git fetch"
 lua = """
-local _, err = jj("git", "fetch")
-if err then flash({ text = err, error = true }); return end
-flash({ text = "fetched" })
+jjui.jj_async("git", "fetch")
 """
 
 # shift+p: push the bookmarks on the selected revision, like lazygit's `P`.
-# `-r` picks the bookmarks pointing at that revision; --allow-new creates a
-# bookmark on the remote the first time, which the default push refuses.
+# `-r` picks the bookmarks pointing at that revision. A bookmark named this way
+# is pushed and tracked even when new on the remote (jj 0.41; --allow-new is a
+# deprecated no-op there).
+# jj_async for the same reason as git.fetch: live UI, graph reload after.
 [[actions]]
 name = "git.push"
 key = "shift+p"
@@ -111,7 +114,5 @@ desc = "git push"
 lua = """
 local id = context.change_id()
 if not id then return end
-local _, err = jj("git", "push", "-r", id, "--allow-new")
-if err then flash({ text = err, error = true }); return end
-flash({ text = "pushed " .. id })
+jjui.jj_async("git", "push", "-r", id)
 """
