@@ -99,3 +99,19 @@ local _, err = jj("git", "fetch")
 if err then flash({ text = err, error = true }); return end
 flash({ text = "fetched" })
 """
+
+# shift+p: push the bookmarks on the selected revision, like lazygit's `P`.
+# `-r` picks the bookmarks pointing at that revision; --allow-new creates a
+# bookmark on the remote the first time, which the default push refuses.
+[[actions]]
+name = "git.push"
+key = "shift+p"
+scope = "revisions"
+desc = "git push"
+lua = """
+local id = context.change_id()
+if not id then return end
+local _, err = jj("git", "push", "-r", id, "--allow-new")
+if err then flash({ text = err, error = true }); return end
+flash({ text = "pushed " .. id })
+"""
