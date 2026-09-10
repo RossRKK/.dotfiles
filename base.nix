@@ -53,6 +53,31 @@ in
         # in a sibling worktree of the repo we're already inside, remap it to
         # the equivalent path in the current worktree if it exists.
         # (No upstream support: https://github.com/ajeetdsouza/zoxide/discussions/970)
+        #
+        # Prints two lines for a directory: the checkout root and an identity
+        # shared by every checkout of the same repo. jj is asked first: a
+        # secondary jj workspace has .jj but no .git, so git walks up past it
+        # and reports the main checkout as the root. `.jj/repo` is a directory
+        # in the main workspace and, in secondary ones, a file holding a
+        # relative path to it. --ignore-working-copy keeps `jj root` from
+        # snapshotting the working copy on every cd. `jj -R` does not search
+        # upward, so pushd into the directory; fish substitutions share cwd.
+        function __checkout_identity --argument-names dir
+            pushd $dir
+            set -l root (jj root --ignore-working-copy 2>/dev/null)
+            popd
+            if test -n "$root"
+                set -l repo $root/.jj/repo
+                if test -f $repo
+                    set repo (realpath $root/.jj/(cat $repo))
+                end
+                printf '%s\n%s\n' $root $repo
+                return
+            end
+            set root (git -C $dir rev-parse --show-toplevel 2>/dev/null)
+            or return 1
+            printf '%s\n%s\n' $root (git -C $dir rev-parse --path-format=absolute --git-common-dir)
+        end
         functions --copy cd __zoxide_plain_cd
         function cd --wraps=cd --description 'worktree-aware zoxide cd'
             switch (count $argv)
@@ -68,19 +93,15 @@ in
             end
             set -l target (zoxide query --exclude $PWD -- $argv)
             or return
-            set -l current_root (git rev-parse --show-toplevel 2>/dev/null)
-            if test -n "$current_root"
-                set -l target_root (git -C $target rev-parse --show-toplevel 2>/dev/null)
-                if test -n "$target_root"; and test "$target_root" != "$current_root"
-                    set -l target_git (git -C $target rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
-                    set -l current_git (git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
-                    if test -n "$target_git"; and test "$target_git" = "$current_git"
-                        set -l rewritten (string replace -- $target_root $current_root $target)
-                        if test -d "$rewritten"
-                            __zoxide_plain_cd $rewritten
-                            return
-                        end
-                    end
+            set -l current (__checkout_identity $PWD)
+            and set -l target_id (__checkout_identity $target)
+            and test "$target_id[1]" != "$current[1]"
+            and test "$target_id[2]" = "$current[2]"
+            and begin
+                set -l rewritten (string replace -- $target_id[1] $current[1] $target)
+                if test -d "$rewritten"
+                    __zoxide_plain_cd $rewritten
+                    return
                 end
             end
             __zoxide_plain_cd $target
