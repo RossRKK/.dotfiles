@@ -110,6 +110,39 @@ return {
         vim.lsp.enable(server)
       end
 
+      -- A workspace tab is opened before its checkout has been `uv sync`ed, so
+      -- basedpyright starts with no venv (or, searching upward, the main
+      -- checkout's) and every cross-package import is unresolved. Pyright
+      -- reloads python.pythonPath on workspace/didChangeConfiguration and
+      -- re-resolves imports in place -- the same path lspconfig's
+      -- :LspPyrightSetPythonPath takes -- so no restart: recompute the venv
+      -- from the client's root and push it when it differs. Cheap (one upward
+      -- stat walk, no process), so it runs on every python BufEnter and on
+      -- FocusGained, which is the moment you come back from the pane where the
+      -- sync ran. :PyVenvRefresh does the same by hand.
+      local function refresh_venv(bufnr)
+        for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr, name = "basedpyright" })) do
+          local py = venv_python(client.root_dir)
+          local settings = client.settings or {}
+          if py and py ~= vim.tbl_get(settings, "python", "pythonPath") then
+            settings.python = vim.tbl_deep_extend("force", settings.python or {}, { pythonPath = py })
+            client.settings = settings
+            client:notify("workspace/didChangeConfiguration", { settings = nil })
+            vim.notify("basedpyright: " .. py, vim.log.levels.INFO)
+          end
+        end
+      end
+      vim.api.nvim_create_autocmd({ "BufEnter", "FocusGained" }, {
+        callback = function(ev)
+          if vim.bo[ev.buf].filetype == "python" then
+            refresh_venv(ev.buf)
+          end
+        end,
+      })
+      vim.api.nvim_create_user_command("PyVenvRefresh", function()
+        refresh_venv(vim.api.nvim_get_current_buf())
+      end, { desc = "Re-point basedpyright at the nearest .venv" })
+
       -- Keymaps on LSP attach
       vim.api.nvim_create_autocmd("LspAttach", {
         callback = function(ev)
