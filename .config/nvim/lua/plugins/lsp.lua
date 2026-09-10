@@ -13,6 +13,10 @@ return {
       -- Absolute path required: pyright roots at each sub-package's pyproject.toml
       -- (e.g. systems/<name>), so a relative ".venv/bin/python" resolves to a venv
       -- that doesn't exist there and pyright falls back to system Python.
+      -- Resolved per client in before_init, from that client's root_dir: one
+      -- nvim holds several workspace tabs (config.workspace), each on its own
+      -- checkout with its own .venv, so a single path picked at startup would
+      -- hand every tab the venv of whichever directory nvim was launched from.
       local venv_python = require("util.venv").python
 
       -- Configure each server using the new vim.lsp.config API
@@ -27,10 +31,12 @@ return {
             basedpyright = {
               analysis = { typeCheckingMode = "standard" },
             },
-            python = {
-              pythonPath = venv_python(),
-            },
           },
+          before_init = function(_, config)
+            config.settings = vim.tbl_deep_extend("force", config.settings or {}, {
+              python = { pythonPath = venv_python(config.root_dir) },
+            })
+          end,
         },
         ts_ls = {},
         -- rust_analyzer is owned by rustaceanvim (see rust.lua), not started here.
