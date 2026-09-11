@@ -1,0 +1,92 @@
+#!/usr/bin/env sh
+# Remove finished secondary jj workspaces. Run as `jj wsclean [-f]` (alias in
+# base.nix) or directly.
+#
+# A workspace is finished when its working-copy commit is empty with no
+# description and every parent of that commit is an ancestor of a remote
+# bookmark, so all of its work is pushed. For each finished workspace this
+# forgets the registration and deletes `<main>/.worktrees/<name>`, the place
+# nvim's <leader>tw and jjui's `w` put workspaces (util/jjworkspace.lua). A
+# workspace that lives elsewhere is only forgotten; the script says so.
+#
+# Without -f/--force it prints what it would remove and changes nothing.
+#
+#   jj wsclean       list the finished workspaces
+#   jj wsclean -f    forget them and delete their directories
+set -eu
+
+die() { printf 'jj-workspace-clean: %s\n' "$*" >&2; exit 1; }
+
+force=0
+for arg in "$@"; do
+    case $arg in
+        -f|--force) force=1 ;;
+        -h|--help) printf 'usage: jj-workspace-clean [-f|--force]\n'; exit 0 ;;
+        *) die "unknown argument: $arg" ;;
+    esac
+done
+
+# `jj root` needs no snapshot; JJ_WORKSPACE_ROOT is set by `jj util exec`.
+root=${JJ_WORKSPACE_ROOT:-$(jj root --ignore-working-copy 2>/dev/null)} \
+    || die "not inside a jj workspace"
+
+# .jj/repo is a directory in the main workspace and a one-line file holding a
+# relative path to it in a secondary workspace. The main workspace root is the
+# parent of that .jj directory.
+repo=$root/.jj/repo
+[ -f "$repo" ] && repo=$(cd "$root/.jj" && cd "$(cat repo)" && pwd)
+main=$(dirname "$(dirname "$repo")")
+
+# Every jj call reads the repo through the main workspace and snapshots
+# nothing: other workspaces' working copies are not ours to touch.
+j() { jj -R "$main" --ignore-working-copy --color=never --no-pager "$@"; }
+
+# Ancestors of the bookmarks on real remotes. `remote_bookmarks()` alone would
+# also match the `@git` refs a colocated repo keeps for every local bookmark,
+# and a set difference cannot drop them: a commit that carries both `main@git`
+# and `main@origin` is one commit. So name each remote from `jj git remote
+# list` instead.
+pushed='none()'
+for remote in $(j git remote list | cut -d' ' -f1); do
+    pushed="$pushed | remote_bookmarks(remote=exact:\"$remote\")"
+done
+pushed="::($pushed)"
+
+# True when the workspace's @ is empty, undescribed and fully pushed.
+finished() {
+    wc=$(j log --no-graph -r "$1@ & empty() & description(exact:\"\")" -T 'change_id') \
+        || die "cannot read workspace $1"
+    [ -n "$wc" ] || return 1
+    unpushed=$(j log --no-graph -r "($1@)- ~ $pushed" -T 'change_id')
+    [ -z "$unpushed" ]
+}
+
+status=0
+count=0
+for name in $(j workspace list -T 'name ++ "\n"'); do
+    [ "$name" != default ] || continue
+    dir=$main/.worktrees/$name
+    # Never remove the workspace this command runs in.
+    [ "$dir" != "$root" ] || continue
+    finished "$name" || continue
+    count=$((count + 1))
+    if [ -d "$dir" ]; then
+        where="$dir"
+    else
+        where="(no directory under $main/.worktrees, forget only)"
+    fi
+    if [ "$force" = 1 ]; then
+        j workspace forget "$name" || { status=1; continue; }
+        [ ! -d "$dir" ] || rm -rf "$dir"
+        printf 'removed %s %s\n' "$name" "$where"
+    else
+        printf 'would remove %s %s\n' "$name" "$where"
+    fi
+done
+
+if [ "$count" = 0 ]; then
+    printf 'no finished workspaces\n'
+elif [ "$force" = 0 ]; then
+    printf 'dry run: pass -f to remove\n'
+fi
+exit $status

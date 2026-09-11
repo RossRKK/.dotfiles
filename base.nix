@@ -164,6 +164,10 @@ in
       # pointers for @ and `jj lfs clean` restores them before a commit; see
       # .local/bin/jj-lfs. `util exec` passes JJ_WORKSPACE_ROOT to the script.
       aliases.lfs = [ "util" "exec" "--" "jj-lfs" ];
+      # `jj wsclean [-f]`: forget the secondary workspaces whose @ is empty and
+      # fully pushed, and delete their .worktrees/<name> directory. Dry run
+      # unless -f is given; see .local/bin/jj-workspace-clean.
+      aliases.wsclean = [ "util" "exec" "--" "jj-workspace-clean" ];
       # Reuse the same SSH signing key as git.
       signing = {
         behavior = "own";
@@ -249,6 +253,8 @@ in
         ".local/bin/nvim-dev"
         # `jj lfs pull` / `jj lfs clean` (aliases.lfs in programs.jujutsu).
         ".local/bin/jj-lfs"
+        # `jj wsclean` (aliases.wsclean in programs.jujutsu).
+        ".local/bin/jj-workspace-clean"
         # Claude Code hook publishing each session's state for fishmonger's
         # agent view. Only the script is symlinked here; the settings.json
         # stanza that wires it to the hook events is merged in by the
