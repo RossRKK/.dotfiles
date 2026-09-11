@@ -13,7 +13,7 @@ let
   link = path: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/${path}";
 in
 {
-  # Home for repo-tracked scripts (clipboard-copy, nvim-dev — see home.file).
+  # Home for repo-tracked scripts (clipboard-copy, jj-lfs — see home.file).
   home.sessionPath = [ "$HOME/.local/bin" ];
 
   programs.fish = {
@@ -250,7 +250,6 @@ in
       [
         ".tmux.conf"
         ".local/bin/clipboard-copy"
-        ".local/bin/nvim-dev"
         # `jj lfs pull` / `jj lfs clean` (aliases.lfs in programs.jujutsu).
         ".local/bin/jj-lfs"
         # `jj wsclean` (aliases.wsclean in programs.jujutsu).
