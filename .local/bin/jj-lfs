@@ -1,0 +1,107 @@
+#!/usr/bin/env sh
+# git-lfs for jj workspaces. Run as `jj lfs pull` / `jj lfs clean` (alias in
+# base.nix) or directly.
+#
+# jj runs no git filters, so every jj working copy holds LFS *pointer* text, and
+# a secondary jj workspace has no .git at all, so `git lfs pull` cannot even find
+# a repository there. This script points git-lfs at the main checkout's .git
+# (GIT_DIR) with the workspace as the work tree (GIT_WORK_TREE) and a throwaway
+# index built from the workspace's own @ commit (GIT_INDEX_FILE), so git-lfs
+# checks out exactly the files this workspace's commit references.
+#
+#   pull   fetch the LFS objects for @ and replace pointer files with content.
+#          jj then reports those files as modified (M): jj snapshots the raw
+#          bytes into @. Run `clean` before you commit or push.
+#   clean  restore the pointer files whose on-disk content still matches the
+#          pointer in @- (the sha256 in the pointer equals the file's sha256).
+#          Files with genuinely new content are left alone and listed, so a
+#          real LFS change is never reverted silently.
+#
+# Not upstreamed in jj yet: https://github.com/jj-vcs/jj/issues/80
+set -eu
+
+die() { printf 'jj-lfs: %s\n' "$*" >&2; exit 1; }
+
+usage() {
+    printf 'usage: jj-lfs pull|clean\n' >&2
+    exit 2
+}
+
+# ---- locate the workspace root and the main checkout's git dir ------------
+
+# `jj root` needs no snapshot; JJ_WORKSPACE_ROOT is set by `jj util exec`.
+root=${JJ_WORKSPACE_ROOT:-$(jj root --ignore-working-copy 2>/dev/null)} \
+    || die "not inside a jj workspace"
+
+# .jj/repo is a directory in the main workspace and a one-line file holding a
+# relative path to it in a secondary workspace.
+repo=$root/.jj/repo
+[ -f "$repo" ] && repo=$(cd "$root/.jj" && cd "$(cat repo)" && pwd)
+[ -f "$repo/store/git_target" ] || die "no git backend at $repo/store"
+gitdir=$(cd "$repo/store" && cd "$(cat git_target)" && pwd)
+
+export GIT_DIR=$gitdir GIT_WORK_TREE=$root
+GIT_INDEX_FILE=$(mktemp "${TMPDIR:-/tmp}/jj-lfs-index.XXXXXX")
+export GIT_INDEX_FILE
+trap 'rm -f "$GIT_INDEX_FILE"' EXIT INT TERM
+
+# Index built from a jj revision's tree. jj stores every commit as a git
+# object, so the working-copy commit is always readable by git.
+read_tree() {
+    rev=$(jj log -R "$root" --ignore-working-copy -r "$1" --no-graph -T commit_id) \
+        || die "cannot resolve revision $1"
+    git read-tree "$rev"
+}
+
+# Paths in the index whose `filter` attribute is lfs, one per line.
+lfs_paths() {
+    git ls-files -z \
+        | git check-attr --stdin -z filter \
+        | tr '\0' '\n' \
+        | awk 'NR % 3 == 1 { path = $0 } NR % 3 == 0 && $0 == "lfs" { print path }'
+}
+
+is_pointer() {
+    [ -f "$1" ] && head -c 40 "$1" | grep -q '^version https://git-lfs.github.com/spec/'
+}
+
+# ---- subcommands ----------------------------------------------------------
+
+pull() {
+    # Snapshot first so @ reflects the files on disk, then build the index.
+    jj -R "$root" status >/dev/null 2>&1 || true
+    read_tree '@'
+    if git remote | grep -q .; then
+        git lfs fetch >&2 || die "git lfs fetch failed"
+    fi
+    git lfs checkout >&2
+    n=$(lfs_paths | while IFS= read -r p; do is_pointer "$root/$p" || echo x; done | wc -l)
+    printf 'jj-lfs: %s LFS files hold content. jj shows them as M; run `jj lfs clean` before you commit.\n' "$n" >&2
+}
+
+clean() {
+    read_tree '@'
+    lfs_paths | while IFS= read -r p; do
+        file=$root/$p
+        is_pointer "$file" && continue
+        [ -f "$file" ] || continue
+        pointer=$(jj file show -R "$root" --ignore-working-copy -r '@-' -- "$p" 2>/dev/null) || pointer=
+        want=$(printf '%s\n' "$pointer" | sed -n 's/^oid sha256:\([0-9a-f]*\)$/\1/p')
+        have=$(sha256sum "$file" | cut -d' ' -f1)
+        if [ -n "$want" ] && [ "$want" = "$have" ]; then
+            printf '%s\n' "$pointer" > "$file"
+            printf 'restored %s\n' "$p" >&2
+        else
+            printf 'kept     %s (content differs from the pointer in @-; commit it with git lfs, not jj)\n' "$p" >&2
+        fi
+    done
+    # Let jj pick up the restored pointers now rather than on the next command.
+    jj -R "$root" status >/dev/null 2>&1 || true
+}
+
+[ $# -eq 1 ] || usage
+case $1 in
+    pull) pull ;;
+    clean) clean ;;
+    *) usage ;;
+esac
