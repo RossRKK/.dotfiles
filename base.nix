@@ -159,6 +159,11 @@ in
       # in place. jj's native markers are 3+ sided and git-conflict can't read
       # them; N-sided conflicts still fall back to jj's diff format.
       ui.conflict-marker-style = "git";
+      # git-lfs in jj: jj runs no git filters and a secondary workspace has no
+      # .git, so `git lfs pull` cannot work there. `jj lfs pull` smudges the
+      # pointers for @ and `jj lfs clean` restores them before a commit; see
+      # .local/bin/jj-lfs. `util exec` passes JJ_WORKSPACE_ROOT to the script.
+      aliases.lfs = [ "util" "exec" "--" "jj-lfs" ];
       # Reuse the same SSH signing key as git.
       signing = {
         behavior = "own";
@@ -242,6 +247,8 @@ in
         ".tmux.conf"
         ".local/bin/clipboard-copy"
         ".local/bin/nvim-dev"
+        # `jj lfs pull` / `jj lfs clean` (aliases.lfs in programs.jujutsu).
+        ".local/bin/jj-lfs"
         # Claude Code hook publishing each session's state for fishmonger's
         # agent view. Only the script is symlinked here; the settings.json
         # stanza that wires it to the hook events is merged in by the
