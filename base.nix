@@ -375,7 +375,7 @@ in
     ]
     ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
       # The nix neovim wrapper puts wl-copy on its own PATH; install it user-wide
-      # too so locally-built nvim (e.g. ~/dev/neovim) gets a clipboard provider.
+      # too so anything outside the wrapper (terminals, scripts) gets a clipboard provider.
       # Wayland-only, so skip it on hosts (e.g. macOS) that can't build it.
       wl-clipboard
       # jj-bond (`jb`), a second jj TUI on trial beside jjui. Linux-only because
