@@ -53,3 +53,44 @@ describe("workspace.jj_name", function()
     assert.is_nil(ws.jj_name("/home/me/other"))
   end)
 end)
+
+describe("workspace.greeter_name", function()
+  local ws, info
+
+  before_each(function()
+    info = nil
+    package.loaded["util.vcsline"] = {
+      root_of = function(dir)
+        return dir:match("^(.*/ionics)")
+      end,
+      info_for = function()
+        return info
+      end,
+    }
+    package.loaded["util.jjworkspace"] = {
+      root = function()
+        return "/home/me/dev/ionics"
+      end,
+    }
+    package.loaded["config.workspace"] = nil
+    ws = require("config.workspace")
+    ws.cwd = function()
+      return "/home/me/dev/ionics"
+    end
+  end)
+
+  after_each(function()
+    package.loaded["util.vcsline"] = nil
+    package.loaded["util.jjworkspace"] = nil
+    package.loaded["config.workspace"] = nil
+  end)
+
+  it("is the repo and the jj workspace name", function()
+    info = { bookmark = "main", change_id = "unlqxzkz", workspace = "default" }
+    assert.equals("ionics - default", ws.greeter_name())
+  end)
+
+  it("is the bare repo before vcsline has answered", function()
+    assert.equals("ionics", ws.greeter_name())
+  end)
+end)
