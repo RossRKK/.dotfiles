@@ -29,14 +29,17 @@ local M = {}
 M.revset = "(heads(::@ & bookmarks())::@) | @"
 
 --- Template: tab-separated per line -- an "@" mark for the working copy, the
---- change id, then the local bookmark names joined with commas.
+--- change id, the local bookmark names joined with commas, then the names of
+--- the workspaces whose working copy the commit is (only `@`'s line has any).
 M.template = 'if(current_working_copy, "@", "") ++ "\t" ++ change_id.shortest(8) ++ "\t"'
-  .. ' ++ local_bookmarks.map(|b| b.name()).join(",") ++ "\n"'
+  .. ' ++ local_bookmarks.map(|b| b.name()).join(",") ++ "\t"'
+  .. ' ++ working_copies.map(|w| w.name()).join(",") ++ "\n"'
 
 ---@class VcsLineInfo
 ---@field change_id string of `@`
 ---@field bookmark? string the nearest bookmark below (or on) `@`
 ---@field distance integer commits from that bookmark to `@`, 0 when it is on `@`
+---@field workspace? string the jj workspace this `@` belongs to (`default` in the main one)
 
 --- Parse the output of `jj log -r <revset> -T <template>`. The first line with
 --- a bookmark is the base (jj prints newest first, so that is the nearest one);
@@ -45,16 +48,21 @@ M.template = 'if(current_working_copy, "@", "") ++ "\t" ++ change_id.shortest(8)
 --- on `@`. Counting rather than positioning keeps it right whichever way jj
 --- orders the lines, and with several bookmarked heads (a merge of two
 --- bookmarked lines) still measures the unbookmarked stretch above them.
+---
+--- The workspace name rides on `@`'s line. Two workspaces can share one
+--- working-copy commit (right after `jj workspace add -r @-` say), and the
+--- template cannot say which of them asked; the first listed is taken.
 ---@param out string
 ---@return VcsLineInfo?
 function M.parse(out)
-  local change_id, bookmark
+  local change_id, bookmark, workspace
   local distance = 0
   for line in vim.gsplit(out, "\n", { plain = true, trimempty = true }) do
-    local mark, id, names = line:match("^(@?)\t(%w+)\t(.*)$")
+    local mark, id, names, spaces = line:match("^(@?)\t(%w+)\t([^\t]*)\t?(.*)$")
     if id then
       if mark == "@" then
         change_id = id
+        workspace = spaces:match("^[^,]+")
       end
       if names == "" then
         distance = distance + 1
@@ -66,14 +74,24 @@ function M.parse(out)
   if not change_id then
     return nil
   end
-  return { change_id = change_id, bookmark = bookmark, distance = bookmark and distance or 0 }
+  return {
+    change_id = change_id,
+    bookmark = bookmark,
+    distance = bookmark and distance or 0,
+    workspace = workspace,
+  }
 end
 
 --- Render the parsed info: `main+2 umzvrvxs`, `main umzvrvxs` when the bookmark
 --- sits on `@`, or the bare change id when nothing below is bookmarked.
+---
+--- `short` drops the change id -- `main+2` -- for places with less room (tab
+--- labels, the agent view), where the statusline is a glance away for the
+--- rest. With no bookmark the change id is all there is, so it stays.
 ---@param info VcsLineInfo
+---@param short? boolean
 ---@return string
-function M.format(info)
+function M.format(info, short)
   if not info.bookmark then
     return info.change_id
   end
@@ -81,19 +99,30 @@ function M.format(info)
   if info.distance > 0 then
     head = head .. "+" .. info.distance
   end
+  if short then
+    return head
+  end
   return head .. " " .. info.change_id
 end
 
---- Per-root cache of the rendered fragment and an in-flight marker.
----@type table<string, {text: string, busy: boolean}>
+--- Per-root cache of the parsed answer and an in-flight marker. `info` is nil
+--- until the first answer lands, or when jj failed.
+---@type table<string, {info: VcsLineInfo?, busy: boolean}>
 local cache = {}
+
+--- The jj root holding `dir`, or nil outside a jj repo.
+---@param dir string
+---@return string?
+function M.root_of(dir)
+  return vim.fs.root(dir, ".jj")
+end
 
 --- The jj root for the current buffer's file (cwd for unnamed buffers).
 ---@return string?
 local function root()
   local name = vim.api.nvim_buf_get_name(0)
   local dir = (name ~= "" and vim.bo.buftype == "" and vim.fs.dirname(name)) or vim.fn.getcwd()
-  return vim.fs.root(dir, ".jj")
+  return M.root_of(dir)
 end
 
 --- Ask jj about `root` and cache the result; one call in flight per root.
@@ -103,7 +132,7 @@ local function query(r)
   if c and c.busy then
     return
   end
-  cache[r] = { text = c and c.text or "", busy = true }
+  cache[r] = { info = c and c.info, busy = true }
   vim.system({
     "jj",
     "--color=never",
@@ -116,16 +145,38 @@ local function query(r)
     "-T",
     M.template,
   }, { cwd = r, text = true }, function(out)
-    local text = cache[r] and cache[r].text or ""
+    local info = cache[r] and cache[r].info
     if out.code == 0 then
-      local info = M.parse(out.stdout or "")
-      text = info and M.format(info) or ""
+      info = M.parse(out.stdout or "")
     end
-    cache[r] = { text = text, busy = false }
+    cache[r] = { info = info, busy = false }
     vim.schedule(function()
       pcall(require("lualine").refresh, { place = { "statusline" } })
+      -- Tab labels and the OS title draw the same fragment (config.workspace);
+      -- they listen here rather than this module knowing about them.
+      vim.api.nvim_exec_autocmds("User", { pattern = "VcsLineChanged", data = { root = r } })
     end)
   end)
+end
+
+--- The cached answer for a jj root, asking jj when there is none yet. Returns
+--- nil until the first answer lands, so callers fall back to something else
+--- and repaint on `User VcsLineChanged`.
+---@param r string jj root
+---@return VcsLineInfo?
+function M.info_for(r)
+  if not cache[r] then
+    query(r)
+  end
+  return cache[r].info
+end
+
+--- Drop every cached answer for `r` and ask again. Bound to events that can
+--- move `@` or a bookmark in that root.
+---@param r string jj root
+function M.invalidate_root(r)
+  cache[r] = nil
+  query(r)
 end
 
 --- Forget the cached answer for the current root and ask again. Bound to the
@@ -133,8 +184,7 @@ end
 function M.invalidate()
   local r = root()
   if r then
-    cache[r] = nil
-    query(r)
+    M.invalidate_root(r)
   end
 end
 
@@ -161,10 +211,8 @@ function M.branch()
   if not r then
     return require("lualine.components.branch.git_branch").get_branch()
   end
-  if not cache[r] then
-    query(r)
-  end
-  return cache[r].text
+  local info = M.info_for(r)
+  return info and M.format(info) or ""
 end
 
 --- lualine `diff` source: gitsigns' dict where gitsigns owns the buffer,

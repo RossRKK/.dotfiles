@@ -32,6 +32,18 @@ describe("vcsline.parse + format", function()
     assert.equals("main+1 umzvrvxs", render("\tabcdefgh\tmain,feature\n@\tumzvrvxs\t\n"))
   end)
 
+  it("drops the change id in the short form, unless it is all there is", function()
+    assert.equals("main+2", vl.format(vl.parse("@\tumzvrvxs\t\n\tquxqtyqs\t\n\tabcdefgh\tmain\n"), true))
+    assert.equals("main", vl.format(vl.parse("@\tumzvrvxs\tmain\n"), true))
+    assert.equals("umzvrvxs", vl.format(vl.parse("@\tumzvrvxs\t\n"), true))
+  end)
+
+  it("reads the workspace name off @'s line, first of several", function()
+    assert.equals("default", vl.parse("@\tumzvrvxs\t\tdefault\n\tabcdefgh\tmain\t\n").workspace)
+    assert.equals("agent", vl.parse("@\tumzvrvxs\tmain\tagent,default\n").workspace)
+    assert.is_nil(vl.parse("@\tumzvrvxs\tmain\t\n").workspace)
+  end)
+
   it("keeps the first bookmarked head when two lines merge into @", function()
     assert.equals(
       "a+2 umzvrvxs",
