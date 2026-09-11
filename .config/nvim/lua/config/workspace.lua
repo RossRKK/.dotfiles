@@ -30,29 +30,76 @@ function M.name(tab)
   return vim.fn.fnamemodify(M.cwd(tab), ":t")
 end
 
---- What a workspace is called wherever it's on display: "<repo> - <branch>",
---- so a worktree reads as the repo and the branch it holds
---- (ionics/.worktrees/rkk-some-branch -> "ionics - rkk/some-branch") rather
---- than as its checkout directory. Drawn from the greeter's cached branch
---- report (config.greeter fetches one per workspace and watches the git dirs,
---- so it follows checkouts); before the report lands -- or for a directory git
---- can't say anything about -- it falls back to the plain workspace name.
---- Used by the tab labels below, the greeter header, and fishmonger's agent
---- view (via project_name in plugins/terminal.lua), so all three agree.
+--- What a workspace is called wherever it's on display -- the tab labels, and
+--- fishmonger's agent view (via project_name in plugins/terminal.lua) -- so
+--- both agree.
+---
+--- In a jj repo: "<repo> - <bookmark>+<n>", the short form of the statusline's
+--- jj fragment (util/vcsline), so a tab says the same thing as the statusline
+--- under it -- `ionics - main+1`. The repo is the main workspace's directory,
+--- so a secondary workspace under `<repo>/.worktrees/` reads as the repo too.
+--- Before vcsline's first answer lands it is the bare repo name; the answer
+--- raises `User VcsLineChanged`, on which the labels repaint (see below).
+---
+--- In a git repo: "<repo> - <branch>", so a worktree reads as the repo and the
+--- branch it holds (ionics/.worktrees/rkk-some-branch -> "ionics -
+--- rkk/some-branch") rather than as its checkout directory. Drawn from the
+--- greeter's cached branch report (config.greeter fetches one per workspace
+--- and watches the git dirs, so it follows checkouts); before the report lands
+--- -- or for a directory git can't say anything about -- it falls back to the
+--- plain workspace name.
 ---@param tab? integer tabpage handle (default: current)
 ---@return string
 function M.display_name(tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
+  local cwd = vim.fs.normalize(M.cwd(tab))
+  local jj = M.jj_name(cwd)
+  if jj then
+    return jj
+  end
   -- package.loaded, not require: no reason to drag the greeter in just to name
   -- a tab, and before its setup there is no report to read anyway.
   local greeter = package.loaded["config.greeter"]
-  local report = greeter and greeter.reports[vim.fs.normalize(M.cwd(tab))]
+  local report = greeter and greeter.reports[cwd]
   if report and report.repo then
     local branch = report.branch or report.head
     return branch and (report.repo .. " - " .. branch) or report.repo
   end
   return M.name(tab)
 end
+
+--- The jj half of display_name: `<repo> - main+1` for a directory inside a jj
+--- workspace, nil outside one.
+---@param cwd string normalized directory
+---@return string?
+function M.jj_name(cwd)
+  local vcsline = require("util.vcsline")
+  local root = vcsline.root_of(cwd)
+  if not root then
+    return nil
+  end
+  local main = require("util.jjworkspace").root(cwd) or root
+  local repo = vim.fn.fnamemodify(main, ":t")
+  local info = vcsline.info_for(root)
+  if not info then
+    return repo
+  end
+  return repo .. " - " .. vcsline.format(info, true)
+end
+
+-- vcsline answers async; its first answer for a root, and every later move of
+-- `@` or a bookmark it notices, repaints the labels. The greeter's report used
+-- to drive this for jj too, from a second `jj` query of its own -- two sources
+-- for one label is where the stale titles came from.
+vim.api.nvim_create_autocmd("User", {
+  pattern = "VcsLineChanged",
+  group = vim.api.nvim_create_augroup("workspace_vcsline", { clear = true }),
+  callback = function()
+    for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+      M.set_label(tab)
+    end
+  end,
+})
 
 --- A tabpage's working directory (its tab-local cwd, else the global one).
 ---@param tab? integer tabpage handle (default: current)
