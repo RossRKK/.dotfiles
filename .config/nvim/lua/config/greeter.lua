@@ -565,13 +565,13 @@ function M.sections(root, buf, tab, report)
     -- agents. Sitting under a "<repo> - <branch>" heading would read as a
     -- claim that these belong to this repo.
     agents,
-    -- "<repo> - <branch>", the workspace's display name everywhere (tab
-    -- labels, agent view): workspace.display_name reads the same report
-    -- cache this greeter fills, with the plain workspace name as the
-    -- fallback for a directory git can't tell us anything about.
+    -- jj: "<repo> - <jj workspace>" (the graph below says where @ is). git:
+    -- "<repo> - <branch>", the tab label, read from the report cache this
+    -- greeter fills, with the plain workspace name as the fallback for a
+    -- directory git can't tell us anything about. See workspace.greeter_name.
     function()
       return {
-        text = { { require("config.workspace").display_name(tab), hl = "SnacksDashboardHeader" } },
+        text = { { require("config.workspace").greeter_name(tab), hl = "SnacksDashboardHeader" } },
         align = "center",
         padding = 1,
       }
@@ -816,6 +816,14 @@ function M.setup()
   vim.api.nvim_create_autocmd("User", {
     group = group,
     pattern = "FishmongerAgentsChanged",
+    callback = M.update_dashboards,
+  })
+
+  -- The heading of a jj greeter is drawn from vcsline's answer (see
+  -- workspace.greeter_name), which lands async and moves with `@`.
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "VcsLineChanged",
     callback = M.update_dashboards,
   })
 

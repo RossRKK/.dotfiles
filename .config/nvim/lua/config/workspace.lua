@@ -87,6 +87,29 @@ function M.jj_name(cwd)
   return repo .. " - " .. vcsline.format(info, true)
 end
 
+--- The greeter's heading: in a jj repo "<repo> - <jj workspace>" (`ionics -
+--- default`, `ionics - dd-x`), since the `jj log` right under it already says
+--- where `@` sits and repeating the bookmark there said nothing new. Outside
+--- jj it is display_name.
+---@param tab? integer tabpage handle (default: current)
+---@return string
+function M.greeter_name(tab)
+  tab = tab or vim.api.nvim_get_current_tabpage()
+  local vcsline = require("util.vcsline")
+  local cwd = vim.fs.normalize(M.cwd(tab))
+  local root = vcsline.root_of(cwd)
+  if not root then
+    return M.display_name(tab)
+  end
+  local main = require("util.jjworkspace").root(cwd) or root
+  local repo = vim.fn.fnamemodify(main, ":t")
+  local info = vcsline.info_for(root)
+  if not info or not info.workspace then
+    return repo
+  end
+  return repo .. " - " .. info.workspace
+end
+
 -- vcsline answers async; its first answer for a root, and every later move of
 -- `@` or a bookmark it notices, repaints the labels. The greeter's report used
 -- to drive this for jj too, from a second `jj` query of its own -- two sources
