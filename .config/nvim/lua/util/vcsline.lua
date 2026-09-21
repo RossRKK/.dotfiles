@@ -55,7 +55,7 @@ M.template = 'if(current_working_copy, "@", "") ++ "\t" ++ change_id.shortest(8)
 ---@param out string
 ---@return VcsLineInfo?
 function M.parse(out)
-  local change_id, bookmark, workspace
+  local change_id, bookmarks, workspace
   local distance = 0
   for line in vim.gsplit(out, "\n", { plain = true, trimempty = true }) do
     local mark, id, names, spaces = line:match("^(@?)\t(%w+)\t([^\t]*)\t?(.*)$")
@@ -66,8 +66,8 @@ function M.parse(out)
       end
       if names == "" then
         distance = distance + 1
-      elseif not bookmark then
-        bookmark = names:match("^[^,]+")
+      elseif not bookmarks then
+        bookmarks = vim.split(names, ",", { plain = true })
       end
     end
   end
@@ -76,10 +76,34 @@ function M.parse(out)
   end
   return {
     change_id = change_id,
-    bookmark = bookmark,
-    distance = bookmark and distance or 0,
+    bookmark = bookmarks and M.pick_bookmark(bookmarks, workspace) or nil,
+    distance = bookmarks and distance or 0,
     workspace = workspace,
   }
+end
+
+--- Which of several bookmarks on one commit to name the line after: the one
+--- this workspace was opened for, else the first.
+---
+--- util/jjworkspace.lua names a workspace for its bookmark's slug (`feat/x` ->
+--- `feat-x`), so right after `jj workspace add -r feat/x` the new working copy
+--- sits over a commit carrying both `feat/x` and whatever it was cut from
+--- (`main`, say). jj lists them alphabetically, so the label used to come out
+--- as `main+1` in a tab called `feat-x`. Matching on the slug puts the tab's
+--- own name first.
+---@param names string[] local bookmarks on the commit, in jj's order
+---@param workspace? string the jj workspace name off @'s line
+---@return string
+function M.pick_bookmark(names, workspace)
+  if workspace then
+    local slug = require("util.worktree").slug
+    for _, name in ipairs(names) do
+      if slug(name) == workspace then
+        return name
+      end
+    end
+  end
+  return names[1]
 end
 
 --- Render the parsed info: `main+2 umzvrvxs`, `main umzvrvxs` when the bookmark

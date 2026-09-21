@@ -32,6 +32,16 @@ describe("vcsline.parse + format", function()
     assert.equals("main+1 umzvrvxs", render("\tabcdefgh\tmain,feature\n@\tumzvrvxs\t\n"))
   end)
 
+  -- jj lists bookmarks alphabetically, so `main` would win over `feat/x` on the
+  -- commit a workspace was just cut from; the workspace's own name breaks the tie.
+  it("prefers the bookmark the workspace is named for, by slug", function()
+    assert.equals("feat/x+1 umzvrvxs", render("@\tumzvrvxs\t\tfeat-x\n\tabcdefgh\tfeat/x,main\t\n"))
+    assert.equals("feat/x+1 umzvrvxs", render("@\tumzvrvxs\t\tfeat-x\n\tabcdefgh\tmain,feat/x\t\n"))
+    assert.equals("feat/x umzvrvxs", render("@\tumzvrvxs\tmain,feat/x\tfeat-x\n"))
+    -- the main workspace is `default`, which no bookmark is called
+    assert.equals("main+1 umzvrvxs", render("@\tumzvrvxs\t\tdefault\n\tabcdefgh\tmain,feat/x\t\n"))
+  end)
+
   it("drops the change id in the short form, unless it is all there is", function()
     assert.equals("main+2", vl.format(vl.parse("@\tumzvrvxs\t\n\tquxqtyqs\t\n\tabcdefgh\tmain\n"), true))
     assert.equals("main", vl.format(vl.parse("@\tumzvrvxs\tmain\n"), true))
