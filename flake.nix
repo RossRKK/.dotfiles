@@ -67,6 +67,13 @@
         ];
       };
 
+      # Steam Deck (SteamOS 3.x), home-manager standalone. No plasma-manager:
+      # SteamOS owns desktop mode's Plasma layout, see hosts/deck.nix.
+      homeConfigurations."deck@achilles" = home-manager.lib.homeManagerConfiguration {
+        pkgs = pkgsLinux "x86_64-linux";
+        modules = [ ./hosts/deck.nix ];
+      };
+
       homeConfigurations."rosskelso@work" = home-manager.lib.homeManagerConfiguration {
         pkgs = pkgsLinux "x86_64-linux";
         modules = [ ./hosts/work.nix ];
