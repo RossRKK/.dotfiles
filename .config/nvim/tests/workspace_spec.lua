@@ -94,3 +94,27 @@ describe("workspace.greeter_name", function()
     assert.equals("ionics", ws.greeter_name())
   end)
 end)
+
+-- <leader>te: a browser for a project that is NOT open yet, so it must start at
+-- ~ rather than following the current buffer's file (the explorer default).
+describe("workspace.explore", function()
+  local saved_snacks, got
+
+  before_each(function()
+    saved_snacks = _G.Snacks
+    got = nil
+    _G.Snacks = { picker = { explorer = function(opts)
+      got = opts
+    end } }
+  end)
+
+  after_each(function()
+    _G.Snacks = saved_snacks
+  end)
+
+  it("starts at ~ and does not follow the current file", function()
+    require("config.workspace").explore()
+    assert.equals(vim.env.HOME, got.cwd)
+    assert.is_false(got.follow_file)
+  end)
+end)

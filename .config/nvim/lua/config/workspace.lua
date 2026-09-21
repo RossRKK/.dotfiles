@@ -348,6 +348,10 @@ function M.explore(opts)
   end
   Snacks.picker.explorer({
     cwd = vim.env.HOME,
+    -- Start collapsed at ~. The explorer source defaults to follow_file, which
+    -- expands the tree down to the current buffer's file -- the one project
+    -- this picker is never for, since it is already open.
+    follow_file = false,
     -- Dotfile directories are projects too (~/.dotfiles, ~/.config/*), and the
     -- point of this picker is reaching a repo nothing has recorded yet.
     hidden = true,
