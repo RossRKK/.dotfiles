@@ -104,20 +104,36 @@ end
 -- augroup CREATED BY NAME with clear = true ("snacks_dashboard"), so opening a
 -- greeter wipes every older greeter's Update autocmd and they go permanently
 -- stale. Calling each instance's :update() directly bypasses that event
--- plumbing. Pruned lazily: snacks styles the buffers bufhidden=wipe, so a
--- dead entry is just an invalid buffer.
+-- plumbing. Pruned lazily: a dead entry is just an invalid buffer.
 local instances = {}
+M._instances = instances -- exposed for tests only
 
---- Repaint every open greeter, newest and stale-augroup ones alike.
---- `visible_only` limits it to greeters currently in a window -- the spinner
---- tick fires several times a second, and re-resolving a hidden dashboard's
---- sections that often buys nothing (it's re-resolved anyway the moment it is
---- shown, via open()).
----@param visible_only? boolean
-function M.update_dashboards(visible_only)
+--- True when the dashboard's own window still exists and still shows it.
+---
+--- A snacks dashboard remembers the window it opened in (`dash.win`) and
+--- `dash:update()` ends by putting the cursor on an action item IN THAT
+--- WINDOW, without checking what the window shows now. Our greeters outlive
+--- being displayed (bufhidden=hide, so the buffer stays on the bufferline), so
+--- once a file is opened over one, that window is the file's -- and an update
+--- would yank the file's cursor to the dashboard item's row and column. Saving
+--- triggered exactly that, via the VcsLineChanged refresh below.
+---@param buf integer
+---@param dash snacks.dashboard.Class
+---@return boolean
+local function shown_in_own_window(buf, dash)
+  return dash.win ~= nil
+    and vim.api.nvim_win_is_valid(dash.win)
+    and vim.api.nvim_win_get_buf(dash.win) == buf
+end
+
+--- Repaint every greeter that is on screen in its own window, newest and
+--- stale-augroup ones alike. Hidden ones are left as they are: they re-resolve
+--- the moment they are shown again, via open(), and updating one would move
+--- the cursor in whatever window took its place (see shown_in_own_window).
+function M.update_dashboards()
   for buf, dash in pairs(instances) do
     if vim.api.nvim_buf_is_valid(buf) then
-      if not visible_only or vim.fn.win_findbuf(buf)[1] then
+      if shown_in_own_window(buf, dash) then
         pcall(dash.update, dash)
       end
     else
@@ -837,9 +853,7 @@ function M.setup()
     pattern = "FishmongerAgentsTick",
     callback = function()
       if vim.bo.filetype ~= "snacks_dashboard" then
-        -- Visible greeters only: this fires several times a second, and hidden
-        -- ones re-resolve on open() anyway.
-        M.update_dashboards(true)
+        M.update_dashboards()
       end
     end,
   })
