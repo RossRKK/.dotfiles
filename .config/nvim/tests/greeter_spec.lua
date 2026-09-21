@@ -55,3 +55,60 @@ describe("greeter.graph", function()
     assert.equals(vim.api.nvim_win_get_width(0), width_of(items[1]))
   end)
 end)
+
+-- Regression: a snacks dashboard's update() puts the cursor on an action item in
+-- the window it opened in, without checking what that window shows now. Our
+-- greeters stay alive after a file is opened over them, so refreshing a hidden
+-- one used to yank the file's cursor (seen on every save that moved vcsline).
+describe("greeter.update_dashboards", function()
+  local dash_buf, dash, updates
+
+  -- A fresh, named-by-content buffer each time: `:enew` on an empty unnamed
+  -- buffer reuses it, which would make the "file" and the dashboard one buffer.
+  local function show_new_buffer(lines)
+    local buf = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.api.nvim_win_set_buf(0, buf)
+    return buf
+  end
+
+  before_each(function()
+    dash_buf = show_new_buffer({ "greeter" })
+    updates = 0
+    -- Stand-in for the object Snacks.dashboard.open() returns: remembers its
+    -- window and, like snacks, moves that window's cursor when updated.
+    dash = { win = vim.api.nvim_get_current_win() }
+    function dash.update(self)
+      updates = updates + 1
+      vim.api.nvim_win_set_cursor(self.win, { 1, 0 })
+    end
+    greeter._instances[dash_buf] = dash
+  end)
+
+  after_each(function()
+    greeter._instances[dash_buf] = nil
+    vim.cmd("%bwipeout!")
+  end)
+
+  it("updates a dashboard that is shown in its own window", function()
+    greeter.update_dashboards()
+    assert.equals(1, updates)
+  end)
+
+  it("leaves the cursor alone once a file is opened over the dashboard", function()
+    show_new_buffer({ "one", "two", "three" })
+    vim.api.nvim_win_set_cursor(0, { 3, 2 })
+
+    greeter.update_dashboards()
+
+    assert.equals(0, updates)
+    assert.same({ 3, 2 }, vim.api.nvim_win_get_cursor(0))
+  end)
+
+  it("forgets a dashboard whose buffer is gone", function()
+    show_new_buffer({ "other" })
+    vim.api.nvim_buf_delete(dash_buf, { force = true })
+    greeter.update_dashboards()
+    assert.is_nil(greeter._instances[dash_buf])
+  end)
+end)
