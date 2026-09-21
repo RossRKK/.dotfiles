@@ -112,3 +112,81 @@ describe("greeter.update_dashboards", function()
     assert.is_nil(greeter._instances[dash_buf])
   end)
 end)
+
+-- Regression: snacks' own WinResized autocmd calls size() and, on a change,
+-- update() -- which ends by setting the cursor in `self.win`. A hidden greeter
+-- whose old window now shows a file made every split-resize either error
+-- ("Invalid cursor line: out of range") or yank the file's cursor.
+describe("greeter.patch_snacks_dashboard", function()
+  local D, dash, dash_buf
+
+  local function show_new_buffer(lines)
+    local buf = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.api.nvim_win_set_buf(0, buf)
+    return buf
+  end
+
+  before_each(function()
+    vim.cmd("only!")
+    -- A stand-in for snacks.dashboard.Dashboard with the real size()/find()
+    -- bodies: unguarded reads of self.win, and self.lines[row] without a check.
+    D = {}
+    D.__index = D
+    function D:size()
+      return { width = vim.api.nvim_win_get_width(self.win), height = vim.api.nvim_win_get_height(self.win) }
+    end
+    function D:find(pos)
+      return { row = pos[1], text = self.lines[pos[1]]:sub(1, 1) }
+    end
+    greeter.patch_snacks_dashboard(D)
+
+    dash_buf = show_new_buffer({ "greeter" })
+    dash = setmetatable({ buf = dash_buf, win = vim.api.nvim_get_current_win(), lines = { "a", "b" } }, D)
+    dash._size = dash:size()
+  end)
+
+  after_each(function()
+    vim.cmd("only!")
+    vim.cmd("%bwipeout!")
+  end)
+
+  it("is idempotent", function()
+    local size = D.size
+    greeter.patch_snacks_dashboard(D)
+    assert.equals(size, D.size)
+  end)
+
+  it("reports the live size while shown in its own window", function()
+    vim.cmd("split")
+    vim.cmd("wincmd j")
+    assert.equals(vim.api.nvim_win_get_height(dash.win), dash:size().height)
+  end)
+
+  it("reports the last size, unchanged, once a file is shown in its old window and it is resized", function()
+    show_new_buffer({ "one" })
+    vim.cmd("split") -- shrinks the old window: snacks would see a new size and update()
+    assert.same(dash._size, dash:size())
+  end)
+
+  it("reports the last size when its window is gone", function()
+    vim.cmd("split")
+    vim.api.nvim_win_close(dash.win, true)
+    assert.same(dash._size, dash:size())
+  end)
+
+  it("follows the buffer to the window that shows it now", function()
+    show_new_buffer({ "one" })
+    vim.cmd("split")
+    vim.api.nvim_win_set_buf(0, dash_buf)
+    local here = vim.api.nvim_get_current_win()
+    assert.equals(vim.api.nvim_win_get_height(here), dash:size().height)
+    assert.equals(here, dash.win)
+  end)
+
+  it("clamps find() to the rendered lines", function()
+    assert.equals(2, dash:find({ 5, 0 }).row)
+    dash.lines = {}
+    assert.is_nil(dash:find({ 1, 0 }))
+  end)
+end)

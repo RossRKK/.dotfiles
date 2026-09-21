@@ -754,6 +754,60 @@ function M.close_all()
   M.open()
 end
 
+--- Patch two snacks.dashboard assumptions that a persistent greeter breaks.
+--- Takes the class (snacks.dashboard.Dashboard) so a spec can hand in a fake.
+--- Idempotent: a second call is a no-op.
+---
+--- 1. D:find indexes self.lines[cursor row] and hands it to charidx() without a
+---    nil guard. A dashboard that shrinks on re-render -- ours does, the file
+---    list is sized to the window (see files()) -- can leave the cursor below
+---    the last rendered line, and snacks' own VimResized autocmd (the one
+---    update path not behind a pcall) then dies with E1174. Clamp the row into
+---    the rendered lines before handing it over.
+---
+--- 2. D:size reads the geometry of self.win unguarded, and the class's
+---    WinResized/VimResized autocmd calls it on every resize, then runs
+---    update() when the size changed -- and update() ends by putting the
+---    cursor on an action item IN self.win. Snacks only re-resolves self.win on
+---    WinEnter, and only ever expects that window to show the dashboard. Ours
+---    outlive their window (see M.open): once a file is opened over a greeter,
+---    self.win is either gone ("Invalid window id") or is now the FILE's
+---    window, so any resize -- a split opening below it, say -- made snacks
+---    re-render the hidden greeter and set the file window's cursor to the
+---    dashboard item's row ("Invalid cursor line: out of range", or a silent
+---    cursor jump when the file was long enough). Re-resolve the window from
+---    the buffer instead, and while the buffer is not shown anywhere report
+---    the last known size, so the autocmd's deep_equal sees "unchanged" and
+---    skips the update.
+---@param D table the snacks.dashboard.Dashboard class
+function M.patch_snacks_dashboard(D)
+  if D._greeter_patched then
+    return
+  end
+  D._greeter_patched = true
+
+  local size = D.size
+  function D:size()
+    if not shown_in_own_window(self.buf, self) then
+      local win = vim.fn.bufwinid(self.buf)
+      if win == -1 then
+        return self._size or { width = 0, height = 0 }
+      end
+      self.win = win
+    end
+    return size(self)
+  end
+
+  local find = D.find
+  function D:find(pos, from)
+    if #self.lines == 0 then
+      return nil
+    end
+    pos = { math.max(1, math.min(pos[1], #self.lines)), pos[2] }
+    return find(self, pos, from)
+  end
+end
+
 --- Keep the greeter as the floor of a workspace tab: whenever a window in one
 --- falls back to a truly empty buffer (last buffer closed, `q` on the greeter
 --- itself), show the greeter instead. Only workspace tabs -- `nvim <file>`,
@@ -761,55 +815,18 @@ end
 function M.setup()
   local group = vim.api.nvim_create_augroup("workspace_greeter", { clear = true })
 
-  -- Patch over a snacks bug: D:find indexes self.lines[cursor row] and hands it
-  -- to charidx() without a nil guard. A dashboard that shrinks on re-render --
-  -- ours does, the file list is sized to the window (see files()) -- can leave
-  -- the cursor below the last rendered line, and snacks' own VimResized autocmd
-  -- (the one update path not behind a pcall) then dies with E1174. Clamp the
-  -- row into the rendered lines before handing it over.
-  --
   -- Applied on VeryLazy, not here: setup() runs from config.autocmds, before
   -- lazy has put snacks on the runtimepath. Patching the class is enough for
   -- dashboards opened earlier (the bare-nvim startup one): instances resolve
-  -- find() through the class metatable at call time.
+  -- the methods through the class metatable at call time.
   vim.api.nvim_create_autocmd("User", {
     group = group,
     pattern = "VeryLazy",
     once = true,
     callback = function()
       local ok, dashboard = pcall(require, "snacks.dashboard")
-      if not ok or dashboard.Dashboard._find_clamped then
-        return
-      end
-      local D = dashboard.Dashboard
-      local find = D.find
-
-      -- Second snacks assumption broken by a persistent dashboard: size()
-      -- reads nvim_win_get_width(self.win) unguarded, and the class's
-      -- WinResized/VimResized autocmd calls it on every resize -- including
-      -- while this dashboard's window is gone (ours outlive their window; see
-      -- M.open). Snacks only re-resolves self.win on WinEnter, so a resize in
-      -- between dies with "Invalid window id". Re-resolve here instead, and
-      -- with no window at all report the last known size, so the autocmd's
-      -- deep_equal sees "unchanged" and skips the update.
-      local size = D.size
-      function D:size()
-        if not (self.win and vim.api.nvim_win_is_valid(self.win)) then
-          local win = vim.fn.bufwinid(self.buf)
-          if win == -1 then
-            return self._size or { width = 0, height = 0 }
-          end
-          self.win = win
-        end
-        return size(self)
-      end
-      D._find_clamped = true
-      function D:find(pos, from)
-        if #self.lines == 0 then
-          return nil
-        end
-        pos = { math.max(1, math.min(pos[1], #self.lines)), pos[2] }
-        return find(self, pos, from)
+      if ok then
+        M.patch_snacks_dashboard(dashboard.Dashboard)
       end
     end,
   })
