@@ -67,6 +67,11 @@ function M.pick_tab()
   tabs().pick()
 end
 
+--- <leader>tb: name a new branch (jj: bookmark) and open a workspace tab for it.
+function M.new_tab()
+  tabs().new()
+end
+
 --- <leader>tf: fork the current workspace tab.
 function M.fork_tab()
   tabs().fork()
