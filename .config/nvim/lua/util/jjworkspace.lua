@@ -207,6 +207,15 @@ function M.parse_candidates(out, spaces, root)
   return items
 end
 
+--- Revset a brand-new name's workspace is parented on: the tab's working copy
+--- when it holds changes, else its parent. `jj workspace add -r X` always makes
+--- the new working copy a CHILD of X, so basing on an empty `@` would leave an
+--- empty commit under the new line of work, and every workspace opened from
+--- there would stack another one. `coalesce` takes the first non-empty set, so
+--- an `@` with edits is kept as the base (that is the fork case: dirty work
+--- carried over) and an empty one is skipped.
+M.new_base = "coalesce(@ & ~empty(), @-)"
+
 --- Open `name`'s workspace as a workspace tab, creating it if needed.
 ---
 --- `name` may be a bookmark (possibly remote-qualified, `origin/x`, as the
@@ -250,7 +259,7 @@ function M.open(name, dir)
 
   -- An existing bookmark is what the new working copy sits on; anything else is
   -- a new line of work off the current change (of THIS workspace: jj runs in
-  -- `dir`, not `root`, so `@` means the tab's working copy).
+  -- `dir`, not `root`, so `@` means the tab's working copy), see new_base.
   --
   -- A bookmark that exists only on a remote is tracked first. jj does NOT fall
   -- back from `x` to `x@origin` the way git checkout does -- `-r x` fails with
@@ -265,7 +274,7 @@ function M.open(name, dir)
       return
     end
   end
-  local add_err = M.add(dir, local_name, path, known and local_name or "@")
+  local add_err = M.add(dir, local_name, path, known and local_name or M.new_base)
   if add_err then
     status("jj workspace add: " .. add_err, vim.log.levels.ERROR)
     return
