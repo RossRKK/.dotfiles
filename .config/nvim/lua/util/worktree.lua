@@ -255,8 +255,13 @@ function M.fork_args(branch, path, base)
   return { "worktree", "add", "-b", branch, path, base }
 end
 
+--- The personal branch prefix, lazygit's `git.branchPrefix`: every branch (jj:
+--- bookmark) made from nvim starts with it. A new-name prompt is pre-filled
+--- with it, and a fork suggestion is put under it.
+M.prefix = "rkk/"
+
 --- The suggested branch name a fork's input prompt is pre-filled with: the
---- branch being forked, always under the personal `rkk/` prefix (not doubled if
+--- branch being forked, always under the personal prefix (not doubled if
 --- already there), with `-fork` appended so the fork reads as one -- numbered
 --- (-fork-2, -fork-3, …) past names already taken, so accepting the suggestion
 --- never hands git a branch that exists.
@@ -267,12 +272,12 @@ function M.fork_name(branch, locals)
   if not branch or branch == "" or branch == "HEAD" then
     branch = "fork"
   else
-    branch = branch:gsub("^rkk/", "") .. "-fork"
+    branch = branch:gsub("^" .. vim.pesc(M.prefix), "") .. "-fork"
   end
-  local name = "rkk/" .. branch
+  local name = M.prefix .. branch
   local n = 2
   while locals[name] do
-    name = ("rkk/%s-%d"):format(branch, n)
+    name = ("%s%s-%d"):format(M.prefix, branch, n)
     n = n + 1
   end
   return name
@@ -410,6 +415,21 @@ function M.open(branch, dir)
   git_async(root, { "fetch", "origin", short }, "fetching origin/" .. short, function(ok)
     -- A failed fetch just means the name is new: fall through to -b.
     create(ok and M.resolve(branch, locals, remote_refs(root)) or branch)
+  end)
+end
+
+--- Prompt for a name and open a worktree tab for it, mirroring
+--- util/jjworkspace.lua's M.new: the picker's <CR> only takes typed text when
+--- nothing fuzzy-matches it, so a new branch name gets its own entry point.
+--- M.open branches an unknown name off the main worktree's HEAD. The prompt
+--- starts with the prefix, as lazygit's does; delete it for a shared branch.
+function M.new()
+  local cwd = vim.fn.getcwd()
+  vim.ui.input({ prompt = "New branch: ", default = M.prefix }, function(input)
+    local branch = vim.trim(input or "")
+    if branch ~= "" then
+      M.open(branch, cwd)
+    end
   end)
 end
 

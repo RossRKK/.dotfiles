@@ -290,6 +290,23 @@ function M.open(name, dir)
   require("config.workspace").open(path, { tab = true })
 end
 
+--- Prompt for a name and open a workspace tab for it: the "start a ticket"
+--- move. The picker (M.pick) is for a bookmark that exists; its <CR> only
+--- falls back to the typed text when nothing fuzzy-matches it, which a ticket
+--- name nearly always does, so a NEW name gets its own entry point. M.open does
+--- the work: a workspace on new_base with a bookmark of this name on its `@`,
+--- so the tab is called what you typed. An existing name just opens. The
+--- prompt starts with the personal prefix, as lazygit's does.
+function M.new()
+  local cwd = vim.fn.getcwd()
+  vim.ui.input({ prompt = "New bookmark: ", default = worktree.prefix }, function(input)
+    local name = vim.trim(input or "")
+    if name ~= "" then
+      M.open(name, cwd)
+    end
+  end)
+end
+
 ---@class jjworkspace.Lookup
 ---@field is_local boolean a local bookmark of this name exists
 ---@field remotes string[] remotes carrying the bookmark, the `git` mirror excluded

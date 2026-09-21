@@ -160,6 +160,13 @@ end, { desc = "New project tab (browse)" })
 map("n", "<leader>tw", function()
   require("util.vcs").pick_tab()
 end, { desc = "New project tab (worktree / jj workspace)" })
+-- A branch (jj: bookmark) that does not exist yet: name it, get a worktree /
+-- jj workspace for it, opened as its own tab. <leader>tw's picker is for
+-- branches that exist; its typed-name fallback only fires when nothing
+-- fuzzy-matches, which a ticket name nearly always does.
+map("n", "<leader>tb", function()
+  require("util.vcs").new_tab()
+end, { desc = "New project tab for a new branch / bookmark" })
 -- Fork the current worktree tab: new branch (jj: bookmark) off this tab's
 -- current state, dirty changes carried over, opened as its own tab, with every
 -- Claude session in this tab's side terminals forked (--fork-session) into its
