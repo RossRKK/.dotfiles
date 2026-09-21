@@ -99,6 +99,42 @@ describe("jjworkspace.add_args", function()
   end)
 end)
 
+describe("jjworkspace.new_base", function()
+  -- Driven against a throwaway repo: the point is what jj resolves the revset
+  -- to, not the string. `jj workspace add -r X` parents the new working copy on
+  -- X, so an empty @ must be skipped or it stays as an empty commit under the
+  -- new work.
+  local root
+  local function jj(...)
+    local out = vim.system({ "jj", ... }, { cwd = root, text = true }):wait()
+    assert.equals(0, out.code, out.stderr)
+    return vim.trim(out.stdout)
+  end
+  local function change(rev)
+    return jj("log", "--no-graph", "-r", rev, "-T", "change_id")
+  end
+
+  before_each(function()
+    root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    jj("git", "init")
+    vim.fn.writefile({ "a" }, root .. "/a.txt")
+    jj("commit", "-m", "base") -- @ is now a fresh, empty change on top
+  end)
+  after_each(function()
+    vim.fn.delete(root, "rf")
+  end)
+
+  it("resolves to the parent when @ is empty", function()
+    assert.equals(change("@-"), change(jjw.new_base))
+  end)
+
+  it("resolves to @ once it has changes", function()
+    vim.fn.writefile({ "b" }, root .. "/b.txt")
+    assert.equals(change("@"), change(jjw.new_base))
+  end)
+end)
+
 describe("jjworkspace.parse_candidates", function()
   --- One `jj bookmark list` line in the template's field order.
   local function row(name, remote, id, time, msg)
