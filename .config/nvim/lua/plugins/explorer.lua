@@ -131,8 +131,9 @@ return {
           -- registered on filesystem (not globally) and referenced from this
           -- source's renderers below -- document_symbols keeps its own. The gutter
           -- combines triage's status glyph and nitpick's comment bubble in one
-          -- fixed-width column (util/reviewgutter), and the wrapped `icon` gives up
-          -- its trailing pad while review mode is on so the column reuses it.
+          -- two-cell column (util/reviewgutter) that grows by one cell only on
+          -- commented rows, and the wrapped `icon` gives up its trailing pad while
+          -- review mode is on so the column reuses it.
           components = {
             icon = require("util.reviewgutter").icon,
             review_gutter = require("util.reviewgutter").gutter,

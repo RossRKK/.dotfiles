@@ -3,9 +3,11 @@
 -- adds two cells only to the rows it marks, which pushed those rows' names to
 -- the right of their neighbours. This module instead:
 --
---   * `gutter`  draws a fixed two-cell column on every row while review mode is
---     on (glyph + space, or two blanks), and nothing at all while it is off. The
---     comment bubble wins over the triage status when a row has both.
+--   * `gutter`  draws a two-cell column on every row while review mode is on
+--     (triage status or a blank, then a space), and nothing at all while it is
+--     off. A commented row alone grows by one cell so the bubble fits between
+--     the status and the space: a comment always comes with a status, so
+--     unmarked and status-only rows keep the same spacing.
 --   * `icon`    wraps neo-tree's icon component and drops its trailing pad while
 --     review mode is on, so the gutter reuses that cell and the tree grows by one
 --     cell, not two.
@@ -24,22 +26,24 @@ local function enabled()
 end
 
 --- neo-tree renderer component: the review gutter for a node.
----@return table chunk
+---@return table chunk|table[] chunks
 function M.gutter(_, node, _)
   if not enabled() then
     return { text = "" }
   end
-  local ok, nitpick = pcall(require, "nitpick")
-  if ok and nitpick.has_comments(node.path) then
-    return { text = M.bubble .. " ", highlight = "ReviewCommentTreeIcon" }
-  end
   local triage = require("triage")
   local status = node.type == "directory" and triage.folder(node.path) or triage.status(node.path)
   local spec = status and triage.icons[status]
-  if spec then
-    return { text = spec.text .. " ", highlight = spec.hl }
+  local ok, nitpick = pcall(require, "nitpick")
+  local commented = ok and nitpick.has_comments(node.path)
+  -- neo-tree takes one highlight per chunk, so the gutter is a list of chunks:
+  -- the status cell, the bubble cell only when there is a comment, then the pad.
+  local chunks = { spec and { text = spec.text, highlight = spec.hl } or { text = " " } }
+  if commented then
+    chunks[#chunks + 1] = { text = M.bubble, highlight = "ReviewCommentTreeIcon" }
   end
-  return { text = "  " }
+  chunks[#chunks + 1] = { text = " " }
+  return chunks
 end
 
 --- neo-tree renderer component: the stock icon, minus its trailing pad while the
