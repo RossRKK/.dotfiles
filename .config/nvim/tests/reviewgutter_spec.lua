@@ -1,6 +1,7 @@
--- util/reviewgutter: the shared review gutter must be exactly two cells wide on
--- every row while review mode is on, and absent while it is off, so rows never
--- shift against their neighbours.
+-- util/reviewgutter: the shared review gutter is two cells wide (status, pad)
+-- on every row while review mode is on, three on a commented row (status,
+-- bubble, pad), and absent while it is off. A comment always comes with a
+-- status, so only commented rows shift against their neighbours.
 
 local assert = require("luassert")
 
@@ -39,6 +40,15 @@ end
 
 local file = { type = "file", path = "/r/a.lua" }
 local dir = { type = "directory", path = "/r/d" }
+local blank, pad = { text = " " }, { text = " " }
+
+local function width(chunks)
+  local w = 0
+  for _, c in ipairs(chunks) do
+    w = w + vim.fn.strdisplaywidth(c.text)
+  end
+  return w
+end
 
 describe("reviewgutter.gutter", function()
   it("draws nothing while review mode is off, even for a marked file", function()
@@ -48,42 +58,47 @@ describe("reviewgutter.gutter", function()
     assert.same({ text = "" }, g.gutter({}, file, {}))
   end)
 
-  it("reserves two blank cells for an unmarked row while review mode is on", function()
+  it("reserves two cells for an unmarked row while review mode is on", function()
     local g = reset()
     fake_triage.on = true
-    assert.same({ text = "  " }, g.gutter({}, file, {}))
+    assert.same({ blank, pad }, g.gutter({}, file, {}))
   end)
 
-  it("draws the triage glyph plus a space for a marked file", function()
+  it("draws the triage glyph in the first cell for a marked file", function()
     local g = reset()
     fake_triage.on = true
     fake_triage.by_path[file.path] = "approved"
-    assert.same({ text = "V ", highlight = "ReviewApproved" }, g.gutter({}, file, {}))
+    assert.same({ { text = "V", highlight = "ReviewApproved" }, pad }, g.gutter({}, file, {}))
   end)
 
   it("uses the rolled-up folder status for a directory", function()
     local g = reset()
     fake_triage.on = true
     fake_triage.by_dir[dir.path] = "approved"
-    assert.same({ text = "V ", highlight = "ReviewApproved" }, g.gutter({}, dir, {}))
+    assert.same({ { text = "V", highlight = "ReviewApproved" }, pad }, g.gutter({}, dir, {}))
   end)
 
-  it("lets the comment bubble win over the triage status", function()
+  it("adds the bubble between the status and the pad for a commented file", function()
     local g = reset()
     fake_triage.on = true
     fake_triage.by_path[file.path] = "approved"
     fake_nitpick.marked[file.path] = true
-    assert.same({ text = g.bubble .. " ", highlight = "ReviewCommentTreeIcon" }, g.gutter({}, file, {}))
+    assert.same({
+      { text = "V", highlight = "ReviewApproved" },
+      { text = g.bubble, highlight = "ReviewCommentTreeIcon" },
+      pad,
+    }, g.gutter({}, file, {}))
   end)
 
-  it("is always two cells wide while on", function()
+  it("is two cells wide on unmarked and status-only rows, three on commented rows", function()
     local g = reset()
     fake_triage.on = true
     fake_triage.by_path["/r/x"] = "approved"
-    fake_nitpick.marked["/r/y"] = true
-    for _, p in ipairs({ "/r/x", "/r/y", "/r/z" }) do
-      assert.equals(2, vim.fn.strdisplaywidth(g.gutter({}, { type = "file", path = p }, {}).text), p)
-    end
+    fake_triage.by_path["/r/w"] = "approved"
+    fake_nitpick.marked["/r/w"] = true
+    assert.equals(2, width(g.gutter({}, { type = "file", path = "/r/z" }, {})), "unmarked")
+    assert.equals(2, width(g.gutter({}, { type = "file", path = "/r/x" }, {})), "status only")
+    assert.equals(3, width(g.gutter({}, { type = "file", path = "/r/w" }, {})), "commented")
   end)
 end)
 
