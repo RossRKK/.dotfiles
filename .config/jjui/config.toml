@@ -1,3 +1,8 @@
+[ui]
+# Poll `jj op log` every N seconds and reload the graph when the operation id
+# changed. Picks up fetches/pushes/edits made from a terminal outside jjui.
+auto_refresh_interval = 5
+
 [preview]
 # Open the preview pane on startup instead of waiting for `p`.
 show_at_start = true
@@ -89,9 +94,11 @@ jjui.revisions.open_set_bookmark({ value = "rkk/" .. suffix })
 # shift+f: fetch every remote, like lazygit's `f`. One key instead of the git
 # menu's `g` then `f`. Tracked bookmarks (master, main) follow the remote, which
 # is what keeps the "<repo> - <branch>" tab title and the greeter current.
-# jj_async goes through jjui's own command runner, like the git menu: the UI
-# stays live during the fetch and the graph reloads when it finishes. A plain
-# jj() call blocks and leaves the old graph on screen until you reopen jjui.
+# jj_async goes through jjui's own command runner, like the git menu, so the UI
+# stays live during the fetch. Unlike the git menu it adds NO refresh
+# continuation (jjui 0.10.6, scripting/lua.go), so the explicit refresh below
+# is what reloads the graph; yielded steps run in sequence, so it runs after
+# the fetch completes. A plain jj() call would block the UI instead.
 [[actions]]
 name = "git.fetch"
 key = "shift+f"
@@ -99,13 +106,14 @@ scope = "revisions"
 desc = "git fetch"
 lua = """
 jjui.jj_async("git", "fetch")
+jjui.revisions.refresh({ keep_selections = true })
 """
 
 # shift+p: push the bookmarks on the selected revision, like lazygit's `P`.
 # `-r` picks the bookmarks pointing at that revision. A bookmark named this way
 # is pushed and tracked even when new on the remote (jj 0.41; --allow-new is a
 # deprecated no-op there).
-# jj_async for the same reason as git.fetch: live UI, graph reload after.
+# jj_async plus an explicit refresh, for the same reason as git.fetch.
 [[actions]]
 name = "git.push"
 key = "shift+p"
@@ -115,4 +123,5 @@ lua = """
 local id = context.change_id()
 if not id then return end
 jjui.jj_async("git", "push", "-r", id)
+jjui.revisions.refresh({ keep_selections = true })
 """
