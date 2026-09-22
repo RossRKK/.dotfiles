@@ -4,8 +4,9 @@
 -- `document_symbols` (a float outlining the focused file, driven by the LSP's
 -- documentSymbol request; <leader>lo).
 -- The branch-review UI paints its triage/nitpick glyphs on the filesystem tree
--- via renderer components (registered below); those come from the triage.nvim /
--- nitpick.nvim plugins, wired in lua/plugins/review.lua.
+-- via the review_gutter renderer component (util/reviewgutter, registered
+-- below), fed by the triage.nvim / nitpick.nvim plugins wired in
+-- lua/plugins/review.lua.
 --
 -- Window routing (which window a file opens into, the side-terminal geometry) is
 -- shared with config/ide.lua and fishmonger, which key off the "neo-tree"
@@ -126,18 +127,20 @@ return {
             hide_dotfiles = false,
             hide_gitignored = false,
           },
-          -- neo-tree resolves components per source, so the triage glyph and the
-          -- nitpick comment marker are registered on filesystem (not globally) and
-          -- referenced from this source's renderers below -- document_symbols keeps
-          -- its own.
+          -- neo-tree resolves components per source, so the review gutter is
+          -- registered on filesystem (not globally) and referenced from this
+          -- source's renderers below -- document_symbols keeps its own. The gutter
+          -- combines triage's status glyph and nitpick's comment bubble in one
+          -- fixed-width column (util/reviewgutter), and the wrapped `icon` gives up
+          -- its trailing pad while review mode is on so the column reuses it.
           components = {
-            triage_status = require("triage.adapter").status_component,
-            nitpick_marker = require("nitpick.adapter").marker_component,
+            icon = require("util.reviewgutter").icon,
+            review_gutter = require("util.reviewgutter").gutter,
           },
           renderers = {
-            -- Default filesystem renderers with `triage_status` and the
-            -- `nitpick_marker` inserted just before the name, so the triage glyph
-            -- and comment bubble sit at the front of the row.
+            -- Default filesystem renderers with `review_gutter` inserted just
+            -- before the name, so the glyph sits at the front of the row without
+            -- shifting the name against its neighbours.
             directory = {
               { "indent" },
               { "icon" },
@@ -145,8 +148,7 @@ return {
               {
                 "container",
                 content = {
-                  { "triage_status", zindex = 10 },
-                  { "nitpick_marker", zindex = 10 },
+                  { "review_gutter", zindex = 10 },
                   { "name", zindex = 10 },
                   { "clipboard", zindex = 10 },
                   {
@@ -166,8 +168,7 @@ return {
               {
                 "container",
                 content = {
-                  { "triage_status", zindex = 10 },
-                  { "nitpick_marker", zindex = 10 },
+                  { "review_gutter", zindex = 10 },
                   { "name", zindex = 10 },
                   { "clipboard", zindex = 10 },
                   { "bufnr", zindex = 10 },
@@ -263,8 +264,8 @@ return {
       })
 
       -- Branch review mode (triage.nvim + nitpick.nvim) is declared and wired in
-      -- plugins/review.lua. Their neo-tree glyphs are registered above as the
-      -- triage_status / nitpick_marker components.
+      -- plugins/review.lua. Their neo-tree glyphs are drawn by the review_gutter
+      -- component registered above (util/reviewgutter).
     end,
   },
 }
