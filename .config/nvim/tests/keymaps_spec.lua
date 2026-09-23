@@ -38,3 +38,13 @@ describe("delete registers", function()
     assert.equals("f", vim.fn.getreg("-"))
   end)
 end)
+
+-- nvim's terminal must forward Shift+Enter to the child untouched, so a
+-- kitty-protocol program (Claude Code) gets CSI 13;2u. An <Esc><CR> map once
+-- sat here and made Claude submit instead of insert a newline.
+describe("terminal Shift+Enter", function()
+  it("leaves <S-CR> unmapped in terminal mode", function()
+    require("config.keymaps")
+    assert.equals("", vim.fn.maparg("<S-CR>", "t"))
+  end)
+end)
