@@ -28,8 +28,7 @@ local function reset_sizes()
 end
 
 local function is_explorer(buf)
-  local src = vim.b[buf].neo_tree_source
-  return src == "filesystem" or src == "git_status"
+  return vim.b[buf].neo_tree_source == "filesystem"
 end
 
 return {
@@ -86,9 +85,7 @@ return {
       left = {
         -- The file tree, sole occupant of the column (the symbols outline is a
         -- float now, see plugins/explorer.lua), so it needs no height of its
-        -- own -- only the column width below. git_status shares this slot:
-        -- <leader>gt swaps the filesystem source for git_status in place
-        -- (neo-tree reuses the window), so both belong to the same edgy view.
+        -- own -- only the column width below.
         {
           title = "Explorer",
           ft = "neo-tree",
