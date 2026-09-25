@@ -36,8 +36,8 @@ function M.open()
   vim.cmd("Neotree filesystem show left")
 end
 
--- Close the docked neo-tree window (filesystem or git_status, which share the
--- slot). The outline float is left alone -- it closes on its own.
+-- Close the docked neo-tree window. The outline float is left alone -- it
+-- closes on its own.
 function M.close()
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
     if vim.api.nvim_win_get_config(win).relative == "" then
@@ -50,7 +50,7 @@ function M.close()
 end
 
 function M.toggle()
-  if M.win("filesystem") or M.win("git_status") then
+  if M.win("filesystem") then
     M.close()
   else
     M.open()

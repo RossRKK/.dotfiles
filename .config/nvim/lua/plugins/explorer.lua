@@ -64,7 +64,7 @@ return {
       end
 
       require("neo-tree").setup({
-        sources = { "filesystem", "document_symbols", "git_status" },
+        sources = { "filesystem", "document_symbols" },
         event_handlers = {
           { event = events.FILE_MOVED, handler = on_file_moved },
           { event = events.FILE_RENAMED, handler = on_file_moved },
@@ -112,9 +112,14 @@ return {
             ["e"] = "toggle_auto_expand_width",
             -- neo-tree's default <C-r> = clear_clipboard is a filesystem-only
             -- command, but window.mappings apply to every source, so the
-            -- document_symbols / git_status sources error on it each startup.
+            -- document_symbols source errors on it each startup.
             -- Unbind it (unused).
             ["<C-r>"] = "none",
+            -- neo-tree's default </> cycle the window's source, so a stray
+            -- keypress swapped the docked tree for another view. The outline
+            -- has its own float (<leader>lo), so unbind them.
+            ["<"] = "none",
+            [">"] = "none",
           },
         },
         filesystem = {
@@ -206,18 +211,6 @@ return {
       vim.keymap.set("n", "<leader>v", "<cmd>Neotree filesystem reveal left reveal_force_cwd<cr>", {
         desc = "Reveal file in explorer",
       })
-      -- Swap the top pane between the file tree and the git_status source (a
-      -- changed-files view with per-file stage/unstage/revert/commit keys:
-      -- ga/gu/gr/gc/gp/gg). Same managed left window, so the outline split below
-      -- stays put; toggles back to the file tree.
-      vim.keymap.set("n", "<leader>gt", function()
-        if sidebar.win("git_status") then
-          vim.cmd("Neotree filesystem show left")
-        else
-          vim.cmd("Neotree git_status show left")
-        end
-      end, { desc = "Toggle git status in explorer" })
-
       -- Link neo-tree's git-status highlight groups to semantic groups so the
       -- colours follow any theme.
       local function set_git_highlights()
