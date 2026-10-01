@@ -578,11 +578,14 @@ alongside them.
 | `Space+rl` | List all comments + drafts in a jumpable overview split   |
 | `Space+re` | Edit the comment / draft on the line (asks if several)    |
 | `Space+ra` | Reply to the comment thread on the line (posts now)       |
+| `Space+rk` | Resolve / unresolve the thread on the line                |
 | `Space+rx` | Discard the draft on the line                             |
 | `Space+rS` | Submit all drafts as one review                           |
+| `Space+ry` | Yank all drafts to a register                             |
 | `Space+rC` | Refresh PR comments from GitHub                           |
 | `Space+ro` | Toggle showing outdated comments (anchor line gone)       |
 | `Space+rs` | Toggle showing resolved-thread comments                   |
+| `Space+rh` | Hide / show all comments for the repo (review mode stays) |
 
 Submit infers the verdict from the triage rollup — no picking: any live
 rejection → **request changes**, all approved → **approve**, anything still
@@ -597,7 +600,8 @@ immediately.
 
 Outdated comments (GitHub dropped their anchor line) show by default, tagged
 `(outdated)`; resolved-thread comments are hidden by default. Toggle each with
-`Space+ro` / `Space+rs`. The review-mode status string (top-left) shows the
+`Space+ro` / `Space+rs`, or hide every comment at once with `Space+rh` while
+review mode (triage status, diff base) stays on. The review-mode status string (top-left) shows the
 target branch and which comment categories are currently on show.
 
 ---
