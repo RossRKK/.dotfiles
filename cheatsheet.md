@@ -563,6 +563,38 @@ shown inline, added / changed lines highlighted — against the review base
 review mode is on; it's a mode across the current buffer's repo, applying to
 that repo's buffers until toggled off.
 
+### Review queue (Space+rq)
+
+`Space+rq` lists the open PRs in the current repo that actually need **your**
+review, and `Enter` opens one as a worktree / jj workspace tab with review mode
+already on (fetched to the PR head, targeted at the PR's base). `Ctrl+o` opens
+it in the browser instead. Each tier lists the oldest PR first.
+
+The queue refreshes in the background every 5 minutes for every repo with an
+open tab (and when you leave review mode), so the picker opens instantly from
+that cache — its title says how old it is, and a list over a minute old is
+refreshed behind it. Outside review mode the greeter shows the counts
+(`12 need you · 1 back to you · 3 for your team`); in review mode it shows the
+PR instead: number, title, state, review decision, checks, and the start of
+the description (fenced blocks collapsed to a placeholder).
+
+| Tier          | Means                                                              |
+| ------------- | ------------------------------------------------------------------ |
+| `needs you`   | Requested by name (or you only commented), and you own files no other owner has approved — or you were asked by name and own nothing |
+| `back to you` | You requested changes and it has new commits, or you were re-requested after approving |
+| `your team`   | A team of yours owns unapproved files, but nobody named you        |
+
+Hidden: drafts, your own PRs, anything you approved or rejected at its current
+head, and anything where another code owner's approval already covers every
+file you could approve. A stale approval stays hidden (it still counts) unless
+you're re-requested.
+
+Broad teams can be excluded per repo — they then only count when you're named:
+
+```bash
+git config --add reviewqueue.excludeTeam org/team
+```
+
 ### PR comments (batched review)
 
 With review mode on, drop line comments in your normal buffers. New comments

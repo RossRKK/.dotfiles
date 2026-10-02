@@ -62,6 +62,22 @@ local function tabs(dir)
   return require("util.worktree")
 end
 
+--- Open `name` (a branch / bookmark) as a workspace tab of the repo at `dir`,
+--- through whichever backend that repo uses.
+---@param name string
+---@param dir string
+---@param on_open? fun(path: string)
+function M.open_tab(name, dir, on_open)
+  tabs(dir).open(name, dir, on_open)
+end
+
+--- Is the repo at `dir` driven through jj (see tabs)?
+---@param dir string
+---@return boolean
+function M.is_jj(dir)
+  return vim.fs.root(dir, ".jj") ~= nil
+end
+
 --- <leader>tw: pick a branch/bookmark and open it as its own workspace tab.
 function M.pick_tab()
   tabs().pick()

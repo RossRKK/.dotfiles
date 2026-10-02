@@ -158,6 +158,14 @@ local GRAPH_LINES = 20
 local PANE_WIDTH = 90
 M.PANE_WIDTH = PANE_WIDTH
 
+--- Is review mode on for `root`? False when triage isn't loaded.
+---@param root string
+---@return boolean
+local function reviewing(root)
+  local ok, triage = pcall(require, "triage")
+  return ok and triage.is_enabled(root) or false
+end
+
 --- Kick off a branch overview for `root` and redraw the greeters if it says
 --- something new. Safe to call as often as you like -- the expensive step (the
 --- merge-result diff) is memoised inside triage on the base/HEAD shas, so a
@@ -180,6 +188,9 @@ function M.fetch(root)
     fetching[root] = nil
     if report then
       M.watch(root, report)
+      if report.branch and reviewing(root) then
+        M.fetch_pr(root, report.branch)
+      end
     end
     M.cache_report(root, report or false)
   end)
@@ -210,6 +221,73 @@ function M.cache_report(root, report)
   -- its repaints hang off fishmonger and tabpage events, none of which fire
   -- for a checkout. Announce the fresh report so it can repaint too.
   vim.api.nvim_exec_autocmds("User", { pattern = "GreeterReportChanged" })
+end
+
+-- The PR for the branch under review, per workspace root: { branch, at, pr }
+-- with pr = the decoded `gh pr view` JSON, or false for "no PR". Only fetched
+-- while review mode is on, and only shown then: outside a review the branch
+-- overview is about MY work, and a gh round trip per git event isn't free.
+M.prs = {}
+local pr_fetching = {}
+-- The watchers fetch the report on every git event; the PR moves on GitHub's
+-- clock, not ours, so a minute-old answer is fine between toggles.
+local PR_TTL_MS = 60 * 1000
+
+--- Fetch the PR for `branch` into M.prs[root] and redraw on a change.
+---@param root string workspace root
+---@param branch string the branch (jj: bookmark) the PR's head is
+---@param force? boolean skip the TTL (review mode was just turned on)
+function M.fetch_pr(root, branch, force)
+  local cached = M.prs[root]
+  if
+    pr_fetching[root]
+    or (not force and cached and cached.branch == branch and vim.uv.now() - cached.at < PR_TTL_MS)
+  then
+    return
+  end
+  pr_fetching[root] = true
+  local fields = "number,title,state,isDraft,body,reviewDecision,statusCheckRollup,url"
+  vim.system(
+    { "gh", "pr", "view", branch, "--json", fields },
+    { cwd = root, text = true },
+    function(res)
+      vim.schedule(function()
+        pr_fetching[root] = nil
+        local pr = false
+        if res.code == 0 then
+          local ok, decoded =
+            pcall(vim.json.decode, res.stdout or "", { luanil = { object = true, array = true } })
+          pr = ok and type(decoded) == "table" and decoded or false
+        end
+        local changed = not (cached and vim.deep_equal(cached.pr, pr))
+        M.prs[root] = { branch = branch, at = vim.uv.now(), pr = pr }
+        if changed then
+          M.update_dashboards()
+        end
+      end)
+    end
+  )
+end
+
+--- triage's on_toggle (plugins/review.lua): show the PR the moment review mode
+--- comes on, and drop it when it goes off.
+---@param on boolean
+---@param root string
+function M.on_review_toggle(on, root)
+  if not on then
+    M.prs[root] = nil
+    M.update_dashboards()
+    -- Leaving review mode usually means a review just went in: the queue's
+    -- count should drop now, not at the next timer tick.
+    require("util.reviewqueue").refresh(root)
+    return
+  end
+  local report = M.reports[root]
+  if report and report.branch then
+    M.fetch_pr(root, report.branch, true)
+  else
+    M.fetch(root) -- the PR follows once the report says which branch this is
+  end
 end
 
 -- Per-root debounce timers for the watcher-driven fetches below.
@@ -563,6 +641,196 @@ local function agents()
   return section
 end
 
+--- Word-wrap `text` to `width` display columns. Words longer than a line are
+--- cut rather than overflowing (a URL in a PR body would widen the pane).
+---@param text string
+---@param width integer
+---@return string[]
+function M.wrap(text, width)
+  local out, cur = {}, ""
+  for word in text:gmatch("%S+") do
+    while vim.fn.strdisplaywidth(word) > width do
+      if cur ~= "" then
+        out[#out + 1], cur = cur, ""
+      end
+      out[#out + 1] = vim.fn.strcharpart(word, 0, width)
+      word = vim.fn.strcharpart(word, width)
+    end
+    if cur == "" then
+      cur = word
+    elseif vim.fn.strdisplaywidth(cur) + 1 + vim.fn.strdisplaywidth(word) <= width then
+      cur = cur .. " " .. word
+    else
+      out[#out + 1], cur = cur, word
+    end
+  end
+  if cur ~= "" then
+    out[#out + 1] = cur
+  end
+  return out
+end
+
+--- The PR's status line chunks: state, review decision, checks.
+---@param pr table `gh pr view` JSON
+---@return table[] chunks
+function M.pr_status(pr)
+  local dim = "SnacksDashboardDesc"
+  local state = pr.isDraft and pr.state == "OPEN" and "DRAFT" or pr.state or "?"
+  local state_hl = ({ OPEN = "Added", DRAFT = dim, MERGED = "Special", CLOSED = "Removed" })[state]
+    or dim
+  local chunks = { { state:lower(), hl = state_hl } }
+
+  -- Null under rulesets-only repos (no branch protection): say nothing then
+  -- rather than a misleading "no review required".
+  local decision = ({
+    APPROVED = { "approved", "Added" },
+    CHANGES_REQUESTED = { "changes requested", "Removed" },
+    REVIEW_REQUIRED = { "review required", "DiagnosticWarn" },
+  })[pr.reviewDecision or ""]
+  if decision then
+    chunks[#chunks + 1] = { "  \u{00b7}  ", hl = dim }
+    chunks[#chunks + 1] = { decision[1], hl = decision[2] }
+  end
+
+  -- Checks: CheckRuns carry status/conclusion, legacy StatusContexts a state.
+  local failed, pending, passed = 0, 0, 0
+  for _, c in ipairs(pr.statusCheckRollup or {}) do
+    local result = c.conclusion or c.state
+    if c.status and c.status ~= "COMPLETED" or result == "PENDING" or result == "EXPECTED" then
+      pending = pending + 1
+    elseif
+      result == "FAILURE"
+      or result == "ERROR"
+      or result == "TIMED_OUT"
+      or result == "CANCELLED"
+      or result == "ACTION_REQUIRED"
+      or result == "STARTUP_FAILURE"
+    then
+      failed = failed + 1
+    else
+      passed = passed + 1 -- SUCCESS, NEUTRAL, SKIPPED
+    end
+  end
+  if failed + pending + passed > 0 then
+    chunks[#chunks + 1] = { "  \u{00b7}  ", hl = dim }
+    if failed > 0 then
+      chunks[#chunks + 1] = { ("\u{2717} %d failing"):format(failed), hl = "Removed" }
+    elseif pending > 0 then
+      chunks[#chunks + 1] = { ("\u{25cf} %d pending"):format(pending), hl = "DiagnosticWarn" }
+    else
+      chunks[#chunks + 1] = { "\u{2713} checks pass", hl = "Added" }
+    end
+  end
+  return chunks
+end
+
+--- The PR block: "#N title", the status line, then the description, wrapped to
+--- `width` and cut to `max_lines` (the file list wants the room more -- the
+--- whole body is a <C-o> away in the browser, or nitpick's overview).
+---@param pr table `gh pr view` JSON
+---@param width integer
+---@param max_lines integer
+---@return table[] items
+function M.pr_items(pr, width, max_lines)
+  local dim = "SnacksDashboardDesc"
+  local items = {
+    line({
+      { ("#%d "):format(pr.number or 0), hl = "SnacksDashboardKey" },
+      { pr.title or "", hl = "SnacksDashboardHeader" },
+    }),
+    line(M.pr_status(pr)),
+    { padding = 1 },
+  }
+
+  -- PR templates leave HTML comments behind; they're instructions to the
+  -- author, not description. Then collapse blank runs to one.
+  local body = (pr.body or ""):gsub("\r", ""):gsub("<!%-%-.-%-%->", "")
+  local lines, blank, fence = {}, true, nil
+  for raw in (body .. "\n"):gmatch("([^\n]*)\n") do
+    local marker, lang = raw:match("^%s*(```+)%s*([%w_+-]*)")
+    if not marker then
+      marker, lang = raw:match("^%s*(~~~+)%s*([%w_+-]*)")
+    end
+    if fence then
+      -- Inside a fenced block: a diagram or code wrapped as prose is noise in
+      -- an overview, so the whole block is the one placeholder line below.
+      if marker and marker:sub(1, 1) == fence:sub(1, 1) and #marker >= #fence then
+        fence = nil
+      end
+    elseif marker then
+      fence = marker
+      blank = false
+      lines[#lines + 1] =
+        { text = ("[%s block]"):format(lang ~= "" and lang or "code"), dim = true }
+    elseif raw:match("^%s*$") then
+      if not blank then
+        lines[#lines + 1] = ""
+      end
+      blank = true
+    else
+      blank = false
+      -- Keep list/quote indentation visible; wrap continuation lines flush.
+      local lead = raw:match("^%s*") or ""
+      for _, w in ipairs(M.wrap(raw, math.max(10, width - #lead))) do
+        lines[#lines + 1] = { text = lead .. w, heading = raw:match("^%s*#") ~= nil }
+      end
+    end
+  end
+  if lines[#lines] == "" then
+    lines[#lines] = nil
+  end
+
+  if #lines == 0 then
+    items[#items + 1] = line({ { "no description", hl = dim } })
+    return items
+  end
+  for i, l in ipairs(lines) do
+    if i > max_lines then
+      items[#items + 1] =
+        { text = { { ("\u{2026} %d more lines"):format(#lines - max_lines), hl = dim } } }
+      break
+    end
+    if l == "" then
+      items[#items + 1] = { text = { { "" } } }
+    else
+      -- Left-aligned as a block, like the jj graph: centring each line of
+      -- prose separately makes a ragged column that's hard to read.
+      local hl = l.dim and dim or l.heading and "Title" or "Normal"
+      items[#items + 1] = { text = { { l.text, hl = hl } } }
+    end
+  end
+  return items
+end
+
+--- The "reviews waiting" line shown outside review mode, from the review
+--- queue's per-tier counts. Nil when nothing's waiting (or no list yet).
+---@param counts integer[]? { needs you, back to you, your team }
+---@return table? item
+function M.queue_line(counts)
+  if not counts or counts[1] + counts[2] + counts[3] == 0 then
+    return nil
+  end
+  local dim = "SnacksDashboardDesc"
+  local chunks = {}
+  local parts = {
+    { counts[1], "need you", "DiagnosticError" },
+    { counts[2], "back to you", "DiagnosticWarn" },
+    { counts[3], "for your team", dim },
+  }
+  for _, p in ipairs(parts) do
+    if p[1] > 0 then
+      if #chunks > 0 then
+        chunks[#chunks + 1] = { "  \u{00b7}  ", hl = dim }
+      end
+      chunks[#chunks + 1] = { ("%d %s"):format(p[1], p[2]), hl = p[3] }
+    end
+  end
+  -- Review glyph (nf-oct-code_review), then where to go from here.
+  table.insert(chunks, 1, { "\u{f4af} ", hl = dim })
+  chunks[#chunks + 1] = { "   Space rq", hl = "SnacksDashboardKey" }
+  return line(chunks)
+end
+
 --- The greeter's sections, top to bottom. Split out of open() so a test can
 --- check the layout without a live snacks dashboard.
 ---@param root string normalized workspace root
@@ -591,6 +859,31 @@ function M.sections(root, buf, tab, report)
         align = "center",
         padding = 1,
       }
+    end,
+    -- Review mode: the PR being reviewed, between the name and the overview.
+    -- Otherwise: how many reviews are waiting on me.
+    function()
+      if not reviewing(root) then
+        -- Not reviewing: what's waiting on me instead, from the review queue's
+        -- background refresh (no fetch of its own).
+        local queue = M.queue_line(require("util.reviewqueue").counts(root))
+        return queue and { queue, { padding = 1 } } or nil
+      end
+      local entry = M.prs[root]
+      if not (entry and entry.pr) then
+        return nil
+      end
+      local height, width = 30, PANE_WIDTH
+      for _, w in ipairs(vim.api.nvim_list_wins()) do
+        if vim.api.nvim_win_get_buf(w) == buf then
+          height = vim.api.nvim_win_get_height(w)
+          width = math.min(PANE_WIDTH, vim.api.nvim_win_get_width(w))
+          break
+        end
+      end
+      -- A third of what's below the header, so the file list keeps its share.
+      local items = M.pr_items(entry.pr, width, math.max(3, math.floor((height - 12) / 3)))
+      return vim.list_extend(items, { { padding = 1 } })
     end,
     -- jj: the log graph. git: the two-line ahead/behind summary.
     function()

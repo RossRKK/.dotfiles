@@ -168,6 +168,12 @@ end, { desc = "New project tab for a new branch / bookmark" })
 map("n", "<leader>tf", function()
   require("util.vcs").fork_tab()
 end, { desc = "Fork project tab (worktree/workspace + claude forks)" })
+-- The other way into a worktree tab: from the PRs that actually need my review
+-- in this repo, opened in review mode. <leader>r because it's where a review
+-- starts; triage/nitpick own the rest of that namespace. See util/reviewqueue.lua.
+map("n", "<leader>rq", function()
+  require("util.reviewqueue").pick()
+end, { desc = "Review queue (PRs needing my review)" })
 map("n", "<leader>tt", function()
   require("config.workspace").pick()
 end, { desc = "Switch to open project tab" })

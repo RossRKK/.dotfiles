@@ -358,7 +358,8 @@ end
 --- directory left behind at the expected path.
 ---@param branch string
 ---@param dir? string a directory inside the repo (default: the tab's cwd)
-function M.open(branch, dir)
+---@param on_open? fun(path: string) runs once the tab is open (creation is async)
+function M.open(branch, dir, on_open)
   branch = vim.trim(branch)
   if branch == "" then
     return
@@ -383,6 +384,9 @@ function M.open(branch, dir)
       path = path or root .. "/.worktrees/" .. M.slug(local_branch)
       M.touch(path)
       require("config.workspace").open(path, { tab = true })
+      if on_open then
+        on_open(path)
+      end
       return
     end
     path = root .. "/.worktrees/" .. M.slug(local_branch)
@@ -397,6 +401,9 @@ function M.open(branch, dir)
         end
         M.touch(path)
         require("config.workspace").open(path, { tab = true })
+        if on_open then
+          on_open(path)
+        end
       end
     )
   end

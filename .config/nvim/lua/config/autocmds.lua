@@ -91,3 +91,6 @@ vim.api.nvim_create_autocmd("FileChangedShellPost", {
 -- Workspace greeter fallback: a workspace tab whose main window empties out
 -- shows the greeter instead of a blank buffer. See config/greeter.lua.
 require("config.greeter").setup()
+-- The review queue refreshes in the background, so <leader>rq opens at once
+-- and the greeter can show what's waiting (util/reviewqueue.lua).
+require("util.reviewqueue").setup()
