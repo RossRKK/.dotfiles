@@ -190,3 +190,126 @@ describe("greeter.patch_snacks_dashboard", function()
     assert.is_nil(dash:find({ 1, 0 }))
   end)
 end)
+
+describe("greeter.wrap", function()
+  it("wraps on word boundaries within the width", function()
+    assert.same({ "aaa bbb", "ccc" }, greeter.wrap("aaa bbb ccc", 7))
+  end)
+
+  it("cuts a word longer than the line instead of overflowing", function()
+    assert.same({ "see", "abcde", "fgh" }, greeter.wrap("see abcdefgh", 5))
+  end)
+end)
+
+describe("greeter.pr_items", function()
+  local function texts(items)
+    return vim.tbl_map(function(item)
+      return item.text
+          and table.concat(vim.tbl_map(function(c)
+            return c[1]
+          end, item.text))
+        or "<pad>"
+    end, items)
+  end
+
+  local pr = {
+    number = 42,
+    title = "Make it faster",
+    state = "OPEN",
+    isDraft = false,
+    body = "<!-- template: delete me -->\r\n## Why\r\n\r\n\r\nBecause.\r\n  - a point\r\n",
+  }
+
+  it("leads with the number and title, then status, then the description", function()
+    local t = texts(greeter.pr_items(pr, 80, 10))
+    assert.equals("#42 Make it faster", t[1])
+    assert.equals("open", t[2])
+    assert.same({ "<pad>", "## Why", "", "Because.", "  - a point" }, vim.list_slice(t, 3))
+  end)
+
+  it("strips template comments and collapses blank runs", function()
+    local t = texts(greeter.pr_items(pr, 80, 10))
+    for _, s in ipairs(t) do
+      assert.is_nil(s:find("template", 1, true))
+    end
+  end)
+
+  it("cuts a long description and counts the rest", function()
+    local long = vim.tbl_extend("force", pr, { body = "one\ntwo\nthree\nfour" })
+    local t = texts(greeter.pr_items(long, 80, 2))
+    assert.same({ "one", "two", "\u{2026} 2 more lines" }, vim.list_slice(t, 4))
+  end)
+
+  it("collapses a fenced block to one placeholder line", function()
+    local fenced = vim.tbl_extend("force", pr, {
+      body = "Intro\n```mermaid\nflowchart TB\n  a --> b\n```\nOutro\n~~~\nraw\n~~~",
+    })
+    local t = texts(greeter.pr_items(fenced, 80, 10))
+    assert.same({ "Intro", "[mermaid block]", "Outro", "[code block]" }, vim.list_slice(t, 4))
+  end)
+
+  it("says so when there is no description", function()
+    local t = texts(greeter.pr_items(vim.tbl_extend("force", pr, { body = "" }), 80, 5))
+    assert.equals("no description", t[4])
+  end)
+end)
+
+describe("greeter.pr_status", function()
+  local function text(pr)
+    return table.concat(vim.tbl_map(function(c)
+      return c[1]
+    end, greeter.pr_status(pr)))
+  end
+
+  it("calls an open draft a draft", function()
+    assert.equals("draft", text({ state = "OPEN", isDraft = true }))
+  end)
+
+  it("adds the review decision only when GitHub has one", function()
+    assert.equals(
+      "open  \u{00b7}  changes requested",
+      text({ state = "OPEN", reviewDecision = "CHANGES_REQUESTED" })
+    )
+    assert.equals("open", text({ state = "OPEN" }))
+  end)
+
+  it("summarises checks: any failure wins, then pending, else pass", function()
+    local done = { status = "COMPLETED", conclusion = "SUCCESS" }
+    local skipped = { status = "COMPLETED", conclusion = "SKIPPED" }
+    local running = { status = "IN_PROGRESS" }
+    local failed = { status = "COMPLETED", conclusion = "FAILURE" }
+    local legacy_pending = { state = "PENDING" }
+    assert.equals(
+      "open  \u{00b7}  \u{2713} checks pass",
+      text({ state = "OPEN", statusCheckRollup = { done, skipped } })
+    )
+    assert.equals(
+      "open  \u{00b7}  \u{25cf} 2 pending",
+      text({ state = "OPEN", statusCheckRollup = { done, running, legacy_pending } })
+    )
+    assert.equals(
+      "open  \u{00b7}  \u{2717} 1 failing",
+      text({ state = "OPEN", statusCheckRollup = { running, failed } })
+    )
+  end)
+end)
+
+describe("greeter.queue_line", function()
+  local function text(item)
+    return table.concat(vim.tbl_map(function(c)
+      return c[1]
+    end, item.text))
+  end
+
+  it("is absent when nothing is waiting or there is no list yet", function()
+    assert.is_nil(greeter.queue_line(nil))
+    assert.is_nil(greeter.queue_line({ 0, 0, 0 }))
+  end)
+
+  it("lists only the non-empty tiers", function()
+    assert.equals(
+      "\u{f4af} 2 need you  \u{00b7}  1 for your team   Space rq",
+      text(greeter.queue_line({ 2, 0, 1 }))
+    )
+  end)
+end)

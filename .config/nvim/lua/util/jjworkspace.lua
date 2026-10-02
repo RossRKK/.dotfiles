@@ -224,7 +224,8 @@ M.new_base = "coalesce(@ & ~empty(), @-)"
 --- has something to be called and `jj git push` has something to push.
 ---@param name string
 ---@param dir? string a directory inside the repo (default: the tab's cwd)
-function M.open(name, dir)
+---@param on_open? fun(path: string) runs once the tab is open
+function M.open(name, dir, on_open)
   name = vim.trim(name)
   if name == "" then
     return
@@ -254,6 +255,9 @@ function M.open(name, dir)
   if M.workspaces(root)[worktree.slug(local_name)] or vim.fn.isdirectory(path) == 1 then
     worktree.touch(path)
     require("config.workspace").open(path, { tab = true })
+    if on_open then
+      on_open(path)
+    end
     return
   end
 
@@ -288,6 +292,9 @@ function M.open(name, dir)
   end
   worktree.touch(path)
   require("config.workspace").open(path, { tab = true })
+  if on_open then
+    on_open(path)
+  end
 end
 
 --- Prompt for a name and open a workspace tab for it: the "start a ticket"

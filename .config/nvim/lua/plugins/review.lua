@@ -21,6 +21,8 @@ return {
         -- rather than each resolving the cwd's on its own.
         on_toggle = function(on, root)
           require("nitpick").set_shown(on, root)
+          -- The greeter shows the PR under review while review mode is on.
+          require("config.greeter").on_review_toggle(on, root)
         end,
       })
     end,
