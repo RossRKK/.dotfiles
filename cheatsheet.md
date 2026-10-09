@@ -778,6 +778,8 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B c`    | New tab in the next free slot                     |
 | `Ctrl+B &`    | Kill the current tab                              |
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
+| `Ctrl+B m`    | Move the current tab to another workspace (pick by project name; you follow it) |
+| `Ctrl+B a`    | Agent view: every agent across all workspaces, blocked first; the row's key jumps to it |
 | `Ctrl+T`      | Toggle the side terminal                          |
 
 ---
