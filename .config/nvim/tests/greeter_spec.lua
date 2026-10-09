@@ -21,6 +21,41 @@ describe("greeter.sections", function()
     end)
     assert.same({ padding = 1 }, sections[1])
   end)
+
+  describe("the PR block", function()
+    -- A real directory outside any repo: the queue line asks git about it.
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    local pr = { number = 42, title = "Make it faster", state = "OPEN", body = "" }
+    local function first_line(branch)
+      local pr_section = greeter.sections(root, 0, 0, function()
+        return { branch = branch }
+      end)[4]
+      local items = pr_section()
+      return items
+        and table.concat(vim.tbl_map(function(c)
+          return c[1]
+        end, items[1].text))
+    end
+    after_each(function()
+      greeter.prs[root] = nil
+    end)
+
+    it("shows the branch's PR outside review mode too", function()
+      greeter.prs[root] = { branch = "feat", at = 0, pr = pr }
+      assert.equals("#42 Make it faster", first_line("feat"))
+    end)
+
+    it("is absent when the branch has no PR", function()
+      greeter.prs[root] = { branch = "feat", at = 0, pr = false }
+      assert.is_nil(first_line("feat"))
+    end)
+
+    it("hides a PR fetched for the branch checked out before", function()
+      greeter.prs[root] = { branch = "old", at = 0, pr = pr }
+      assert.is_nil(first_line("feat"))
+    end)
+  end)
 end)
 
 describe("greeter.graph", function()
@@ -246,6 +281,19 @@ describe("greeter.pr_items", function()
     })
     local t = texts(greeter.pr_items(fenced, 80, 10))
     assert.same({ "Intro", "[mermaid block]", "Outro", "[code block]" }, vim.list_slice(t, 4))
+  end)
+
+  it("adds the diff size under the status once it has landed", function()
+    local sized = vim.tbl_extend("force", pr, {
+      size = {
+        additions = 12,
+        deletions = 3,
+        files = 2,
+        generated = { additions = 0, deletions = 0, files = 0 },
+      },
+    })
+    local t = texts(greeter.pr_items(sized, 80, 10))
+    assert.same({ "open", "+12 -3 in 2 files", "<pad>", "## Why" }, vim.list_slice(t, 2, 5))
   end)
 
   it("says so when there is no description", function()

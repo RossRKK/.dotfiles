@@ -188,7 +188,7 @@ function M.fetch(root)
     fetching[root] = nil
     if report then
       M.watch(root, report)
-      if report.branch and reviewing(root) then
+      if report.branch then
         M.fetch_pr(root, report.branch)
       end
     end
@@ -223,10 +223,11 @@ function M.cache_report(root, report)
   vim.api.nvim_exec_autocmds("User", { pattern = "GreeterReportChanged" })
 end
 
--- The PR for the branch under review, per workspace root: { branch, at, pr }
--- with pr = the decoded `gh pr view` JSON, or false for "no PR". Only fetched
--- while review mode is on, and only shown then: outside a review the branch
--- overview is about MY work, and a gh round trip per git event isn't free.
+-- The PR for the workspace's branch, per workspace root: { branch, at, pr }
+-- with pr = the decoded `gh pr view` JSON, or false for "no PR". Shown whenever
+-- there is one -- reviewing someone's branch or working on my own, the PR is
+-- what the branch is for. The TTL below is what keeps a gh round trip off
+-- every git event.
 M.prs = {}
 local pr_fetching = {}
 -- The watchers fetch the report on every git event; the PR moves on GitHub's
@@ -246,7 +247,7 @@ function M.fetch_pr(root, branch, force)
     return
   end
   pr_fetching[root] = true
-  local fields = "number,title,state,isDraft,body,reviewDecision,statusCheckRollup,url"
+  local fields = "number,title,state,isDraft,body,reviewDecision,statusCheckRollup,url,headRefOid"
   vim.system(
     { "gh", "pr", "view", branch, "--json", fields },
     { cwd = root, text = true },
@@ -259,23 +260,39 @@ function M.fetch_pr(root, branch, force)
             pcall(vim.json.decode, res.stdout or "", { luanil = { object = true, array = true } })
           pr = ok and type(decoded) == "table" and decoded or false
         end
+        -- The diff size is a fetch of its own (every file, for the generated
+        -- ones), so it's kept until the head moves rather than redone per TTL.
+        local old = cached and cached.pr
+        local same_head = pr and old and old.number == pr.number and old.headRefOid == pr.headRefOid
+        if same_head then
+          pr.size = old.size
+        end
         local changed = not (cached and vim.deep_equal(cached.pr, pr))
-        M.prs[root] = { branch = branch, at = vim.uv.now(), pr = pr }
+        local entry = { branch = branch, at = vim.uv.now(), pr = pr }
+        M.prs[root] = entry
         if changed then
           M.update_dashboards()
+        end
+        if pr and not same_head then
+          require("util.reviewqueue").size(root, pr.number, function(size)
+            if size and M.prs[root] == entry then
+              pr.size = size
+              M.update_dashboards()
+            end
+          end)
         end
       end)
     end
   )
 end
 
---- triage's on_toggle (plugins/review.lua): show the PR the moment review mode
---- comes on, and drop it when it goes off.
+--- triage's on_toggle (plugins/review.lua): refetch the PR the moment review
+--- mode comes on (it's about to be read), and swap the queue line back in
+--- when it goes off.
 ---@param on boolean
 ---@param root string
 function M.on_review_toggle(on, root)
   if not on then
-    M.prs[root] = nil
     M.update_dashboards()
     -- Leaving review mode usually means a review just went in: the queue's
     -- count should drop now, not at the next timer tick.
@@ -724,9 +741,10 @@ function M.pr_status(pr)
   return chunks
 end
 
---- The PR block: "#N title", the status line, then the description, wrapped to
---- `width` and cut to `max_lines` (the file list wants the room more -- the
---- whole body is a <C-o> away in the browser, or nitpick's overview).
+--- The PR block: "#N title", the status line, the diff size, then the
+--- description, wrapped to `width` and cut to `max_lines` (the file list wants
+--- the room more -- the whole body is a <C-o> away in the browser, or
+--- nitpick's overview).
 ---@param pr table `gh pr view` JSON
 ---@param width integer
 ---@param max_lines integer
@@ -739,8 +757,16 @@ function M.pr_items(pr, width, max_lines)
       { pr.title or "", hl = "SnacksDashboardHeader" },
     }),
     line(M.pr_status(pr)),
-    { padding = 1 },
   }
+  -- Set by fetch_pr once its own fetch lands; no line until then.
+  if pr.size then
+    local chunks = {}
+    for i, c in ipairs(require("util.diffsize").chunks(pr.size, dim)) do
+      chunks[i] = { c[1], hl = c[2] }
+    end
+    items[#items + 1] = line(chunks)
+  end
+  items[#items + 1] = { padding = 1 }
 
   -- PR templates leave HTML comments behind; they're instructions to the
   -- author, not description. Then collapse blank runs to one.
@@ -860,30 +886,33 @@ function M.sections(root, buf, tab, report)
         padding = 1,
       }
     end,
-    -- Review mode: the PR being reviewed, between the name and the overview.
-    -- Otherwise: how many reviews are waiting on me.
+    -- The branch's PR, if it has one, between the name and the overview. Then,
+    -- unless reviewing, how many reviews are waiting on me.
     function()
+      local items = {}
+      local entry, rep = M.prs[root], report()
+      -- The entry can be for the branch before a checkout until the refetch.
+      if entry and entry.pr and rep and entry.branch == rep.branch then
+        local height, width = 30, PANE_WIDTH
+        for _, w in ipairs(vim.api.nvim_list_wins()) do
+          if vim.api.nvim_win_get_buf(w) == buf then
+            height = vim.api.nvim_win_get_height(w)
+            width = math.min(PANE_WIDTH, vim.api.nvim_win_get_width(w))
+            break
+          end
+        end
+        -- A third of what's below the header, so the file list keeps its share.
+        items = M.pr_items(entry.pr, width, math.max(3, math.floor((height - 12) / 3)))
+        items[#items + 1] = { padding = 1 }
+      end
       if not reviewing(root) then
-        -- Not reviewing: what's waiting on me instead, from the review queue's
-        -- background refresh (no fetch of its own).
+        -- From the review queue's background refresh (no fetch of its own).
         local queue = M.queue_line(require("util.reviewqueue").counts(root))
-        return queue and { queue, { padding = 1 } } or nil
-      end
-      local entry = M.prs[root]
-      if not (entry and entry.pr) then
-        return nil
-      end
-      local height, width = 30, PANE_WIDTH
-      for _, w in ipairs(vim.api.nvim_list_wins()) do
-        if vim.api.nvim_win_get_buf(w) == buf then
-          height = vim.api.nvim_win_get_height(w)
-          width = math.min(PANE_WIDTH, vim.api.nvim_win_get_width(w))
-          break
+        if queue then
+          vim.list_extend(items, { queue, { padding = 1 } })
         end
       end
-      -- A third of what's below the header, so the file list keeps its share.
-      local items = M.pr_items(entry.pr, width, math.max(3, math.floor((height - 12) / 3)))
-      return vim.list_extend(items, { { padding = 1 } })
+      return #items > 0 and items or nil
     end,
     -- jj: the log graph. git: the two-line ahead/behind summary.
     function()

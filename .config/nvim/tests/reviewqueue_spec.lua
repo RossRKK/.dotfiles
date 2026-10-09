@@ -295,13 +295,17 @@ describe("reviewqueue.from_node", function()
       latestOpinionatedReviews = {
         nodes = { { state = "APPROVED", author = { login = "pat" }, commit = { oid = "abc" } } },
       },
-      files = { nodes = { { path = "a" }, { path = "b" } } },
+      files = { nodes = { { path = "a", additions = 3, deletions = 1 }, { path = "b" } } },
     }, true)
     assert.equals("ghost", p.author)
     assert.same({ "me" }, p.user_requests)
     assert.same({ "acme/platform" }, p.team_requests)
     assert.same({ { author = "pat", state = "APPROVED", commit = "abc" } }, p.reviews)
     assert.same({ "a", "b" }, p.files)
+    assert.same({
+      { path = "a", additions = 3, deletions = 1 },
+      { path = "b", additions = 0, deletions = 0 },
+    }, p.changes)
     assert.is_true(p.reviewed_by_me)
   end)
 end)

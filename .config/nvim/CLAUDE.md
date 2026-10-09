@@ -30,6 +30,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
 | `vcsline_spec.lua` | statusline VCS fragment from `jj log` (bookmark+distance, change id), diff dict choice |
 | `reviewqueue_spec.lua` | CODEOWNERS glob matching / last-match-wins, "does this PR need my review" tiers |
+| `diffsize_spec.lua` | PR diff size without generated files (`git check-attr` parsing, lockfiles) |
 
 The side-terminal and branch-review logic now live in external plugins, each
 with its own test suite (developed locally under `~/dev` via lazy's `dev` path):

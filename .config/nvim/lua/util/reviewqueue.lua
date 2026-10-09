@@ -24,6 +24,8 @@
 
 local M = {}
 
+local diffsize = require("util.diffsize")
+
 -- ---------------------------------------------------------------------------
 -- CODEOWNERS
 
@@ -181,6 +183,8 @@ end
 ---@field team_requests string[] "org/team" slugs requested
 ---@field reviews reviewqueue.Review[] latest opinionated review per user
 ---@field files string[]
+---@field changes { path: string, additions: integer, deletions: integer }[]
+---@field size diffsize.Size? set by fetch() for the PRs that make the list
 ---@field reviewed_by_me boolean? found via `reviewed-by:@me`
 
 ---@class reviewqueue.Ctx
@@ -358,6 +362,7 @@ function M.from_node(node, reviewed_by_me)
     team_requests = {},
     reviews = {},
     files = {},
+    changes = {},
     reviewed_by_me = reviewed_by_me,
   }
   for _, rr in ipairs(nodes(node.reviewRequests)) do
@@ -379,6 +384,11 @@ function M.from_node(node, reviewed_by_me)
   end
   for _, f in ipairs(nodes(node.files)) do
     table.insert(pr.files, f.path)
+    table.insert(pr.changes, {
+      path = f.path,
+      additions = tonumber(f.additions) or 0,
+      deletions = tonumber(f.deletions) or 0,
+    })
   end
   return pr
 end
@@ -448,7 +458,7 @@ local PR_FIELDS = [[
     nodes { requestedReviewer { ... on User { login } ... on Team { combinedSlug } } }
   }
   latestOpinionatedReviews(first: 100) { nodes { state author { login } commit { oid } } }
-  files(first: 100) { pageInfo { hasNextPage endCursor } nodes { path } }
+  files(first: 100) { pageInfo { hasNextPage endCursor } nodes { path additions deletions } }
 ]]
 
 -- Numbers only: the per-PR fields (files above all) make a search page slow,
@@ -466,7 +476,7 @@ local MORE_FILES = [[
 query($owner: String!, $name: String!, $number: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
-      files(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { path } }
+      files(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { path additions deletions } }
     }
   }
 }]]
@@ -646,16 +656,86 @@ local function excluded(dir)
   return set
 end
 
---- Everything the picker shows, for the repo at `dir`, classified and sorted.
+--- linguist-generated for `paths`, as the base branch's .gitattributes say
+--- (the local remote-tracking ref: attributes rarely move, so a stale fetch is
+--- fine). Falls back to the checkout's own attributes when that ref isn't
+--- here, and to none (lockfiles only, see util/diffsize) outside a git repo.
 ---@param dir string
----@return { pr: reviewqueue.PR, verdict: reviewqueue.Verdict }[] items, { owner: string, name: string } repo
-function M.fetch(dir)
+---@param base string
+---@param paths string[]
+---@return table<string, string>
+local function attributes(dir, base, paths)
+  local opts = { cwd = dir, stdin = diffsize.attr_input(paths) }
+  local res = run(diffsize.attr_cmd("refs/remotes/origin/" .. base), opts)
+  if res.code ~= 0 then
+    res = run(diffsize.attr_cmd(), opts)
+  end
+  return res.code == 0 and diffsize.parse_attrs(res.stdout or "") or {}
+end
+
+--- Set pr.size on each PR, one check-attr per base branch.
+---@param dir string
+---@param prs reviewqueue.PR[]
+local function sizes(dir, prs)
+  local by_base = {} ---@type table<string, reviewqueue.PR[]>
+  for _, pr in ipairs(prs) do
+    by_base[pr.base] = by_base[pr.base] or {}
+    table.insert(by_base[pr.base], pr)
+  end
+  local bases = sorted_keys(by_base)
+  local attrs = parallel(vim.tbl_map(function(base)
+    return function()
+      local paths = {}
+      for _, pr in ipairs(by_base[base]) do
+        vim.list_extend(paths, pr.files)
+      end
+      return attributes(dir, base, paths)
+    end
+  end, bases))
+  for i, base in ipairs(bases) do
+    for _, pr in ipairs(by_base[base]) do
+      pr.size = diffsize.summarize(pr.changes, attrs[i])
+    end
+  end
+end
+
+---@param dir string
+---@return { owner: string, name: string }
+local function repo_of(dir)
   local view = run({ "gh", "repo", "view", "--json", "owner,name" }, { cwd = dir })
   local ok, info = pcall(vim.json.decode, view.stdout or "")
   if view.code ~= 0 or not ok then
     error("not a GitHub repo: " .. vim.trim(view.stderr or ""), 0)
   end
-  local repo = { owner = info.owner.login, name = info.name }
+  return { owner = info.owner.login, name = info.name }
+end
+
+--- The diff size of one PR (the greeter's PR under review), or nil if it
+--- couldn't be had. Its own fetch rather than `gh pr view --json files`,
+--- which stops at 100 files without saying so.
+---@param dir string
+---@param number integer
+---@param cb fun(size: diffsize.Size?)
+function M.size(dir, number, cb)
+  coroutine.wrap(function()
+    local ok, size = pcall(function()
+      local node = details(repo_of(dir), { number })[1]
+      if not node then
+        return nil
+      end
+      local pr = M.from_node(node, false)
+      sizes(dir, { pr })
+      return pr.size
+    end)
+    cb(ok and size or nil)
+  end)()
+end
+
+--- Everything the picker shows, for the repo at `dir`, classified and sorted.
+---@param dir string
+---@return { pr: reviewqueue.PR, verdict: reviewqueue.Verdict }[] items, { owner: string, name: string } repo
+function M.fetch(dir)
+  local repo = repo_of(dir)
 
   local first = parallel({
     function()
@@ -732,6 +812,12 @@ function M.fetch(dir)
       items[#items + 1] = { pr = pr, verdict = verdict }
     end
   end
+  sizes(
+    dir,
+    vim.tbl_map(function(it)
+      return it.pr
+    end, items)
+  )
   return M.sort(items), repo
 end
 
@@ -956,6 +1042,17 @@ function M.setup()
   timer:start(M.INTERVAL_MS, M.INTERVAL_MS, vim.schedule_wrap(M.refresh_open))
 end
 
+--- The preview's size line, markdown: "**+12 -3** in 4 files · …".
+---@param size diffsize.Size?
+---@return string
+local function size_line(size)
+  if not size then
+    return ""
+  end
+  local adds, dels = diffsize.counts(size)
+  return ("**%s %s**%s"):format(adds, dels, diffsize.detail(size))
+end
+
 ---@param ms integer
 ---@return string
 local function ago(ms)
@@ -970,6 +1067,14 @@ local function show(entry, dir)
   if #entry.items == 0 then
     vim.notify("nothing needs your review", vim.log.levels.INFO, { title = "review queue" })
     return
+  end
+  -- The size columns are as wide as the widest size, so the titles line up.
+  local adds_w, dels_w = 0, 0
+  for _, it in ipairs(entry.items) do
+    if it.pr.size then
+      local adds, dels = diffsize.counts(it.pr.size)
+      adds_w, dels_w = math.max(adds_w, #adds), math.max(dels_w, #dels)
+    end
   end
   -- Fresh tables each time: snacks adds its own fields to an item, and the
   -- cached list outlives this picker.
@@ -989,6 +1094,7 @@ local function show(entry, dir)
           ("**%s** — %s"):format(TIERS[it.verdict.tier].label, it.verdict.reason),
           "",
           ("by @%s · `%s` → `%s`"):format(pr.author, pr.head, pr.base),
+          size_line(pr.size),
           pr.url,
           "",
           (pr.body or ""):gsub("\r", ""),
@@ -1007,9 +1113,16 @@ local function show(entry, dir)
     preview = "preview",
     format = function(item)
       local tier = TIERS[item.verdict.tier]
+      -- Additions right-aligned, deletions left: "  +12 -3   ".
+      local adds, dels = "", ""
+      if item.pr.size then
+        adds, dels = diffsize.counts(item.pr.size)
+      end
       return {
         { ("%-11s "):format(tier.label), tier.hl },
         { ("#%-5d "):format(item.pr.number), "SnacksPickerIdx" },
+        { (" "):rep(adds_w - #adds) .. adds .. " ", "Added" },
+        { dels .. (" "):rep(dels_w - #dels) .. "  ", "Removed" },
         { item.pr.title .. " " },
         { "@" .. item.pr.author .. " ", "SnacksPickerComment" },
         { item.verdict.reason, "SnacksPickerComment" },
