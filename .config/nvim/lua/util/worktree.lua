@@ -359,7 +359,8 @@ end
 ---@param branch string
 ---@param dir? string a directory inside the repo (default: the tab's cwd)
 ---@param on_open? fun(path: string) runs once the tab is open (creation is async)
-function M.open(branch, dir, on_open)
+---@param slot? integer the workspace number to open it as (config.workspace.open)
+function M.open(branch, dir, on_open, slot)
   branch = vim.trim(branch)
   if branch == "" then
     return
@@ -383,7 +384,7 @@ function M.open(branch, dir, on_open)
     if path or vim.fn.isdirectory(root .. "/.worktrees/" .. M.slug(local_branch)) == 1 then
       path = path or root .. "/.worktrees/" .. M.slug(local_branch)
       M.touch(path)
-      require("config.workspace").open(path, { tab = true })
+      require("config.workspace").open(path, { tab = true, slot = slot })
       if on_open then
         on_open(path)
       end
@@ -400,7 +401,7 @@ function M.open(branch, dir, on_open)
           return
         end
         M.touch(path)
-        require("config.workspace").open(path, { tab = true })
+        require("config.workspace").open(path, { tab = true, slot = slot })
         if on_open then
           on_open(path)
         end
@@ -692,7 +693,8 @@ end
 --- <leader>tw: pick a branch, get its worktree as a tab. Recently opened
 --- worktrees float to the top (see M.order); typing a name that matches nothing
 --- creates a new branch off HEAD.
-function M.pick()
+---@param slot? integer the workspace number to open it as (<M-b>wN)
+function M.pick(slot)
   local cwd = vim.fn.getcwd()
   local root, err = M.root(cwd)
   if not root then
@@ -731,7 +733,7 @@ function M.pick()
       picker:close()
       local branch = item and item.branch or pattern
       if branch then
-        M.open(branch, cwd)
+        M.open(branch, cwd, nil, slot)
       end
     end,
   })
