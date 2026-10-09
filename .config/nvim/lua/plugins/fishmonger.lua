@@ -14,7 +14,7 @@ return {
       -- glyphs (the symbol Claude Code prefixes its OSC title with, flipping
       -- while it thinks / waits for input), current workspace in brackets:
       --
-      --   [✳✳ dotfiles] · nvim-config api
+      --   [1 ✳✳ dotfiles] 2 nvim-config 3 api
       --
       -- That way an agent waiting on you in a BACKGROUND workspace is visible
       -- from the emulator's tab strip without switching tabpages -- the job the
@@ -34,6 +34,11 @@ return {
           local segment = workspace.name(tab)
           if #icons > 0 then
             segment = table.concat(icons) .. " " .. segment
+          end
+          -- The workspace number, as on the tab label (<M-N> reaches it).
+          local slot = workspace.slot(tab)
+          if slot then
+            segment = slot .. " " .. segment
           end
           segments[#segments + 1] = tab == current and ("[" .. segment .. "]") or segment
         end
@@ -65,7 +70,7 @@ return {
       -- names, so it repaints here. Without this a checkout or `jj new` only
       -- reached the title via unrelated events.
       vim.api.nvim_create_autocmd("User", {
-        pattern = { "GreeterReportChanged", "VcsLineChanged" },
+        pattern = { "GreeterReportChanged", "VcsLineChanged", "WorkspaceRenumbered" },
         callback = queue_title,
       })
 

@@ -25,6 +25,11 @@ return {
         project_name = function(tab)
           return require("config.workspace").display_name(tab)
         end,
+        -- <C-b>mN sends a terminal to workspace N by its stable number (the one
+        -- on the tab label and behind <M-N>), not the tabpage position.
+        workspace = function(n)
+          return require("config.workspace").tab(n)
+        end,
       })
       -- Tab keymaps for the side terminal (<C-b>{1-9}, etc).
       require("fishmonger").setup_keymaps()

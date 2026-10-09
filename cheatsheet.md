@@ -188,8 +188,11 @@ scrollback history of everything that was notified.
 
 A **workspace** is one project in one nvim tabpage: its own explorer rooted at
 that project, its own side terminals, its own cwd. Opening a second project is
-`Space+tn` rather than a second nvim, and switching between them is Vim's own
-`gt` / `gT`.
+`Space+tn` rather than a second nvim. Each workspace has a **number**, shown at
+the front of its tab label, and `Alt+N` jumps to it from any mode — including
+from inside the terminal. The numbers are stable like terminal slots: a new
+workspace takes the lowest free number, and closing one leaves a gap instead of
+renumbering the rest.
 
 | Key         | Action                                                     |
 | ----------- | ---------------------------------------------------------- |
@@ -197,9 +200,23 @@ that project, its own side terminals, its own cwd. Opening a second project is
 | `Space+te`  | New project tab — browse the filesystem for one (float)    |
 | `Space+tw`  | New project tab — a worktree/jj workspace of a branch here  |
 | `Space+tf`  | Fork this tab — new branch + checkout, Claudes forked along |
+| `Alt+1-9`   | Switch to workspace N (works in terminal mode too); an unused number opens the project picker, and the pick becomes workspace N |
 | `Space+tt`  | Switch to an open project (picker; matches number or name) |
-| `Space+tx`  | Close this project tab (its terminals shut down with it)   |
+| `Space+tx`  | Close this project tab (its terminals shut down with it; asks first if an agent there is live) |
 | `gt` / `gT` | Next / prev tab                                            |
+
+`Alt+B` is the workspace prefix: the same keys as the terminal's `Ctrl+B`, with
+Alt instead of Ctrl. It works from the terminal too (there it takes fish's
+`Alt+B` back-a-word; `Ctrl+Left` still does that).
+
+| Key           | Action                                                      |
+| ------------- | ----------------------------------------------------------- |
+| `Alt+B 1-9`   | Switch to workspace N, or open one into N (same as `Alt+N`) |
+| `Alt+B c`     | Open a new workspace (project picker, lowest free number)   |
+| `Alt+B &`     | Close this workspace (asks first if an agent there is live) |
+| `Alt+B . N`   | Renumber this workspace to N (`.` then `1-9`); swaps if N is taken |
+| `Alt+B w N`   | Open a branch's worktree / jj workspace as workspace N (the `Space+tw` picker) |
+| `Alt+B e N`   | Browse to a directory and open it as workspace N (the `Space+te` browser) |
 
 Tab labels sit at the **right end of the bufferline**, showing the project name —
 prefixed with the agent status icon of each of that project's Claude Code
@@ -764,8 +781,8 @@ author / …).
 ### Terminal tabs
 
 tmux-style tabs in the side terminal: one fills the slot, the others stay alive
-but hidden. Switch from **terminal-normal mode** (enter it with `Ctrl+N`), then
-press the `Ctrl+B` binding. `Ctrl+T` toggles the terminal from anywhere. A
+but hidden. The `Ctrl+B` prefix works straight from the terminal (and from normal
+mode). `Ctrl+T` toggles the terminal from anywhere. A
 titled tab strip shows across the top when the side terminal is open.
 
 Slots 1–9 are **per workspace** (see [Workspaces](#workspaces)): each project tab
@@ -778,7 +795,7 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B c`    | New tab in the next free slot                     |
 | `Ctrl+B &`    | Kill the current tab                              |
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
-| `Ctrl+B m`    | Move the current tab to another workspace (pick by project name; you follow it) |
+| `Ctrl+B m N`  | Move the current tab to workspace N (the number on its label; you follow it) |
 | `Ctrl+B a`    | Agent view: every agent across all workspaces, blocked first; the row's key jumps to it |
 | `Ctrl+T`      | Toggle the side terminal                          |
 

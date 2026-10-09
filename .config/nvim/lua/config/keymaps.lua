@@ -135,10 +135,27 @@ map("n", "<leader>X", function()
   require("config.greeter").close_all()
 end, { desc = "Close all buffers (this workspace)" })
 
--- Workspaces: one project per tabpage (see config/workspace.lua). Switching
--- between them is Vim's own gt/gT -- only opening one, listing them, and closing
--- one down are new. <leader>t is "tab"; the test namespace moved to <leader>T
--- (neotest.lua) since these are reached far more often.
+-- Workspaces: one project per tabpage (see config/workspace.lua). <leader>t is
+-- "tab"; the test namespace moved to <leader>T (neotest.lua) since these are
+-- reached far more often.
+--
+-- <M-N>: switch to workspace N -- its stable number, shown on the tab label --
+-- mirroring fishmonger's <C-b>N for terminals, a chord shorter for the bigger
+-- jump. Bound in terminal mode too, since that is where switching mostly
+-- starts from (gt/gT need normal mode first); the program in the terminal
+-- never sees Alt+digit, which neither fish nor Claude Code uses.
+for n = 1, 9 do
+  map({ "n", "i", "x", "t" }, "<M-" .. n .. ">", function()
+    require("config.workspace").switch(n)
+  end, { desc = "Switch to workspace " .. n })
+end
+-- <M-b>: the workspace prefix -- fishmonger's <C-b> terminal keys with Alt
+-- instead of Ctrl (N switch, c new, & close, .N renumber), plus wN / eN to
+-- open a worktree / browsed-to directory as workspace N. In terminal mode it
+-- takes fish's alt-b (back a word) from the shell; ctrl-left does the same.
+map({ "n", "i", "x", "t" }, "<M-b>", function()
+  require("config.workspace").prefix()
+end, { desc = "Workspace prefix (N switch / c new / & close / .N renumber / wN worktree / eN browse)" })
 map("n", "<leader>tn", function()
   require("config.workspace").pick_new()
 end, { desc = "New project tab (recent/dev)" })
@@ -179,8 +196,11 @@ map("n", "<leader>tt", function()
 end, { desc = "Switch to open project tab" })
 -- :tabclose, but named alongside the others. fishmonger shuts that tabpage's
 -- terminals down with it (nothing could reach them afterwards), so this ends the
--- workspace's shells too. Mirrors <leader>x for a buffer.
-map("n", "<leader>tx", "<cmd>tabclose<cr>", { desc = "Close project tab" })
+-- workspace's shells too -- hence the confirm when an agent there is live.
+-- Mirrors <leader>x for a buffer; <M-b>& is the same thing.
+map("n", "<leader>tx", function()
+  require("config.workspace").close()
+end, { desc = "Close project tab" })
 
 -- Parse a `path[:line[:col]]` reference (e.g. printed in the terminal, or a path
 -- in a diff/log) and resolve it to a real file on disk. Best-effort: returns

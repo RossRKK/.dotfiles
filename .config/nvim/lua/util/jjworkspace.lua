@@ -225,7 +225,8 @@ M.new_base = "coalesce(@ & ~empty(), @-)"
 ---@param name string
 ---@param dir? string a directory inside the repo (default: the tab's cwd)
 ---@param on_open? fun(path: string) runs once the tab is open
-function M.open(name, dir, on_open)
+---@param slot? integer the workspace number to open it as (config.workspace.open)
+function M.open(name, dir, on_open, slot)
   name = vim.trim(name)
   if name == "" then
     return
@@ -254,7 +255,7 @@ function M.open(name, dir, on_open)
   local path = M.path(root, local_name)
   if M.workspaces(root)[worktree.slug(local_name)] or vim.fn.isdirectory(path) == 1 then
     worktree.touch(path)
-    require("config.workspace").open(path, { tab = true })
+    require("config.workspace").open(path, { tab = true, slot = slot })
     if on_open then
       on_open(path)
     end
@@ -291,7 +292,7 @@ function M.open(name, dir, on_open)
     end
   end
   worktree.touch(path)
-  require("config.workspace").open(path, { tab = true })
+  require("config.workspace").open(path, { tab = true, slot = slot })
   if on_open then
     on_open(path)
   end
@@ -451,7 +452,8 @@ end
 --- <leader>tw: pick a bookmark, get its workspace as a tab. Recently opened
 --- workspaces float to the top (worktree.order); typing a name that matches
 --- nothing creates a new one off the current change.
-function M.pick()
+---@param slot? integer the workspace number to open it as (<M-b>wN)
+function M.pick(slot)
   local cwd = vim.fn.getcwd()
   local root, err = M.root(cwd)
   if not root then
@@ -502,7 +504,7 @@ function M.pick()
       picker:close()
       local name = item and item.branch or pattern
       if name then
-        M.open(name, cwd)
+        M.open(name, cwd, nil, slot)
       end
     end,
   })

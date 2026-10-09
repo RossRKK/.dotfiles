@@ -79,8 +79,9 @@ function M.is_jj(dir)
 end
 
 --- <leader>tw: pick a branch/bookmark and open it as its own workspace tab.
-function M.pick_tab()
-  tabs().pick()
+---@param slot? integer the workspace number to open it as (<M-b>wN)
+function M.pick_tab(slot)
+  tabs().pick(slot)
 end
 
 --- <leader>tb: name a new branch (jj: bookmark) and open a workspace tab for it.
