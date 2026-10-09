@@ -568,15 +568,19 @@ that repo's buffers until toggled off.
 `Space+rq` lists the open PRs in the current repo that actually need **your**
 review, and `Enter` opens one as a worktree / jj workspace tab with review mode
 already on (fetched to the PR head, targeted at the PR's base). `Ctrl+o` opens
-it in the browser instead. Each tier lists the oldest PR first.
+it in the browser instead. Each tier lists the oldest PR first. Each row shows
+the diff size (`+adds -dels`) without generated files: `linguist-generated` in
+`.gitattributes` (read from the base branch), plus lockfiles (`Cargo.lock`,
+`package-lock.json`, `uv.lock`, …) unless marked `linguist-generated=false`.
 
 The queue refreshes in the background every 5 minutes for every repo with an
 open tab (and when you leave review mode), so the picker opens instantly from
 that cache — its title says how old it is, and a list over a minute old is
 refreshed behind it. Outside review mode the greeter shows the counts
-(`12 need you · 1 back to you · 3 for your team`); in review mode it shows the
-PR instead: number, title, state, review decision, checks, and the start of
-the description (fenced blocks collapsed to a placeholder).
+(`12 need you · 1 back to you · 3 for your team`). Whenever the branch has a
+PR — reviewing or your own — the greeter shows it too: number, title, state,
+review decision, checks, the diff size (generated files excluded, as above),
+and the start of the description (fenced blocks collapsed to a placeholder).
 
 | Tier          | Means                                                              |
 | ------------- | ------------------------------------------------------------------ |
