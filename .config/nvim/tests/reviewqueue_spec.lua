@@ -311,14 +311,14 @@ describe("reviewqueue.from_node", function()
 end)
 
 describe("reviewqueue.sort", function()
-  it("orders by tier, then oldest PR first", function()
+  it("orders by tier, then newest PR first", function()
     local items = rq.sort({
       { pr = { number = 1 }, verdict = { tier = 3 } },
       { pr = { number = 2 }, verdict = { tier = 1 } },
       { pr = { number = 5 }, verdict = { tier = 1 } },
     })
     assert.same(
-      { 2, 5, 1 },
+      { 5, 2, 1 },
       vim.tbl_map(function(i)
         return i.pr.number
       end, items)

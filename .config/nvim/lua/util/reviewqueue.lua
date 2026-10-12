@@ -323,15 +323,14 @@ function M.classify(pr, ctx)
   return nil -- every file I could approve already has an owner's approval
 end
 
---- Verdicts in display order: tier, then oldest PR first -- a queue, so the
---- one that's waited longest is at the front.
+--- Verdicts in display order: tier, then newest PR first.
 ---@param items { pr: reviewqueue.PR, verdict: reviewqueue.Verdict }[]
 function M.sort(items)
   table.sort(items, function(a, b)
     if a.verdict.tier ~= b.verdict.tier then
       return a.verdict.tier < b.verdict.tier
     end
-    return a.pr.number < b.pr.number
+    return a.pr.number > b.pr.number
   end)
   return items
 end
