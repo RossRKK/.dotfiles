@@ -585,7 +585,7 @@ that repo's buffers until toggled off.
 `Space+rq` lists the open PRs in the current repo that actually need **your**
 review, and `Enter` opens one as a worktree / jj workspace tab with review mode
 already on (fetched to the PR head, targeted at the PR's base). `Ctrl+o` opens
-it in the browser instead. Each tier lists the oldest PR first. Each row shows
+it in the browser instead. Each tier lists the newest PR first. Each row shows
 the diff size (`+adds -dels`) without generated files: `linguist-generated` in
 `.gitattributes` (read from the base branch), plus lockfiles (`Cargo.lock`,
 `package-lock.json`, `uv.lock`, …) unless marked `linguist-generated=false`.
