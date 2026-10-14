@@ -2,15 +2,16 @@ quitOnTopLevelReturn: false
 customCommands:
   - key: "n"
     context: "localBranches"
-    description: "New branch, replacing the selected branch's prefix with rkk/"
+    description: "New branch off the selected branch, replacing its prefix with rkk/"
     prompts:
       - type: "input"
         title: "Branch name"
         key: "Name"
         initialValue: >-
           rkk/{{ runCommand (printf "sh -c %s" (printf "echo %s | sed -E -e 's#^(main|master|develop|trunk)$##' -e 's#^[^/]+/##'" .SelectedLocalBranch.Name | quote)) }}
+    # Start point is the selected branch (like lazygit's built-in n), not HEAD.
     command: >-
-      git checkout -b "{{.Form.Name}}"
+      git checkout -b "{{.Form.Name}}" "{{.SelectedLocalBranch.Name}}"
     loadingText: "Creating branch..."
   - key: "n"
     context: "worktrees"
