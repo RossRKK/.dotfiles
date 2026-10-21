@@ -22,10 +22,11 @@ return {
       -- Configure each server using the new vim.lsp.config API
       local servers = {
         -- basedpyright, not pyright: it's a drop-in fork that additionally serves
-        -- inlay hints (return/variable types, call-arg names), which the
-        -- LspAttach handler below enables. typeCheckingMode "standard" matches
-        -- pyright's default rather than basedpyright's stricter "recommended", so
-        -- the switch adds hints without a wall of new diagnostics.
+        -- inlay hints (return/variable types, call-arg names), off by default
+        -- and toggled per buffer with <leader>uh (plugins/snacks-ui.lua).
+        -- typeCheckingMode "standard" matches pyright's default rather than
+        -- basedpyright's stricter "recommended", so the switch adds hints
+        -- without a wall of new diagnostics.
         basedpyright = {
           settings = {
             basedpyright = {
@@ -184,9 +185,6 @@ return {
           end, "Next diagnostic")
 
           local client = vim.lsp.get_client_by_id(ev.data.client_id)
-          if client and client:supports_method("textDocument/inlayHint", ev.buf) then
-            vim.lsp.inlay_hint.enable(true, { bufnr = ev.buf })
-          end
 
           -- terraformls emits a very large semantic-token batch for files with
           -- deeply nested heredoc/yamlencode blocks (e.g. argocd-bootstrap's
