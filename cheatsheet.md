@@ -326,6 +326,7 @@ builds subsequent ones the same way.
 | `Space+o` | Open the path in a register in the main window (`"a Space+o` for register a; bare = clipboard) |
 | `Space+yf` | Yank the open **file's** path (jumps back via `gf` / `Space+o`) |
 | `Space+yl` | Yank the open file's `path:line` at cursor |
+| `Space+ya` | Type `path:line` (visual: `path:a-b`) into the side terminal, unsubmitted — comment to the agent |
 | `K`  | Hover docs                               |
 
 The file-path yanks (`Space+yf` / `Space+yl`) and `Space+o` are register-aware:

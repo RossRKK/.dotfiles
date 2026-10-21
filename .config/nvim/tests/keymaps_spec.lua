@@ -48,3 +48,52 @@ describe("terminal Shift+Enter", function()
     assert.equals("", vim.fn.maparg("<S-CR>", "t"))
   end)
 end)
+
+-- <leader>ya types the cursor's path:line (a visual selection's path:first-last)
+-- into the side terminal via fishmonger.send, unsubmitted, for a comment to the
+-- agent to follow.
+describe("<leader>ya", function()
+  local sent
+
+  before_each(function()
+    sent = {}
+    package.loaded["fishmonger"] = {
+      send = function(text)
+        sent[#sent + 1] = text
+        return true
+      end,
+    }
+    require("config.keymaps")
+    vim.cmd("enew!")
+    vim.api.nvim_buf_set_name(0, vim.fn.getcwd() .. "/lua/sample.lua")
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "a", "b", "c", "d" })
+  end)
+
+  after_each(function()
+    vim.cmd("bwipeout!")
+    package.loaded["fishmonger"] = nil
+  end)
+
+  local function press(keys)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "mx", false)
+  end
+
+  it("sends the cursor line as path:line with a trailing space", function()
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    press("<leader>ya")
+    assert.same({ "lua/sample.lua:3 " }, sent)
+  end)
+
+  it("sends a visual selection as path:first-last, either direction", function()
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    press("Vk<leader>ya")
+    assert.same({ "lua/sample.lua:2-3 " }, sent)
+    assert.equals("n", vim.fn.mode())
+  end)
+
+  it("sends nothing from a buffer with no file", function()
+    vim.cmd("enew!")
+    press("<leader>ya")
+    assert.same({}, sent)
+  end)
+end)
