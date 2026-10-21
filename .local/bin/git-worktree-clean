@@ -1,0 +1,94 @@
+#!/usr/bin/env sh
+# Remove finished secondary git worktrees. Git finds it on PATH, so run it as
+# `git worktree-clean [-f]` (symlinked by base.nix) or directly.
+#
+# A worktree is finished when its HEAD is contained in a remote-tracking ref,
+# so its commits are on a remote, and `git status` shows nothing, so no
+# staged, unstaged or untracked work is lost. Ignored files (build output,
+# venvs) go with it, as with plain `git worktree remove`. The local branch is
+# kept; only the checkout is removed. The main worktree, the one this command
+# runs in and locked worktrees are never touched. Registrations whose
+# directory is already gone are pruned.
+#
+# Remote-tracking refs are used as last fetched: a stale fetch only means
+# fewer worktrees count as finished. A squash-merged branch whose remote
+# branch was then deleted is not on the remote any more and is kept.
+#
+# Without -f/--force it prints what it would remove and changes nothing.
+#
+#   git worktree-clean       list the finished worktrees
+#   git worktree-clean -f    remove them
+set -eu
+
+die() { printf 'git-worktree-clean: %s\n' "$*" >&2; exit 1; }
+
+force=0
+for arg in "$@"; do
+    case $arg in
+        -f|--force) force=1 ;;
+        -h|--help) printf 'usage: git-worktree-clean [-f|--force]\n'; exit 0 ;;
+        *) die "unknown argument: $arg" ;;
+    esac
+done
+
+here=$(git rev-parse --show-toplevel 2>/dev/null) || die "not inside a git worktree"
+here=$(cd "$here" && pwd -P)
+
+# True when the worktree at $1 with HEAD $2 is clean and $2 is on a remote.
+finished() {
+    [ -n "$(git for-each-ref --count=1 --contains "$2" refs/remotes)" ] || return 1
+    st=$(git -C "$1" status --porcelain) || return 1
+    [ -z "$st" ]
+}
+
+status=0
+count=0
+prune=0
+# One record per worktree, blank-line separated; the first is the main one.
+# Each record is handled when its terminating blank line is read.
+first=1
+path='' head='' locked=0 prunable=0
+handle() {
+    if [ "$first" = 1 ]; then first=0; return; fi
+    if [ "$prunable" = 1 ]; then
+        prune=1
+        printf '%s %s (directory missing)\n' "$([ "$force" = 1 ] && echo pruned || echo 'would prune')" "$path"
+        return
+    fi
+    [ "$locked" = 0 ] || return 0
+    [ -n "$head" ] || return 0
+    [ "$(cd "$path" && pwd -P)" != "$here" ] || return 0
+    finished "$path" "$head" || return 0
+    count=$((count + 1))
+    if [ "$force" = 1 ]; then
+        git worktree remove "$path" || { status=1; return 0; }
+        printf 'removed %s\n' "$path"
+    else
+        printf 'would remove %s\n' "$path"
+    fi
+}
+
+list=$(git worktree list --porcelain; echo)
+while IFS= read -r line; do
+    case $line in
+        'worktree '*) path=${line#worktree } ;;
+        'HEAD '*) head=${line#HEAD } ;;
+        locked|'locked '*) locked=1 ;;
+        prunable|'prunable '*) prunable=1 ;;
+        '')
+            [ -z "$path" ] || handle
+            path='' head='' locked=0 prunable=0
+            ;;
+    esac
+done <<EOF
+$list
+EOF
+
+[ "$force" = 0 ] || [ "$prune" = 0 ] || git worktree prune
+
+if [ "$count" = 0 ] && [ "$prune" = 0 ]; then
+    printf 'no finished worktrees\n'
+elif [ "$force" = 0 ]; then
+    printf 'dry run: pass -f to remove\n'
+fi
+exit $status

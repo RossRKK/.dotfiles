@@ -254,6 +254,8 @@ in
         ".local/bin/jj-lfs"
         # `jj wsclean` (aliases.wsclean in programs.jujutsu).
         ".local/bin/jj-workspace-clean"
+        # `git worktree-clean` (git runs git-<name> from PATH).
+        ".local/bin/git-worktree-clean"
         # Claude Code hook publishing each session's state for fishmonger's
         # agent view. Only the script is symlinked here; the settings.json
         # stanza that wires it to the hook events is merged in by the

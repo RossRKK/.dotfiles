@@ -292,8 +292,13 @@ with your main checkout untouched in the tab next door — no stash, no
 `git checkout` dance, and an agent can work a branch while you work another.
 `.worktrees/` is in the global gitignore, which jj honours too, so it never shows
 up in `git status` or `jj status`; jj workspaces sit outside the repo and so
-never appear in it either. Removing one is still plain `git worktree remove`
-(jj: `jj workspace forget`, then delete the directory) in the terminal.
+never appear in it either. To tidy up, `git worktree-clean` lists the worktrees
+whose HEAD is on a remote and that have no local changes (not even untracked
+files); `-f` removes them, keeping their branches. `jj wsclean [-f]` is the jj
+equivalent for workspaces whose `@` is empty and fully pushed. Both are dry runs
+without `-f` and never touch the main or current checkout. A squash-merged
+branch whose remote branch is gone is not "on the remote", so it survives:
+remove that one with plain `git worktree remove` / `jj workspace forget`.
 
 Separately, `gw` in the **docked explorer** opens the node's directory as its own
 workspace tab — how a subdirectory of the current project, or a sibling repo you
