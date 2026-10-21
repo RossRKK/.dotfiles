@@ -328,19 +328,31 @@ map("n", "<leader>o", function()
   goto_ref(ref)
 end, { desc = "Open path from register (default: clipboard)" })
 
+--- The open file's path relative to cwd, with `:line` (or `:first-last`) when
+--- lines are given. Nil, with a warning, for a buffer that isn't a file.
+local function file_ref(first, last)
+  local path = vim.fn.expand("%:.")
+  if path == "" then
+    vim.notify("no file in this buffer", vim.log.levels.WARN)
+    return nil
+  end
+  if first and last and first ~= last then
+    return ("%s:%d-%d"):format(path, math.min(first, last), math.max(first, last))
+  elseif first then
+    return ("%s:%d"):format(path, first)
+  end
+  return path
+end
+
 -- Yank the current (open) file's path, without a trip to the explorer.
 -- <leader>yf ("yank file"): path relative to cwd. <leader>yl: with the cursor
 -- line as path:line, so it round-trips straight back through gf / <leader>o.
 -- Register-aware like the other path commands: `"a<leader>yf` yanks into register
 -- a; bare uses the unnamed register, which defaults to + (clipboard) here.
 local function yank_file_path(with_line)
-  local path = vim.fn.expand("%:.")
-  if path == "" then
-    vim.notify("no file in this buffer", vim.log.levels.WARN)
+  local path = file_ref(with_line and vim.api.nvim_win_get_cursor(0)[1] or nil)
+  if not path then
     return
-  end
-  if with_line then
-    path = ("%s:%d"):format(path, vim.api.nvim_win_get_cursor(0)[1])
   end
   vim.fn.setreg(vim.v.register, path)
   vim.notify("yanked: " .. path)
@@ -352,6 +364,22 @@ end, { desc = "Yank open file path" })
 map("n", "<leader>yl", function()
   yank_file_path(true)
 end, { desc = "Yank open file path:line" })
+
+-- <leader>ya ("yank to agent"): <leader>yl's path:line, typed straight into the
+-- side terminal's prompt (fishmonger.send) and left unsubmitted, so you write
+-- your comment on that line to the agent right there. From visual mode the
+-- selection's lines go as path:first-last. No register is touched.
+map({ "n", "x" }, "<leader>ya", function()
+  local first, last = vim.fn.line("."), nil
+  if vim.fn.mode():match("^[vV\22]") then
+    last = vim.fn.line("v")
+    vim.cmd("normal! \27") -- leave visual so the terminal opens in a clean state
+  end
+  local ref = file_ref(first, last)
+  if ref then
+    require("fishmonger").send(ref .. " ")
+  end
+end, { desc = "Send path:line to the side terminal (agent)" })
 
 map("n", "<leader>N", function()
   vim.wo.relativenumber = not vim.wo.relativenumber
