@@ -39,7 +39,10 @@
     kubernetes-helm
     kustomize
     kubeconform
-    k3d
+    # Upstream release builds bake the then-latest k3s into k3d's default
+    # image; nixpkgs only does that when k3sVersion is set, otherwise k3d
+    # falls back to its hardcoded v1.21.7-k3s1. No v prefix.
+    (k3d.override { k3sVersion = "1.33.13-k3s1"; })
     go-task
     step-cli
   ];
