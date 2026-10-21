@@ -64,6 +64,15 @@ return {
       end,
       desc = "Notification history",
     },
+    -- Inlay hints start off (nothing enables them on LspAttach); this turns
+    -- them on for the current buffer only.
+    {
+      "<leader>uh",
+      function()
+        Snacks.toggle.inlay_hints():toggle()
+      end,
+      desc = "Toggle inlay hints",
+    },
     {
       "<leader>ghi",
       function()

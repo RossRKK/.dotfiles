@@ -432,6 +432,12 @@ server to rewrite the imports pointing at the old path.
 | --------- | --------------------- |
 | `Space+d` | Show diagnostic popup |
 
+### Space+u — UI toggles
+
+| Key        | Action                                              |
+| ---------- | --------------------------------------------------- |
+| `Space+uh` | Toggle inlay hints (off by default; current buffer) |
+
 ### Space+cf — Format (conform)
 
 Formatting is manual — nothing runs on save. See `lua/plugins/conform.lua` for
