@@ -9,7 +9,8 @@
     # and its svelte-language-server (0.17.31) predates the 0.18.x line that
     # understands Svelte 5.5x runes and TypeScript 6 (false errors on runes
     # and <script> blocks otherwise); take them from unstable until stable
-    # catches up.
+    # catches up. Same for openspec: 26.05 ships 1.4.1, ten minor
+    # releases behind upstream.
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
@@ -44,6 +45,7 @@
             poethepoet = pkgs-unstable.poethepoet;
             opentofu = pkgs-unstable.opentofu;
             svelte-language-server = pkgs-unstable.svelte-language-server;
+            openspec = pkgs-unstable.openspec;
             claude-code = claude-code.packages.${system}.default;
             # Not in nixpkgs; its build deps want rustc >= 1.96, which only
             # unstable carries, so build it with the unstable toolchain.

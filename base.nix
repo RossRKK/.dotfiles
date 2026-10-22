@@ -339,6 +339,7 @@ in
       gnumake # plugin test suites (fishmonger.nvim etc.) drive nvim via make test
       imagemagick
       jq # .claude/hooks/agent-status parses its hook payloads with it
+      openspec # spec-driven development for AI coding agents (openspec.dev)
       terraform
       cmake
       openssl
