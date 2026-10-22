@@ -307,6 +307,11 @@ were looking at, becomes a workspace of its own.
 `nvim <dir>` still builds the first workspace exactly as before; the picker just
 builds subsequent ones the same way.
 
+Every opener — the pickers, `gw`, `jjui`'s `w`, and `nvim <dir>` from a side
+terminal — **switches to the tab** if that exact directory is already open as a
+workspace, rather than opening a duplicate. A subdirectory of an open project
+still gets its own tab.
+
 > **There is no session restore.** A saved session carries a single cwd, which
 > has no meaning once several projects share one nvim, so startup opens an empty
 > editor rather than reopening the last files.

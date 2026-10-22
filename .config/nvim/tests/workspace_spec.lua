@@ -329,3 +329,57 @@ describe("workspace numbers", function()
     assert.same({ 1, 2 }, strip())
   end)
 end)
+
+describe("workspace.open on a directory already open", function()
+  local ws, root
+
+  --- A workspace tabpage on `dir`, set up the way open() leaves one.
+  local function open_ws(dir)
+    vim.cmd("tabnew")
+    vim.cmd.tcd(vim.fn.fnameescape(dir))
+    ws.assign_slot()
+    return vim.api.nvim_get_current_tabpage()
+  end
+
+  before_each(function()
+    pcall(vim.cmd, "tabonly")
+    vim.t.workspace_slot = nil
+    package.loaded["config.workspace"] = nil
+    ws = require("config.workspace")
+    ws.assign_slot()
+    root = vim.fn.tempname()
+    vim.fn.mkdir(root .. "/wt/sub", "p")
+    root = vim.uv.fs_realpath(root)
+  end)
+
+  after_each(function()
+    pcall(vim.cmd, "tabonly")
+    vim.fn.delete(root, "rf")
+  end)
+
+  it("switches to the existing tab instead of opening a second", function()
+    local wt = open_ws(root .. "/wt")
+    open_ws(root)
+    local count = #vim.api.nvim_list_tabpages()
+    ws.open(root .. "/wt/", { tab = true })
+    assert.equals(wt, vim.api.nvim_get_current_tabpage())
+    assert.equals(count, #vim.api.nvim_list_tabpages())
+  end)
+
+  it("matches through a symlink", function()
+    local wt = open_ws(root .. "/wt")
+    vim.uv.fs_symlink(root .. "/wt", root .. "/link")
+    assert.equals(wt, ws.find(root .. "/link"))
+  end)
+
+  it("treats a subdirectory as a workspace of its own", function()
+    open_ws(root .. "/wt")
+    assert.is_nil(ws.find(root .. "/wt/sub"))
+  end)
+
+  it("ignores a tabpage that is not a workspace", function()
+    vim.cmd("tabnew") -- the dap debug tab, say
+    vim.cmd.tcd(vim.fn.fnameescape(root .. "/wt"))
+    assert.is_nil(ws.find(root .. "/wt"))
+  end)
+end)

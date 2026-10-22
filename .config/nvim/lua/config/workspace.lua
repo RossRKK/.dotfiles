@@ -435,10 +435,31 @@ function M.set_label(tab)
   end
 end
 
+--- The workspace tabpage already rooted at `dir`, or nil. Compared after
+--- resolving symlinks, since the fish `nvim <dir>` wrapper hands over a
+--- realpath while :tcd keeps whatever spelling it was given. Exact match only:
+--- a subdirectory of an open project is a workspace of its own (neo-tree's
+--- promote-a-subdirectory, see plugins/explorer.lua), not a duplicate.
+---@param dir string
+---@return integer?
+function M.find(dir)
+  local function real(p)
+    return vim.uv.fs_realpath(p) or p
+  end
+  local want = real(dir)
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    if M.slot(tab) and real(M.cwd(tab)) == want then
+      return tab
+    end
+  end
+end
+
 --- Set the current (or a new) tabpage up as a workspace on `dir`.
 ---@param dir string project directory
 ---@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer }
----   tab: open a new tabpage first, and scope the cwd to it with :tcd.
+---   tab: open a new tabpage first, and scope the cwd to it with :tcd -- or,
+---     if a workspace on `dir` is already open, switch to that instead of
+---     opening a second one (slot is then ignored: it keeps its number).
 ---     Without it the directory becomes the GLOBAL cwd -- which is what startup
 ---     wants, so that a child process inheriting nvim's cwd lands in the project
 ---     rather than wherever the shell happened to be.
@@ -454,6 +475,11 @@ function M.open(dir, opts)
   end
 
   if opts.tab then
+    local existing = M.find(dir)
+    if existing then
+      vim.api.nvim_set_current_tabpage(existing)
+      return
+    end
     vim.cmd("tabnew")
   end
   vim.cmd((opts.tab and "tcd " or "cd ") .. vim.fn.fnameescape(dir))
