@@ -356,6 +356,7 @@ in
       marksman
       helm-ls
       nixd
+      buf # provides buf_ls (`buf lsp serve`) for .proto
 
       # Debug adapters (nvim-dap; debugpy is not here because the python adapter
       # runs debugpy out of each project's venv, see dap.lua)
