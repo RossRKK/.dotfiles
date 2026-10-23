@@ -51,6 +51,12 @@ return {
         -- helm_ls shells out to yaml-language-server for the embedded YAML,
         -- finding it on PATH (installed via Nix alongside the other servers).
         helm_ls = {},
+        -- buf's own LSP (`buf lsp serve`, lspconfig's buf_ls), not protols:
+        -- it resolves imports and lints from the buf.yaml at the module root,
+        -- so a repo can opt in with a bare buf.yaml even without using buf
+        -- for codegen. Formatting is `buf format`, via <leader>cf's LSP
+        -- fallback (conform.lua).
+        buf_ls = {},
         -- No binary to install: the GDScript server *is* the Godot editor,
         -- which hosts it on 127.0.0.1:6005 (override with
         -- $GDScript_Port). lspconfig's lsp/gdscript.lua supplies the
