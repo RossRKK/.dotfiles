@@ -220,7 +220,7 @@ in
   home.sessionVariables = {
     EDITOR = "nvim";
     CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1";
-    RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+    RUSTC_WRAPPER = "${pkgs.kache}/bin/kache";
   } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     # bindgen dlopens libclang at build time; there's no FHS path to find it on NixOS.
     LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
