@@ -21,6 +21,20 @@
 -- Per-repo exclusions live in the repo's own git config, not here (this config
 -- is public): `git config --add reviewqueue.excludeTeam org/team`. An excluded
 -- team only counts when I'm requested by name.
+--
+-- The same fetch also lists MY open PRs (<leader>rm), the other way round:
+-- what's waiting on me to move them along (classify_mine()).
+--   1 to fix       checks failing, changes requested, review threads someone
+--                  else has the last word in, conflicts, or kicked out of the
+--                  merge queue
+--   2 to merge     every file a code owner's approved, and it targets the
+--                  default branch (a stacked PR waits on the one below it)
+--   3 to finish    a draft, or loose ends: unresolved threads I've answered,
+--                  or that new commits made outdated
+--   4 queued       in the merge queue, or auto-merge is on
+--   5 waiting      on reviewers, or on the stack below it
+-- "Approved" is worked out from CODEOWNERS rather than taken from GitHub's
+-- reviewDecision, which is null under rulesets-only protection.
 
 local M = {}
 
@@ -186,6 +200,15 @@ end
 ---@field changes { path: string, additions: integer, deletions: integer }[]
 ---@field size diffsize.Size? set by fetch() for the PRs that make the list
 ---@field reviewed_by_me boolean? found via `reviewed-by:@me`
+--- The rest only for my own PRs (MINE_FIELDS):
+---@field checks string? statusCheckRollup state: SUCCESS | FAILURE | ERROR | PENDING | EXPECTED
+---@field failing string[] names of the failing checks
+---@field threads { resolved: boolean, outdated: boolean, last: string? }[] review threads, with who spoke last
+---@field mergeable string? MERGEABLE | CONFLICTING | UNKNOWN (computed lazily by GitHub)
+---@field merge_state string? mergeStateStatus; only BEHIND is used
+---@field auto_merge boolean
+---@field queue { state: string, position: integer? }? merge queue entry
+---@field dequeued { reason: string, by: string? }? last merge-queue event was a removal
 
 ---@class reviewqueue.Ctx
 ---@field me string
@@ -195,8 +218,10 @@ end
 ---@field teams_of table<string, table<string, true>> login -> its team slugs
 
 ---@class reviewqueue.Verdict
----@field tier 1|2|3
+---@field tier integer 1-3 for review, 1-5 for mine
 ---@field reason string
+---@field notes string[]? extra preview lines
+---@field review boolean? mine: open it in review mode (there are threads to answer or resolve)
 
 local lower = string.lower
 
@@ -323,6 +348,164 @@ function M.classify(pr, ctx)
   return nil -- every file I could approve already has an owner's approval
 end
 
+--- The CODEOWNERS owners whose approval `pr` still lacks: every owner of each
+--- file that none of `approvers` can approve for. Empty = fully approved
+--- (including when nothing in it is owned).
+---@param pr reviewqueue.PR
+---@param ctx reviewqueue.Ctx
+---@param approvers string[] lowercased logins
+---@return string[]
+function M.awaiting_owners(pr, ctx, approvers)
+  local waiting = {} ---@type table<string, true>
+  for _, path in ipairs(pr.files) do
+    local owners = M.owners(ctx.rules, path)
+    local covered = false
+    for _, a in ipairs(approvers) do
+      for _, o in ipairs(owners) do
+        covered = covered or satisfies(ctx, a, o)
+      end
+    end
+    if not covered then
+      for _, o in ipairs(owners) do
+        waiting[o] = true
+      end
+    end
+  end
+  return sorted_keys(waiting)
+end
+
+---@class reviewqueue.MineCtx: reviewqueue.Ctx
+---@field default_branch string?
+---@field heads table<string, integer> head ref -> number, over my open PRs
+
+local CHECKS_FAILED = { FAILURE = true, ERROR = true }
+local CHECKS_PENDING = { PENDING = true, EXPECTED = true }
+
+--- What's holding up one of my own PRs. Unlike classify(), never nil: every
+--- open PR of mine is listed somewhere.
+---@param pr reviewqueue.PR
+---@param ctx reviewqueue.MineCtx
+---@return reviewqueue.Verdict
+function M.classify_mine(pr, ctx)
+  local me = lower(ctx.me)
+  local approvers, blockers = {}, {} ---@type string[], string[]
+  for _, r in ipairs(pr.reviews) do
+    local who = lower(r.author)
+    if who ~= me then
+      if r.state == "APPROVED" then
+        approvers[#approvers + 1] = who
+      elseif r.state == "CHANGES_REQUESTED" then
+        blockers[#blockers + 1] = "@" .. r.author
+      end
+    end
+  end
+
+  -- Unresolved threads: someone else's last word is a question for me (to
+  -- fix). One I've answered, or one new commits have made outdated, is a loose
+  -- end -- probably dealt with, but still open until somebody resolves it.
+  local unanswered, loose, outdated = 0, 0, 0
+  for _, t in ipairs(pr.threads) do
+    if not t.resolved then
+      if t.outdated then
+        loose, outdated = loose + 1, outdated + 1
+      elseif t.last and lower(t.last) ~= me then
+        unanswered = unanswered + 1
+      else
+        loose = loose + 1
+      end
+    end
+  end
+
+  local fix = {} ---@type string[]
+  local notes = {} ---@type string[]
+  if CHECKS_FAILED[pr.checks or ""] then
+    fix[#fix + 1] = "checks failing"
+    if #pr.failing > 0 then
+      notes[#notes + 1] = "failing: " .. table.concat(pr.failing, ", ")
+    end
+  end
+  if #blockers > 0 then
+    fix[#fix + 1] = "changes requested by " .. table.concat(blockers, ", ")
+  end
+  if unanswered > 0 then
+    fix[#fix + 1] = ("%d unanswered thread%s"):format(unanswered, unanswered == 1 and "" or "s")
+  end
+  if pr.mergeable == "CONFLICTING" then
+    fix[#fix + 1] = "merge conflicts"
+  end
+  if pr.queue and pr.queue.state == "UNMERGEABLE" then
+    fix[#fix + 1] = "unmergeable in the merge queue"
+  elseif not pr.queue and pr.dequeued and lower(pr.dequeued.by or "") ~= me then
+    -- Taking it out myself was deliberate; GitHub taking it out wasn't.
+    local why = pr.dequeued.reason ~= "" and (": " .. pr.dequeued.reason:lower()) or ""
+    fix[#fix + 1] = "removed from the merge queue" .. why
+  end
+  local finish = {} ---@type string[]
+  if pr.draft then
+    finish[#finish + 1] = "draft"
+  end
+  if loose > 0 then
+    finish[#finish + 1] = ("%d thread%s to resolve%s"):format(
+      loose,
+      loose == 1 and "" or "s",
+      outdated > 0 and (" (%d outdated)"):format(outdated) or ""
+    )
+  end
+  -- Review mode is where threads are answered and resolved (nitpick).
+  local review = #blockers > 0 or unanswered > 0 or loose > 0
+
+  local function verdict(tier, reasons)
+    return { tier = tier, reason = table.concat(reasons, ", "), notes = notes, review = review }
+  end
+
+  -- A draft is unfinished whatever else is wrong with it: that's said too,
+  -- but it's not a fix to a PR that's meant to be done.
+  if pr.draft then
+    return verdict(3, vim.list_extend(finish, fix))
+  end
+  if #fix > 0 then
+    return verdict(1, vim.list_extend(fix, finish))
+  end
+  -- Queued (or auto-merging) lands without me: loose ends don't hold it up.
+  if pr.queue then
+    local state = pr.queue.state:lower():gsub("_", " ")
+    local at = pr.queue.position and ("#%d in the merge queue"):format(pr.queue.position)
+      or "in the merge queue"
+    return verdict(4, { at, state })
+  end
+  if pr.auto_merge then
+    return verdict(4, { "auto-merge on" })
+  end
+  if #finish > 0 then
+    return verdict(3, finish)
+  end
+
+  local awaiting = M.awaiting_owners(pr, ctx, approvers)
+  local approved = #approvers > 0 and #awaiting == 0
+  local status = approved and "approved"
+    or #approvers > 0 and ("approved, awaiting " .. table.concat(awaiting, ", "))
+    or #awaiting > 0 and ("awaiting " .. table.concat(awaiting, ", "))
+    or "awaiting review"
+
+  -- GitHub retargets a stacked PR when the one below merges; until then,
+  -- merging it would land it in that branch, not the default one.
+  if ctx.default_branch and pr.base ~= ctx.default_branch then
+    local below = ctx.heads[pr.base]
+    return verdict(5, { status, "stacked on " .. (below and ("#" .. below) or pr.base) })
+  end
+  if not approved then
+    return verdict(5, { status })
+  end
+  local extra = {}
+  if CHECKS_PENDING[pr.checks or ""] then
+    extra[#extra + 1] = "checks pending"
+  end
+  if pr.merge_state == "BEHIND" then
+    extra[#extra + 1] = "behind " .. pr.base
+  end
+  return verdict(2, vim.list_extend({ status }, extra))
+end
+
 --- Verdicts in display order: tier, then newest PR first.
 ---@param items { pr: reviewqueue.PR, verdict: reviewqueue.Verdict }[]
 function M.sort(items)
@@ -363,7 +546,59 @@ function M.from_node(node, reviewed_by_me)
     files = {},
     changes = {},
     reviewed_by_me = reviewed_by_me,
+    failing = {},
+    threads = {},
+    mergeable = str(node.mergeable),
+    merge_state = str(node.mergeStateStatus),
+    auto_merge = type(node.autoMergeRequest) == "table",
   }
+  if type(node.mergeQueueEntry) == "table" then
+    pr.queue = {
+      state = str(node.mergeQueueEntry.state) or "",
+      position = tonumber(node.mergeQueueEntry.position),
+    }
+  end
+  -- timelineItems is filtered to the queue's added/removed events, last one.
+  local ev = nodes(node.timelineItems)[1]
+  if ev and ev.__typename == "RemovedFromMergeQueueEvent" then
+    pr.dequeued = {
+      reason = str(ev.reason) or "",
+      by = type(ev.actor) == "table" and str(ev.actor.login) or nil,
+    }
+  end
+  for _, t in ipairs(nodes(node.reviewThreads)) do
+    local last = nodes(t.comments)[1]
+    table.insert(pr.threads, {
+      resolved = t.isResolved == true,
+      outdated = t.isOutdated == true,
+      last = last and type(last.author) == "table" and str(last.author.login) or nil,
+    })
+  end
+  local head = nodes(node.commits)[1]
+  local rollup = head and type(head.commit) == "table" and head.commit.statusCheckRollup
+  if type(rollup) == "table" then
+    pr.checks = str(rollup.state)
+    -- CheckRuns carry a conclusion, legacy StatusContexts a state. A name
+    -- can repeat (one job in several workflows): list it once.
+    local seen = {}
+    for _, c in ipairs(nodes(rollup.contexts)) do
+      local result = c.conclusion or c.state
+      if
+        result == "FAILURE"
+        or result == "ERROR"
+        or result == "TIMED_OUT"
+        or result == "CANCELLED"
+        or result == "ACTION_REQUIRED"
+        or result == "STARTUP_FAILURE"
+      then
+        local name = str(c.name) or str(c.context) or "?"
+        if not seen[name] then
+          seen[name] = true
+          table.insert(pr.failing, name)
+        end
+      end
+    end
+  end
   for _, rr in ipairs(nodes(node.reviewRequests)) do
     local who = type(rr.requestedReviewer) == "table" and rr.requestedReviewer or {}
     if str(who.login) then
@@ -460,6 +695,25 @@ local PR_FIELDS = [[
   files(first: 100) { pageInfo { hasNextPage endCursor } nodes { path additions deletions } }
 ]]
 
+-- My own PRs also need what's holding them up. The rollup state is what
+-- classifies; the contexts only name the failing checks in the preview, so
+-- details() pages past the first 100 only when the rollup has failed.
+local MINE_FIELDS = [[
+  mergeable mergeStateStatus
+  autoMergeRequest { enabledAt }
+  mergeQueueEntry { state position }
+  timelineItems(last: 1, itemTypes: [ADDED_TO_MERGE_QUEUE_EVENT, REMOVED_FROM_MERGE_QUEUE_EVENT]) {
+    nodes { __typename ... on RemovedFromMergeQueueEvent { reason actor { login } } }
+  }
+  reviewThreads(first: 100) { nodes { isResolved isOutdated comments(last: 1) { nodes { author { login } } } } }
+  commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) { %s } } } } }
+]]
+local CONTEXTS = [[
+  pageInfo { hasNextPage endCursor }
+  nodes { ... on CheckRun { name conclusion } ... on StatusContext { context state } }
+]]
+MINE_FIELDS = MINE_FIELDS:format(CONTEXTS)
+
 -- Numbers only: the per-PR fields (files above all) make a search page slow,
 -- and search pages can only be walked one after another. Details are then
 -- fetched by number in parallel batches (details()).
@@ -479,6 +733,17 @@ query($owner: String!, $name: String!, $number: Int!, $after: String) {
     }
   }
 }]]
+
+local MORE_CONTEXTS = ([[
+query($owner: String!, $name: String!, $number: Int!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      commits(last: 1) { nodes { commit { statusCheckRollup {
+        contexts(first: 100, after: $after) { %s }
+      } } } }
+    }
+  }
+}]]):format(CONTEXTS)
 
 local TEAMS =
   "teams(first: 100, userLogins: [%s]) { nodes { combinedSlug ancestors(first: 20) { nodes { combinedSlug } } } }"
@@ -526,13 +791,7 @@ end
 ---@param qualifier string
 ---@return integer[]
 local function search(repo, qualifier)
-  -- Drafts and my own PRs never need my review; filtering here also spares
-  -- paging a big draft's file list.
-  local q = ("repo:%s/%s is:pr is:open draft:false -author:@me %s"):format(
-    repo.owner,
-    repo.name,
-    qualifier
-  )
+  local q = ("repo:%s/%s is:pr is:open %s"):format(repo.owner, repo.name, qualifier)
   local out, after = {}, nil
   repeat
     local page = graphql(SEARCH, { q = q, after = after }).search
@@ -549,11 +808,12 @@ end
 --- Full PR nodes for some numbers, in one request, files fully paginated.
 ---@param repo { owner: string, name: string }
 ---@param numbers integer[]
+---@param extra? string more fields (MINE_FIELDS)
 ---@return table[] nodes
-local function details(repo, numbers)
+local function details(repo, numbers, extra)
   local fields = {}
   for i, n in ipairs(numbers) do
-    fields[i] = ("p%d: pullRequest(number: %d) { %s }"):format(i, n, PR_FIELDS)
+    fields[i] = ("p%d: pullRequest(number: %d) { %s %s }"):format(i, n, PR_FIELDS, extra or "")
   end
   local query = ("query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { %s } }"):format(
     table.concat(fields, "\n")
@@ -573,6 +833,21 @@ local function details(repo, numbers)
         }).repository.pullRequest.files
         vim.list_extend(files.nodes, more.nodes)
         files.pageInfo = more.pageInfo
+      end
+      local head = node.commits and node.commits.nodes and node.commits.nodes[1]
+      local rollup = head and head.commit and head.commit.statusCheckRollup
+      local contexts = rollup
+        and (rollup.state == "FAILURE" or rollup.state == "ERROR")
+        and rollup.contexts
+      while contexts and contexts.pageInfo.hasNextPage do
+        local more = graphql(MORE_CONTEXTS, {
+          owner = repo.owner,
+          name = repo.name,
+          number = node.number,
+          after = contexts.pageInfo.endCursor,
+        }).repository.pullRequest.commits.nodes[1].commit.statusCheckRollup.contexts
+        vim.list_extend(contexts.nodes, more.nodes)
+        contexts.pageInfo = more.pageInfo
       end
       out[#out + 1] = node
     end
@@ -730,27 +1005,63 @@ function M.size(dir, number, cb)
   end)()
 end
 
---- Everything the picker shows, for the repo at `dir`, classified and sorted.
+---@alias reviewqueue.Item { pr: reviewqueue.PR, verdict: reviewqueue.Verdict }
+
+--- Full PR nodes for `numbers`, fetched in parallel batches of 10.
+---@param repo { owner: string, name: string }
+---@param numbers integer[]
+---@param extra? string
+---@return table[]
+local function all_details(repo, numbers, extra)
+  local batches = {}
+  for i = 1, #numbers, 10 do
+    local batch = vim.list_slice(numbers, i, i + 9)
+    batches[#batches + 1] = function()
+      return details(repo, batch, extra)
+    end
+  end
+  local out = {}
+  for _, nodes in ipairs(parallel(batches)) do
+    vim.list_extend(out, nodes)
+  end
+  return out
+end
+
+--- Both pickers' lists for the repo at `dir`, classified and sorted: the PRs
+--- needing my review, and my own open PRs.
 ---@param dir string
----@return { pr: reviewqueue.PR, verdict: reviewqueue.Verdict }[] items, { owner: string, name: string } repo
+---@return reviewqueue.Item[] items, { owner: string, name: string } repo, reviewqueue.Item[] mine
 function M.fetch(dir)
   local repo = repo_of(dir)
 
+  -- Drafts and my own PRs never need my review; filtering in the search also
+  -- spares paging a big draft's file list.
+  local review_q = "draft:false -author:@me "
   local first = parallel({
     function()
       return graphql("{ viewer { login } }").viewer.login
     end,
     function()
-      return search(repo, "reviewed-by:@me")
+      return search(repo, review_q .. "reviewed-by:@me")
     end,
     function()
-      return search(repo, "review-requested:@me")
+      return search(repo, review_q .. "review-requested:@me")
     end,
     function()
       return excluded(dir)
     end,
+    function()
+      return search(repo, "author:@me")
+    end,
+    function()
+      local q =
+        "query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { defaultBranchRef { name } } }"
+      local ref = graphql(q, repo).repository.defaultBranchRef
+      return ref and ref.name or false
+    end,
   })
   local me, reviewed, requested, exclude = first[1], first[2], first[3], first[4]
+  local authored, default_branch = first[5], first[6] or nil
 
   local reviewed_set, numbers = {}, {}
   for _, n in ipairs(reviewed) do
@@ -763,26 +1074,30 @@ function M.fetch(dir)
     end
   end
 
-  local batches = {}
-  for i = 1, #numbers, 10 do
-    local batch = vim.list_slice(numbers, i, i + 9)
-    batches[#batches + 1] = function()
-      return details(repo, batch)
-    end
+  local fetched = parallel({
+    function()
+      return all_details(repo, numbers)
+    end,
+    function()
+      return all_details(repo, authored, MINE_FIELDS)
+    end,
+  })
+  local prs, my_prs = {}, {}
+  for _, node in ipairs(fetched[1]) do
+    prs[#prs + 1] = M.from_node(node, reviewed_set[node.number] == true)
   end
-  local prs = {}
-  for _, nodes in ipairs(parallel(batches)) do
-    for _, node in ipairs(nodes) do
-      prs[#prs + 1] = M.from_node(node, reviewed_set[node.number] == true)
-    end
+  for _, node in ipairs(fetched[2]) do
+    my_prs[#my_prs + 1] = M.from_node(node, false)
   end
 
   local bases, approvers = {}, { [me] = true }
-  for _, pr in ipairs(prs) do
-    bases[pr.base] = true
-    for _, r in ipairs(pr.reviews) do
-      if r.state == "APPROVED" then
-        approvers[r.author] = true
+  for _, list in ipairs({ prs, my_prs }) do
+    for _, pr in ipairs(list) do
+      bases[pr.base] = true
+      for _, r in ipairs(pr.reviews) do
+        if r.state == "APPROVED" then
+          approvers[r.author] = true
+        end
       end
     end
   end
@@ -797,27 +1112,52 @@ function M.fetch(dir)
   local owners_text, teams = second[1], second[2]
 
   local rules = {}
+  local function rules_for(base)
+    rules[base] = rules[base] or M.parse_codeowners(owners_text[base] or "")
+    return rules[base]
+  end
   local items = {}
   for _, pr in ipairs(prs) do
-    rules[pr.base] = rules[pr.base] or M.parse_codeowners(owners_text[pr.base] or "")
     local verdict = M.classify(pr, {
       me = me,
       my_teams = teams[lower(me)] or {},
       exclude = exclude,
-      rules = rules[pr.base],
+      rules = rules_for(pr.base),
       teams_of = teams,
     })
     if verdict then
       items[#items + 1] = { pr = pr, verdict = verdict }
     end
   end
-  sizes(
-    dir,
-    vim.tbl_map(function(it)
-      return it.pr
-    end, items)
-  )
-  return M.sort(items), repo
+
+  local heads = {}
+  for _, pr in ipairs(my_prs) do
+    heads[pr.head] = pr.number
+  end
+  local mine = {}
+  for _, pr in ipairs(my_prs) do
+    mine[#mine + 1] = {
+      pr = pr,
+      verdict = M.classify_mine(pr, {
+        me = me,
+        my_teams = teams[lower(me)] or {},
+        exclude = exclude,
+        rules = rules_for(pr.base),
+        teams_of = teams,
+        default_branch = default_branch,
+        heads = heads,
+      }),
+    }
+  end
+
+  local listed = {}
+  for _, list in ipairs({ items, mine }) do
+    for _, it in ipairs(list) do
+      listed[#listed + 1] = it.pr
+    end
+  end
+  sizes(dir, listed)
+  return M.sort(items), repo, M.sort(mine)
 end
 
 -- ---------------------------------------------------------------------------
@@ -826,9 +1166,15 @@ end
 --- Fetch the PR head so the worktree starts at what's actually on the PR (a
 --- tier-2 PR is there BECAUSE it moved), open it as a workspace tab, and turn
 --- review mode on there against the PR's own base.
+---
+--- `review = false` (my own PRs, nothing to answer) just opens the tab: no
+--- review mode, and no "behind the PR head" warning -- my checkout being
+--- ahead of what's pushed is normal.
 ---@param pr reviewqueue.PR
 ---@param dir string a directory inside the repo
-function M.open(pr, dir)
+---@param opts? { review: boolean? } review defaults to true
+function M.open(pr, dir, opts)
+  local review = not (opts and opts.review == false)
   local vcs = require("util.vcs")
   if pr.cross_repo then
     -- The head lives in a fork: origin has no branch by that name, and
@@ -843,6 +1189,9 @@ function M.open(pr, dir)
   local jj = vcs.is_jj(dir)
 
   local function on_open(path)
+    if not review then
+      return
+    end
     local triage = require("triage")
     if not triage.is_enabled() then
       triage.toggle()
@@ -910,13 +1259,21 @@ local TIERS = {
   { label = "back to you", hl = "DiagnosticWarn" },
   { label = "your team", hl = "Comment" },
 }
+local MINE_TIERS = {
+  { label = "to fix", hl = "DiagnosticError" },
+  { label = "to merge", hl = "Added" },
+  { label = "to finish", hl = "DiagnosticWarn" },
+  { label = "queued", hl = "Special" },
+  { label = "waiting", hl = "Comment" },
+}
 
 -- ---------------------------------------------------------------------------
 -- Cache: the queue is refreshed in the background (setup()), so the picker
 -- opens at once and the greeter can show counts without a fetch of its own.
 
 ---@class reviewqueue.Entry
----@field items { pr: reviewqueue.PR, verdict: reviewqueue.Verdict }[]?
+---@field items reviewqueue.Item[]? PRs needing my review
+---@field mine reviewqueue.Item[]? my own open PRs
 ---@field repo { owner: string, name: string }?
 ---@field err string? the last fetch failed (not a GitHub repo, gh logged out)
 ---@field at integer vim.uv.now() of the fetch
@@ -964,8 +1321,8 @@ function M.refresh(dir, cb)
   end
   inflight[key] = { cb }
   coroutine.wrap(function()
-    local ok, items, repo = pcall(M.fetch, key)
-    local entry = ok and { items = items, repo = repo, at = vim.uv.now() }
+    local ok, items, repo, mine = pcall(M.fetch, key)
+    local entry = ok and { items = items, mine = mine, repo = repo, at = vim.uv.now() }
       or { err = tostring(items), at = vim.uv.now() }
     -- A failed refresh keeps the last good list: a blip in the background
     -- shouldn't blank the greeter's count.
@@ -979,7 +1336,10 @@ function M.refresh(dir, cb)
     for _, f in pairs(cbs) do
       f(entry)
     end
-    if not vim.deep_equal(M.counts_of(prev), M.counts_of(entry)) then
+    if
+      not vim.deep_equal(M.counts_of(prev), M.counts_of(entry))
+      or not vim.deep_equal(M.counts_of(prev, "mine"), M.counts_of(entry, "mine"))
+    then
       pcall(function()
         require("config.greeter").update_dashboards()
       end)
@@ -989,13 +1349,18 @@ end
 
 --- Items per tier, or nil when there's no list.
 ---@param entry reviewqueue.Entry?
+---@param list? "items"|"mine" default "items"
 ---@return integer[]?
-function M.counts_of(entry)
-  if not (entry and entry.items) then
+function M.counts_of(entry, list)
+  list = list or "items"
+  if not (entry and entry[list]) then
     return nil
   end
-  local counts = { 0, 0, 0 }
-  for _, it in ipairs(entry.items) do
+  local counts = {}
+  for i = 1, #(list == "mine" and MINE_TIERS or TIERS) do
+    counts[i] = 0
+  end
+  for _, it in ipairs(entry[list]) do
     counts[it.verdict.tier] = counts[it.verdict.tier] + 1
   end
   return counts
@@ -1005,8 +1370,9 @@ end
 --- asked about yet gets its first fetch kicked off, so a fresh tab's greeter
 --- fills in without waiting for the timer.
 ---@param dir string
+---@param list? "items"|"mine"
 ---@return integer[]?
-function M.counts(dir)
+function M.counts(dir, list)
   local key = M.key(dir)
   if not key then
     return nil
@@ -1014,7 +1380,7 @@ function M.counts(dir)
   if not M.cache[key] then
     M.refresh(dir)
   end
-  return M.counts_of(M.cache[key])
+  return M.counts_of(M.cache[key], list)
 end
 
 --- Refresh every repo with an open workspace tab.
@@ -1059,17 +1425,36 @@ local function ago(ms)
   return min < 1 and "just now" or ("%dm ago"):format(min)
 end
 
---- The picker over a cached entry.
+---@class reviewqueue.View
+---@field tiers { label: string, hl: string }[]
+---@field title string
+---@field empty string
+---@field mine boolean
+
+---@type table<"items"|"mine", reviewqueue.View>
+local VIEWS = {
+  items = {
+    tiers = TIERS,
+    title = "Review queue",
+    empty = "nothing needs your review",
+    mine = false,
+  },
+  mine = { tiers = MINE_TIERS, title = "My PRs", empty = "you have no open PRs here", mine = true },
+}
+
+--- The picker over one of a cached entry's lists.
+---@param list "items"|"mine"
 ---@param entry reviewqueue.Entry
 ---@param dir string
-local function show(entry, dir)
-  if #entry.items == 0 then
-    vim.notify("nothing needs your review", vim.log.levels.INFO, { title = "review queue" })
+local function show(list, entry, dir)
+  local view, its = VIEWS[list], entry[list]
+  if #its == 0 then
+    vim.notify(view.empty, vim.log.levels.INFO, { title = view.title })
     return
   end
   -- The size columns are as wide as the widest size, so the titles line up.
   local adds_w, dels_w = 0, 0
-  for _, it in ipairs(entry.items) do
+  for _, it in ipairs(its) do
     if it.pr.size then
       local adds, dels = diffsize.counts(it.pr.size)
       adds_w, dels_w = math.max(adds_w, #adds), math.max(dels_w, #dels)
@@ -1078,8 +1463,17 @@ local function show(entry, dir)
   -- Fresh tables each time: snacks adds its own fields to an item, and the
   -- cached list outlives this picker.
   local rows = {}
-  for i, it in ipairs(entry.items) do
+  for i, it in ipairs(its) do
     local pr = it.pr
+    local head = {
+      ("# #%d %s"):format(pr.number, pr.title),
+      "",
+      ("**%s** — %s"):format(view.tiers[it.verdict.tier].label, it.verdict.reason),
+    }
+    for _, note in ipairs(it.verdict.notes or {}) do
+      head[#head + 1] = ""
+      head[#head + 1] = note
+    end
     rows[i] = {
       idx = i,
       pr = pr,
@@ -1087,23 +1481,24 @@ local function show(entry, dir)
       text = ("#%d %s %s %s %s"):format(pr.number, pr.title, pr.author, pr.head, it.verdict.reason),
       preview = {
         ft = "markdown",
-        text = table.concat({
-          ("# #%d %s"):format(pr.number, pr.title),
-          "",
-          ("**%s** — %s"):format(TIERS[it.verdict.tier].label, it.verdict.reason),
-          "",
-          ("by @%s · `%s` → `%s`"):format(pr.author, pr.head, pr.base),
-          size_line(pr.size),
-          pr.url,
-          "",
-          (pr.body or ""):gsub("\r", ""),
-        }, "\n"),
+        text = table.concat(
+          vim.list_extend(head, {
+            "",
+            ("by @%s · `%s` → `%s`"):format(pr.author, pr.head, pr.base),
+            size_line(pr.size),
+            pr.url,
+            "",
+            ((pr.body or ""):gsub("\r", "")),
+          }),
+          "\n"
+        ),
       },
     }
   end
   Snacks.picker.pick({
     source = "reviewqueue",
-    title = ("Review queue · %s/%s · %s"):format(
+    title = ("%s · %s/%s · %s"):format(
+      view.title,
       entry.repo.owner,
       entry.repo.name,
       ago(vim.uv.now() - entry.at)
@@ -1111,26 +1506,31 @@ local function show(entry, dir)
     items = rows,
     preview = "preview",
     format = function(item)
-      local tier = TIERS[item.verdict.tier]
+      local tier = view.tiers[item.verdict.tier]
       -- Additions right-aligned, deletions left: "  +12 -3   ".
       local adds, dels = "", ""
       if item.pr.size then
         adds, dels = diffsize.counts(item.pr.size)
       end
-      return {
+      local chunks = {
         { ("%-11s "):format(tier.label), tier.hl },
         { ("#%-5d "):format(item.pr.number), "SnacksPickerIdx" },
         { (" "):rep(adds_w - #adds) .. adds .. " ", "Added" },
         { dels .. (" "):rep(dels_w - #dels) .. "  ", "Removed" },
         { item.pr.title .. " " },
-        { "@" .. item.pr.author .. " ", "SnacksPickerComment" },
-        { item.verdict.reason, "SnacksPickerComment" },
       }
+      if not view.mine then -- they're all mine: the author says nothing
+        chunks[#chunks + 1] = { "@" .. item.pr.author .. " ", "SnacksPickerComment" }
+      end
+      chunks[#chunks + 1] = { item.verdict.reason, "SnacksPickerComment" }
+      return chunks
     end,
     confirm = function(picker, item)
       picker:close()
       if item then
-        M.open(item.pr, dir)
+        -- My own PR: review mode only when there are comments to answer,
+        -- which is what shows them inline (nitpick).
+        M.open(item.pr, dir, { review = not view.mine or item.verdict.review })
       end
     end,
     actions = {
@@ -1148,32 +1548,40 @@ local function show(entry, dir)
   })
 end
 
---- <leader>rq: the review queue for the current repo. From the cache when
---- there is one (refreshed behind it if stale); otherwise fetched now.
-function M.pick()
+--- <leader>rq (the review queue) / <leader>rm (my PRs) for the current repo.
+--- From the cache when there is one (refreshed behind it if stale);
+--- otherwise fetched now.
+---@param list? "items"|"mine" default "items"
+function M.pick(list)
+  list = list or "items"
+  local title = VIEWS[list].title
   local dir = vim.fn.getcwd()
   local key = M.key(dir)
   if not key then
-    vim.notify("not in a repository", vim.log.levels.WARN, { title = "review queue" })
+    vim.notify("not in a repository", vim.log.levels.WARN, { title = title })
     return
   end
   local entry = M.cache[key]
-  if entry and entry.items then
-    show(entry, dir)
+  if entry and entry[list] then
+    show(list, entry, dir)
     if vim.uv.now() - entry.at > STALE_MS then
       M.refresh(dir)
     end
     return
   end
   local id = "reviewqueue"
-  vim.notify("fetching review queue…", vim.log.levels.INFO, { id = id, title = "review queue" })
+  vim.notify(
+    ("fetching %s…"):format(title:lower()),
+    vim.log.levels.INFO,
+    { id = id, title = title }
+  )
   M.refresh(dir, function(fresh)
     if fresh.err then
-      vim.notify(fresh.err, vim.log.levels.ERROR, { id = id, title = "review queue" })
+      vim.notify(fresh.err, vim.log.levels.ERROR, { id = id, title = title })
       return
     end
     Snacks.notifier.hide(id)
-    show(fresh, dir)
+    show(list, fresh, dir)
   end)
 end
 
