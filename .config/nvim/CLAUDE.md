@@ -31,6 +31,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `vcsline_spec.lua` | statusline VCS fragment from `jj log` (bookmark+distance, change id), diff dict choice |
 | `reviewqueue_spec.lua` | CODEOWNERS glob matching / last-match-wins, "does this PR need my review" tiers |
 | `diffsize_spec.lua` | PR diff size without generated files (`git check-attr` parsing, lockfiles) |
+| `neotree_leak_spec.lua` | the pinned neo-tree doesn't leak timers/process handles across renders. The one spec that loads a real plugin (and its git status): it guards the lazy pin, not our code. `NEOTREE_PATH=<checkout>` tests another build |
 
 The side-terminal and branch-review logic now live in external plugins, each
 with its own test suite (developed locally under `~/dev` via lazy's `dev` path):

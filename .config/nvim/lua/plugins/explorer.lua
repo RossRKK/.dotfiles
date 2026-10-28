@@ -15,7 +15,11 @@
 return {
   {
     "nvim-neo-tree/neo-tree.nvim",
-    branch = "v3.x",
+    -- main, not v3.x: v3.x lacks the fixes for a resize-monitor timer chain
+    -- spawned per render (hundreds of live loops in a long session) and
+    -- unclosed git process handles (#2103, #2106). Return to v3.x once it
+    -- carries them.
+    branch = "main",
     dependencies = {
       "nvim-lua/plenary.nvim",
       "nvim-tree/nvim-web-devicons",
