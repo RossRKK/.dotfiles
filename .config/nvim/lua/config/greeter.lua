@@ -828,33 +828,62 @@ function M.pr_items(pr, width, max_lines)
   return items
 end
 
+--- A greeter line of non-empty counts: "<glyph> 2 need you  ·  1 for your
+--- team   Space rq". Nil when every count is zero (or there's no list yet).
+---@param glyph string
+---@param counts integer[]?
+---@param parts { [1]: string, [2]: string }[] label and highlight per count; a
+---   count with no part isn't shown
+---@param key string
+---@return table? item
+local function counts_line(glyph, counts, parts, key)
+  if not counts then
+    return nil
+  end
+  local dim = "SnacksDashboardDesc"
+  local chunks = {}
+  for i, p in ipairs(parts) do
+    local n = counts[i] or 0
+    if n > 0 then
+      if #chunks > 0 then
+        chunks[#chunks + 1] = { "  \u{00b7}  ", hl = dim }
+      end
+      chunks[#chunks + 1] = { ("%d %s"):format(n, p[1]), hl = p[2] == "dim" and dim or p[2] }
+    end
+  end
+  if #chunks == 0 then
+    return nil
+  end
+  table.insert(chunks, 1, { glyph .. " ", hl = dim })
+  chunks[#chunks + 1] = { "   " .. key, hl = "SnacksDashboardKey" }
+  return line(chunks)
+end
+
 --- The "reviews waiting" line shown outside review mode, from the review
 --- queue's per-tier counts. Nil when nothing's waiting (or no list yet).
 ---@param counts integer[]? { needs you, back to you, your team }
 ---@return table? item
 function M.queue_line(counts)
-  if not counts or counts[1] + counts[2] + counts[3] == 0 then
-    return nil
-  end
-  local dim = "SnacksDashboardDesc"
-  local chunks = {}
-  local parts = {
-    { counts[1], "need you", "DiagnosticError" },
-    { counts[2], "back to you", "DiagnosticWarn" },
-    { counts[3], "for your team", dim },
-  }
-  for _, p in ipairs(parts) do
-    if p[1] > 0 then
-      if #chunks > 0 then
-        chunks[#chunks + 1] = { "  \u{00b7}  ", hl = dim }
-      end
-      chunks[#chunks + 1] = { ("%d %s"):format(p[1], p[2]), hl = p[3] }
-    end
-  end
-  -- Review glyph (nf-oct-code_review), then where to go from here.
-  table.insert(chunks, 1, { "\u{f4af} ", hl = dim })
-  chunks[#chunks + 1] = { "   Space rq", hl = "SnacksDashboardKey" }
-  return line(chunks)
+  -- Review glyph (nf-oct-code_review).
+  return counts_line("\u{f4af}", counts, {
+    { "need you", "DiagnosticError" },
+    { "back to you", "DiagnosticWarn" },
+    { "for your team", "dim" },
+  }, "Space rq")
+end
+
+--- The same for my own PRs. Only what's on me, or about to land: waiting on
+--- reviewers (tier 5) isn't something to act on from here.
+---@param counts integer[]? { to fix, to merge, to finish, queued, waiting }
+---@return table? item
+function M.mine_line(counts)
+  -- Pull request glyph (nf-oct-git_pull_request).
+  return counts_line("\u{f407}", counts, {
+    { "to fix", "DiagnosticError" },
+    { "ready to merge", "Added" },
+    { "to finish", "DiagnosticWarn" },
+    { "in merge queue", "dim" },
+  }, "Space rm")
 end
 
 --- The greeter's sections, top to bottom. Split out of open() so a test can
@@ -887,7 +916,8 @@ function M.sections(root, buf, tab, report)
       }
     end,
     -- The branch's PR, if it has one, between the name and the overview. Then,
-    -- unless reviewing, how many reviews are waiting on me.
+    -- unless reviewing, how many reviews are waiting on me, and how many of my
+    -- own PRs are.
     function()
       local items = {}
       local entry, rep = M.prs[root], report()
@@ -906,10 +936,15 @@ function M.sections(root, buf, tab, report)
         items[#items + 1] = { padding = 1 }
       end
       if not reviewing(root) then
-        -- From the review queue's background refresh (no fetch of its own).
-        local queue = M.queue_line(require("util.reviewqueue").counts(root))
-        if queue then
-          vim.list_extend(items, { queue, { padding = 1 } })
+        -- From the review queue's background refresh (no fetch of its own),
+        -- which lists my own PRs too.
+        local rq = require("util.reviewqueue")
+        local lines = { M.queue_line(rq.counts(root)), M.mine_line(rq.counts(root, "mine")) }
+        if lines[1] or lines[2] then
+          for i = 1, 2 do
+            items[#items + 1] = lines[i]
+          end
+          items[#items + 1] = { padding = 1 }
         end
       end
       return #items > 0 and items or nil

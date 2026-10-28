@@ -361,3 +361,23 @@ describe("greeter.queue_line", function()
     )
   end)
 end)
+
+describe("greeter.mine_line", function()
+  local function text(item)
+    return table.concat(vim.tbl_map(function(c)
+      return c[1]
+    end, item.text))
+  end
+
+  it("leaves out PRs that are only waiting on reviewers", function()
+    assert.is_nil(greeter.mine_line(nil))
+    assert.is_nil(greeter.mine_line({ 0, 0, 0, 0, 5 }))
+  end)
+
+  it("lists what's on me and what's about to land", function()
+    assert.equals(
+      "\u{f407} 1 to fix  \u{00b7}  4 to finish  \u{00b7}  2 in merge queue   Space rm",
+      text(greeter.mine_line({ 1, 0, 4, 2, 3 }))
+    )
+  end)
+end)

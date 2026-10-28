@@ -9,7 +9,7 @@
 - [Code and diagnostics](#code-and-diagnostics) — `Space+c` action · `Space+rn` rename · `Space+d` diagnostics · `Space+u` undo
 - [Tests and debugging](#tests-and-debugging) — `Space+T` neotest · dap debug
 - [Git](#git) — `Space+g` hunks · merge conflicts
-- [Branch review](#branch-review) — review mode · PR comments
+- [Branch review](#branch-review) — review mode · review queue · my PRs · PR comments
 - [File explorer](#file-explorer) — neo-tree keys · git glyphs · review indicators
 - [Terminal](#terminal) — side terminal · tabs
 - [Fish](#fish) — fzf.fish pickers · autopair
@@ -611,7 +611,8 @@ The queue refreshes in the background every 5 minutes for every repo with an
 open tab (and when you leave review mode), so the picker opens instantly from
 that cache — its title says how old it is, and a list over a minute old is
 refreshed behind it. Outside review mode the greeter shows the counts
-(`12 need you · 1 back to you · 3 for your team`). Whenever the branch has a
+(`12 need you · 1 back to you · 3 for your team`), and under them the
+[my PRs](#my-prs-spacerm) counts. Whenever the branch has a
 PR — reviewing or your own — the greeter shows it too: number, title, state,
 review decision, checks, the diff size (generated files excluded, as above),
 and the start of the description (fenced blocks collapsed to a placeholder).
@@ -632,6 +633,27 @@ Broad teams can be excluded per repo — they then only count when you're named:
 ```bash
 git config --add reviewqueue.excludeTeam org/team
 ```
+
+### My PRs (Space+rm)
+
+The other way round: `Space+rm` lists **your** open PRs in the current repo by
+what they're waiting on. `Enter` opens the branch as a worktree / jj workspace
+tab, with review mode on only if there are threads to answer or resolve, since
+review mode is what shows them inline. `Ctrl+o` opens the PR in the browser. It comes
+from the same background fetch as the review queue, and the greeter shows
+`2 to fix · 1 ready to merge · 3 to finish · 1 in merge queue` (PRs only
+waiting on reviewers aren't counted there).
+
+| Tier        | Means                                                                 |
+| ----------- | --------------------------------------------------------------------- |
+| `to fix`    | Checks failing, changes requested, review threads where someone else has the last word, merge conflicts, or the merge queue threw it out (not when you removed it yourself) |
+| `to merge`  | A code owner has approved every file (CODEOWNERS, as GitHub enforces it), and it targets the default branch. Pending checks / behind base are noted |
+| `to finish` | A draft, or loose ends: unresolved threads you've answered, or that new commits made outdated |
+| `queued`    | In the merge queue (with its position), or auto-merge is on — open threads don't hold it up |
+| `waiting`   | Awaiting reviewers (names the owners still missing), or stacked on another PR (`stacked on #N` — GitHub retargets it when that one merges) |
+
+A draft is always `to finish`, with anything else wrong noted
+(`draft, checks failing`). The preview names the failing checks.
 
 ### PR comments (batched review)
 
