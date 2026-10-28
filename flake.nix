@@ -19,6 +19,12 @@
     # Tracks claude-code releases much faster than nixpkgs; update with
     # `nix flake update claude-code` + rebuild.
     claude-code.url = "github:sadjow/claude-code-nix";
+    # Rust/C build cache (RUSTC_WRAPPER), not in nixpkgs. `stable` tracks
+    # releases; its flake builds with its own rust-overlay toolchain.
+    kache = {
+      url = "github:kunobi-ninja/kache/stable";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
+    };
     plasma-manager = {
       url = "github:nix-community/plasma-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -26,7 +32,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, plasma-manager, claude-code, ... }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, plasma-manager, claude-code, kache, ... }:
     let
       # Linux hosts (personal, work) take atmos/poethepoet/opentofu from
       # unstable, see the nixpkgs-unstable input comment above.
@@ -47,6 +53,7 @@
             svelte-language-server = pkgs-unstable.svelte-language-server;
             openspec = pkgs-unstable.openspec;
             claude-code = claude-code.packages.${system}.default;
+            kache = kache.packages.${system}.default;
             # Not in nixpkgs; its build deps want rustc >= 1.96, which only
             # unstable carries, so build it with the unstable toolchain.
             jj-bond = pkgs-unstable.callPackage ./pkgs/jj-bond.nix {};
@@ -58,6 +65,7 @@
         config.allowUnfree = true;
         overlays = [ (final: prev: {
           claude-code = claude-code.packages.${system}.default;
+          kache = kache.packages.${system}.default;
         }) ];
       };
     in {
