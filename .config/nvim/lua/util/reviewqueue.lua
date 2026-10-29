@@ -1196,9 +1196,10 @@ function M.open(pr, dir, opts)
     if not triage.is_enabled() then
       triage.toggle()
     end
-    -- triage auto-detects the default branch; a stacked PR targets another.
-    local base = jj and (pr.base .. "@origin") or ("origin/" .. pr.base)
-    triage.set_target(base)
+    -- No set_target here: triage asks for the PR's base itself (greeter.pr_base,
+    -- answered from this queue's cache until the greeter fetches the PR), and
+    -- an override would stick to the parent after it merges and GitHub
+    -- retargets the PR.
     -- An existing worktree keeps its own checkout: say so if it's behind.
     local head = jj and { "jj", "log", "--no-graph", "-r", "@-", "-T", "commit_id" }
       or { "git", "rev-parse", "HEAD" }
