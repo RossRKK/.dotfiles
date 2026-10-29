@@ -381,3 +381,68 @@ describe("greeter.mine_line", function()
     )
   end)
 end)
+
+describe("greeter.pr_base", function()
+  local rq = require("util.reviewqueue")
+  local root = "/repo/wt"
+  local saved_key
+
+  before_each(function()
+    greeter.prs = {}
+    rq.cache = {}
+    saved_key = rq.key
+    rq.key = function()
+      return "/repo"
+    end
+  end)
+
+  after_each(function()
+    greeter.prs = {}
+    rq.cache = {}
+    rq.key = saved_key
+  end)
+
+  local function queued(list, pr)
+    rq.cache["/repo"] = rq.cache["/repo"] or { items = {}, mine = {} }
+    table.insert(rq.cache["/repo"][list], { pr = pr, verdict = {} })
+  end
+
+  it("answers with the open PR's base and number", function()
+    greeter.prs[root] =
+      { branch = "feat/b", at = 0, pr = { number = 7, state = "OPEN", baseRefName = "feat/a" } }
+    local base, label = greeter.pr_base(root, "feat/b")
+    assert.equals("feat/a", base)
+    assert.equals("#7", label)
+  end)
+
+  it("ignores a merged or closed PR, so triage infers instead", function()
+    greeter.prs[root] =
+      { branch = "feat/b", at = 0, pr = { number = 7, state = "MERGED", baseRefName = "feat/a" } }
+    queued("mine", { number = 7, head = "feat/b", base = "feat/a" })
+    assert.is_nil(greeter.pr_base(root, "feat/b"))
+  end)
+
+  it("trusts the greeter's 'no PR' over the queue for the same branch", function()
+    greeter.prs[root] = { branch = "feat/b", at = 0, pr = false }
+    queued("items", { number = 7, head = "feat/b", base = "feat/a" })
+    assert.is_nil(greeter.pr_base(root, "feat/b"))
+  end)
+
+  it("falls back to the queue's lists before the greeter has fetched the branch", function()
+    greeter.prs[root] = { branch = "other", at = 0, pr = { number = 1, state = "OPEN", baseRefName = "x" } }
+    queued("items", { number = 9, head = "theirs", base = "main" })
+    queued("mine", { number = 8, head = "feat/b", base = "feat/a" })
+    local base, label = greeter.pr_base(root, "feat/b")
+    assert.equals("feat/a", base)
+    assert.equals("#8", label)
+  end)
+
+  it("skips fork PRs, whose branch name means nothing locally", function()
+    queued("items", { number = 9, head = "feat/b", base = "feat/a", cross_repo = true })
+    assert.is_nil(greeter.pr_base(root, "feat/b"))
+  end)
+
+  it("is nil without a branch", function()
+    assert.is_nil(greeter.pr_base(root, nil))
+  end)
+end)

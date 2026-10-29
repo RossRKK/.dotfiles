@@ -572,9 +572,17 @@ on with `Space+rt` and approve / reject files as you go. The toggle — like the
 target and all review state — is **per repo**, so each workspace tab reviews (or
 doesn't) independently.
 
-The target defaults to the auto-detected default branch (`origin/HEAD`, else
-`main` / `master`). Override it with `Space+rb` (or `:ReviewBase <branch>`, with
-branch-name completion); an empty value clears back to auto-detect.
+The target is picked so a stacked branch only shows its own changes. First
+match wins, and the statusline says which (` feat/a · #412`):
+
+| Statusline | Target                                                          |
+| ---------- | --------------------------------------------------------------- |
+| `· set`    | Your override: `Space+rb` (or `:ReviewBase <branch>`)           |
+| `· #412`   | The branch's open PR base (`origin/<base>`); follows GitHub retargeting it when the parent merges |
+| `· stack`  | No PR: the nearest other branch below this one that the default branch doesn't already contain |
+| (nothing)  | The default branch (`origin/HEAD`, else `main` / `master`)      |
+
+An empty `Space+rb` clears the override back to auto.
 
 | Key        | Action                                     |
 | ---------- | ------------------------------------------ |

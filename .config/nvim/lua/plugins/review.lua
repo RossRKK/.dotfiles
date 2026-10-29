@@ -24,6 +24,11 @@ return {
           -- The greeter shows the PR under review while review mode is on.
           require("config.greeter").on_review_toggle(on, root)
         end,
+        -- A stacked PR is reviewed against its parent: the PR's own base
+        -- when the branch has one, before triage falls back to inferring it.
+        resolve_base = function(root, branch)
+          return require("config.greeter").pr_base(root, branch)
+        end,
       })
     end,
   },

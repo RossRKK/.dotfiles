@@ -247,7 +247,8 @@ function M.fetch_pr(root, branch, force)
     return
   end
   pr_fetching[root] = true
-  local fields = "number,title,state,isDraft,body,reviewDecision,statusCheckRollup,url,headRefOid"
+  local fields =
+    "number,title,state,isDraft,body,reviewDecision,statusCheckRollup,url,headRefOid,baseRefName"
   vim.system(
     { "gh", "pr", "view", branch, "--json", fields },
     { cwd = root, text = true },
@@ -268,10 +269,18 @@ function M.fetch_pr(root, branch, force)
           pr.size = old.size
         end
         local changed = not (cached and vim.deep_equal(cached.pr, pr))
+        local was = cached and cached.branch == branch and M.pr_base(root, branch)
         local entry = { branch = branch, at = vim.uv.now(), pr = pr }
         M.prs[root] = entry
         if changed then
           M.update_dashboards()
+        end
+        -- triage reviews against the PR's base (pr_base): a review started
+        -- before this answer, or a parent merging and GitHub retargeting the
+        -- PR, has to move to the new base.
+        local triage = require("triage")
+        if M.pr_base(root, branch) ~= was and triage.is_enabled(root) then
+          triage.refresh()
         end
         if pr and not same_head then
           require("util.reviewqueue").size(root, pr.number, function(size)
@@ -284,6 +293,40 @@ function M.fetch_pr(root, branch, force)
       end)
     end
   )
+end
+
+--- triage's resolve_base (plugins/review.lua): the base of `branch`'s open PR,
+--- so a stacked PR is reviewed against its parent rather than the default
+--- branch. The greeter's own fetch answers first -- it's the one asked per
+--- branch -- else the review queue's lists, which already hold a PR the queue
+--- just opened before the greeter has fetched anything for the new worktree.
+--- Nil (no PR, or not open) leaves triage to infer the parent from git.
+---@param root string normalized workspace root
+---@param branch string?
+---@return string? base, string? label
+function M.pr_base(root, branch)
+  if not branch then
+    return nil
+  end
+  local cached = M.prs[root]
+  if cached and cached.branch == branch then
+    local pr = cached.pr
+    if pr and pr.state == "OPEN" and pr.baseRefName then
+      return pr.baseRefName, "#" .. pr.number
+    end
+    return nil
+  end
+  local rq = require("util.reviewqueue")
+  local key = rq.key(root)
+  local entry = key and rq.cache[key]
+  for _, list in ipairs({ entry and entry.items or {}, entry and entry.mine or {} }) do
+    for _, item in ipairs(list) do
+      if item.pr.head == branch and not item.pr.cross_repo and item.pr.base ~= "" then
+        return item.pr.base, "#" .. item.pr.number
+      end
+    end
+  end
+  return nil
 end
 
 --- triage's on_toggle (plugins/review.lua): refetch the PR the moment review
