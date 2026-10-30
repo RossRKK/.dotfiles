@@ -597,3 +597,48 @@ describe("reviewqueue.counts_of", function()
     assert.is_nil(rq.counts_of({ at = 0 }, "mine"))
   end)
 end)
+
+describe("reviewqueue.pick", function()
+  local saved_snacks, saved_open, saved_key, opts, opened
+
+  before_each(function()
+    saved_snacks, saved_open, saved_key = _G.Snacks, vim.ui.open, rq.key
+    opts, opened = nil, nil
+    _G.Snacks = { picker = { pick = function(o)
+      opts = o
+    end } }
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.ui.open = function(path, _)
+      opened = path
+      return nil, nil
+    end
+    rq.key = function(_)
+      return "repo"
+    end
+    local pr = { number = 7, title = "t", author = "me", head = "h", base = "main", url = "https://pr/7" }
+    rq.cache.repo = {
+      at = vim.uv.now(),
+      repo = { owner = "o", name = "n" },
+      items = { { pr = pr, verdict = { tier = 1, reason = "r" } } },
+      mine = { { pr = pr, verdict = { tier = 1, reason = "r" } } },
+    }
+  end)
+
+  after_each(function()
+    _G.Snacks, vim.ui.open, rq.key = saved_snacks, saved_open, saved_key
+    rq.cache.repo = nil
+  end)
+
+  for _, list in ipairs({ "items", "mine" }) do
+    it(("opens the PR in the browser on normal-mode G in either window (%s)"):format(list), function()
+      rq.pick(list)
+      for _, win in ipairs({ "input", "list" }) do
+        local key = opts.win[win].keys.G
+        assert.equals("n", key.mode)
+        opened = nil
+        opts.actions[key[1]](nil, { pr = { url = "https://pr/7" } })
+        assert.equals("https://pr/7", opened)
+      end
+    end)
+  end
+end)
