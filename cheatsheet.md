@@ -146,13 +146,9 @@ The **greeter** is the leftmost buffer tab, labelled `Overview` — one per
 workspace, always there, so going back to it is `Space+h`, a click, or `<S-h>`
 off the left end. It's also what the main window falls back to when the last
 buffer closes, rather than a blank `[No Name]`. It shows a branch overview:
-`repo - branch`
-(a worktree reads as its repo, not its checkout directory; in a jj repo the
-branch half is the nearest bookmark, else the change's description, else its
-change id — jj has no current branch, and colocated git sits on a detached
-HEAD), how far ahead/behind
-its remote it is, the review base and commits on top of it, and the files this
-branch changes — the same merge-result diff and triage marks (`●` changed, `✓`
+`repo - branch` (a worktree reads as its repo, not its checkout directory), how
+far ahead/behind its remote it is, the review base and commits on top of it,
+and the files this branch changes — the same merge-result diff and triage marks (`●` changed, `✓`
 approved, `✗` rejected, `↻` revised) review mode puts in the explorer. Each file
 has a key next to it; press it to open. `Space+X` is the quick way back to the
 greeter. Outside a git repo there's no overview, so it falls back to the pickers
@@ -198,7 +194,7 @@ renumbering the rest.
 | ----------- | ---------------------------------------------------------- |
 | `Space+tn`  | New project tab — names one from zoxide's list             |
 | `Space+te`  | New project tab — browse the filesystem for one (float)    |
-| `Space+tw`  | New project tab — a worktree/jj workspace of a branch here  |
+| `Space+tw`  | New project tab — a worktree of a branch here               |
 | `Space+tf`  | Fork this tab — new branch + checkout, Claudes forked along |
 | `Alt+1-9`   | Switch to workspace N (works in terminal mode too); an unused number opens the project picker, and the pick becomes workspace N |
 | `Space+tt`  | Switch to an open project (picker; matches number or name) |
@@ -215,7 +211,7 @@ Alt instead of Ctrl. It works from the terminal too (there it takes fish's
 | `Alt+B c`     | Open a new workspace (project picker, lowest free number)   |
 | `Alt+B &`     | Close this workspace (asks first if an agent there is live) |
 | `Alt+B . N`   | Renumber this workspace to N (`.` then `1-9`); swaps if N is taken |
-| `Alt+B w N`   | Open a branch's worktree / jj workspace as workspace N (the `Space+tw` picker) |
+| `Alt+B w N`   | Open a branch's worktree as workspace N (the `Space+tw` picker) |
 | `Alt+B e N`   | Browse to a directory and open it as workspace N (the `Space+te` browser) |
 
 Tab labels sit at the **right end of the bufferline**, showing the project name —
@@ -246,28 +242,6 @@ it on the remotes — fetching `origin/<name>` if it isn't known yet — and onl
 makes a new branch off `HEAD` when no remote has it. Picking a branch that
 already has a worktree just opens it.
 
-**In a jj repo** the same key does the same thing through `jj workspace` instead:
-it lists bookmarks (local and remote) and `Enter` adds a workspace for one. jj
-doesn't understand git worktrees, so the backend is chosen per repo on `.jj` —
-the same rule that picks jjui over lazygit for `Ctrl+G`.
-
-jj workspaces live in the same place as git worktrees, `<repo>/.worktrees/<slug>`.
-A secondary jj workspace has no `.git`, so git tools run inside it find the
-*parent* repo — which is harmless, because wherever a `.jj` exists jj owns the
-answer: jjsigns paints the gutter, gitsigns stands down, and neo-tree's git
-glyphs are switched off in secondary workspaces (in the colocated main workspace
-they stay on: jj keeps git's HEAD on `@-`, so git's view there is jj's).
-A bookmark that exists only on a remote is tracked first (`jj bookmark track
-<name>@origin`), so the workspace sits on that commit and `jj git push` later
-moves it. A name nothing matches needs no fetch guess (jj bookmarks are one
-namespace): it becomes a new workspace on top of the current change, with a
-bookmark of that name so the tab has something to be called.
-
-The new working copy is a **new empty change on top of** the bookmark; the
-bookmark itself does not advance as you commit, unlike a checked-out git
-branch. Run `jj bookmark set <name>` (or `jj bookmark move --from ... --to @-`)
-before pushing.
-
 The same thing is reachable from **lazygit**: `w` on a branch (local or remote)
 opens it as a worktree project tab in the surrounding nvim.
 
@@ -281,24 +255,16 @@ into the **same terminal slot**, so "claude 2" is still claude 2 after the
 fork. Plain shells and open editor buffers do not travel; staged hunks arrive
 unstaged.
 
-In a jj repo the fork asks for a **bookmark** name and carries the uncommitted
-work by construction rather than by stashing: the new workspace's working copy
-is parented on this tab's current change, so it inherits everything in it and
-the original keeps it too. The Claude session forking is identical — it's the
-same code either way.
-
 So a branch becomes a project tab: its own checkout, terminals and buffer list,
 with your main checkout untouched in the tab next door — no stash, no
 `git checkout` dance, and an agent can work a branch while you work another.
-`.worktrees/` is in the global gitignore, which jj honours too, so it never shows
-up in `git status` or `jj status`; jj workspaces sit outside the repo and so
-never appear in it either. To tidy up, `git worktree-clean` lists the worktrees
+`.worktrees/` is in the global gitignore, so it never shows up in `git status`.
+To tidy up, `git worktree-clean` lists the worktrees
 whose HEAD is on a remote and that have no local changes (not even untracked
-files); `-f` removes them, keeping their branches. `jj wsclean [-f]` is the jj
-equivalent for workspaces whose `@` is empty and fully pushed. Both are dry runs
-without `-f` and never touch the main or current checkout. A squash-merged
-branch whose remote branch is gone is not "on the remote", so it survives:
-remove that one with plain `git worktree remove` / `jj workspace forget`.
+files); `-f` removes them, keeping their branches. It is a dry run without
+`-f` and never touches the main or current checkout. A squash-merged branch
+whose remote branch is gone is not "on the remote", so it survives: remove that
+one with plain `git worktree remove`.
 
 Separately, `gw` in the **docked explorer** opens the node's directory as its own
 workspace tab — how a subdirectory of the current project, or a sibling repo you
@@ -307,7 +273,7 @@ were looking at, becomes a workspace of its own.
 `nvim <dir>` still builds the first workspace exactly as before; the picker just
 builds subsequent ones the same way.
 
-Every opener — the pickers, `gw`, `jjui`'s `w`, and `nvim <dir>` from a side
+Every opener — the pickers, `gw`, lazygit's `w`, and `nvim <dir>` from a side
 terminal — **switches to the tab** if that exact directory is already open as a
 workspace, rather than opening a duplicate. A subdirectory of an open project
 still gets its own tab.
@@ -499,7 +465,7 @@ Pass/fail signs render in the gutter; driven by rust-analyzer runnables.
 
 ## Git
 
-### Space+g — Hunks (gitsigns / jjsigns)
+### Space+g — Hunks (gitsigns)
 
 | Key        | Action                    |
 | ---------- | ------------------------- |
@@ -512,13 +478,6 @@ Pass/fail signs render in the gutter; driven by rust-analyzer runnables.
 | `Space+gt` | Swap explorer to the git status view |
 | `Space+ghi` | Browse GitHub issues (snacks picker + `gh` CLI) |
 | `Space+ghp` | Browse GitHub PRs (snacks picker + `gh` CLI) |
-
-In a **jj repo** — any directory under a `.jj`, colocated or not — the gutter is
-drawn by jjsigns instead, diffing against `@-`, with the same `]h`/`[h`,
-`Space+gp` and `Space+gr`. gitsigns vetoes its own attach there so the two never
-paint the same file. Two keys have no jj meaning and are absent: `Space+gs` (jj
-has no index — the working copy *is* a commit, so there is nothing to stage) and
-the blame pair, which jjsigns does not do yet.
 
 `Space+gt` swaps the explorer's top pane to neo-tree's `git_status` source (and
 back) — a changed-files list where you stage / commit per file:
@@ -608,7 +567,7 @@ that repo's buffers until toggled off.
 ### Review queue (Space+rq)
 
 `Space+rq` lists the open PRs in the current repo that actually need **your**
-review, and `Enter` opens one as a worktree / jj workspace tab with review mode
+review, and `Enter` opens one as a worktree tab with review mode
 already on (fetched to the PR head, targeted at the PR's base). `Ctrl+o` (or `G` in normal mode, as in lazygit) opens
 it in the browser instead. Each tier lists the newest PR first. Each row shows
 the diff size (`+adds -dels`) without generated files: `linguist-generated` in
@@ -645,7 +604,7 @@ git config --add reviewqueue.excludeTeam org/team
 ### My PRs (Space+rm)
 
 The other way round: `Space+rm` lists **your** open PRs in the current repo by
-what they're waiting on. `Enter` opens the branch as a worktree / jj workspace
+what they're waiting on. `Enter` opens the branch as a worktree
 tab, with review mode on only if there are threads to answer or resolve, since
 review mode is what shows them inline. `Ctrl+o` (or `G` in normal mode) opens the PR in the browser. It comes
 from the same background fetch as the review queue, and the greeter shows
@@ -815,7 +774,7 @@ scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI munging).
 | Key                    | Action                                                |
 | ---------------------- | ----------------------------------------------------- |
 | `Ctrl+T`               | Toggle the side terminal                              |
-| `Ctrl+G`               | Toggle the git TUI — jjui in a jj repo, else lazygit  |
+| `Ctrl+G`               | Toggle the git TUI (lazygit)                          |
 | `Ctrl+Shift+G`         | Open the git TUI in a picked project                  |
 | `Ctrl+N` (in terminal) | Enter terminal-normal mode (then `gf` jumps to a ref) |
 | `<leader>y` (visual, side terminal) | Yank the selection joined into one line — for wrapped commands in Claude Code output (pty soft-wraps in shell output join automatically on any yank) |

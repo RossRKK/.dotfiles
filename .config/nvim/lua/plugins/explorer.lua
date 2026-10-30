@@ -227,24 +227,6 @@ return {
       vim.api.nvim_create_autocmd("ColorScheme", { callback = set_git_highlights })
       set_git_highlights()
 
-      -- neo-tree has no jj backend, so its status glyphs and gitignore dimming
-      -- come from git whatever the repo. In a secondary jj workspace
-      -- (<repo>/.worktrees/x) there is no .git, git resolves UP to the main
-      -- workspace, and the global `.worktrees/` rule paints every file ignored.
-      -- util/jjstatus fills neo-tree's status map from jj instead (working copy
-      -- vs its parent; ignored = not in `jj file list`) and switches the git
-      -- fallback off for that state. Outside a jj repo it does nothing. Runs
-      -- before every render, after neo-tree's own git refresh, so jj's answer
-      -- is the one that gets drawn.
-      events.subscribe({
-        event = events.BEFORE_RENDER,
-        handler = function(state)
-          if state and state.name == "filesystem" then
-            require("util.jjstatus").before_render(state)
-          end
-        end,
-      })
-
       -- `nvim <dir>` (e.g. `nvim .`): build the first workspace -- the tree
       -- beside a real editor window, side terminal on the right. Same open() the
       -- <leader>tn picker calls for a second project, minus the new tabpage: this

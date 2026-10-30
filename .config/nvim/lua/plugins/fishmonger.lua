@@ -65,12 +65,11 @@ return {
         end)
       end
 
-      -- A fresh branch report (config.greeter) or jj answer (util.vcsline) has
-      -- already repainted the tab labels itself; the OS title reads the same
-      -- names, so it repaints here. Without this a checkout or `jj new` only
-      -- reached the title via unrelated events.
+      -- A fresh branch report (config.greeter) has already repainted the tab
+      -- labels itself; the OS title reads the same names, so it repaints here.
+      -- Without this a checkout only reached the title via unrelated events.
       vim.api.nvim_create_autocmd("User", {
-        pattern = { "GreeterReportChanged", "VcsLineChanged", "WorkspaceRenumbered" },
+        pattern = { "GreeterReportChanged", "WorkspaceRenumbered" },
         callback = queue_title,
       })
 

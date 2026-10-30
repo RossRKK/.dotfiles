@@ -255,8 +255,8 @@ function M.fork_args(branch, path, base)
   return { "worktree", "add", "-b", branch, path, base }
 end
 
---- The personal branch prefix, lazygit's `git.branchPrefix`: every branch (jj:
---- bookmark) made from nvim starts with it. A new-name prompt is pre-filled
+--- The personal branch prefix, lazygit's `git.branchPrefix`: every branch made
+--- from nvim starts with it. A new-name prompt is pre-filled
 --- with it, and a fork suggestion is put under it.
 M.prefix = "rkk/"
 
@@ -426,9 +426,9 @@ function M.open(branch, dir, on_open, slot)
   end)
 end
 
---- Prompt for a name and open a worktree tab for it, mirroring
---- util/jjworkspace.lua's M.new: the picker's <CR> only takes typed text when
---- nothing fuzzy-matches it, so a new branch name gets its own entry point.
+--- Prompt for a name and open a worktree tab for it: the picker's <CR> only
+--- takes typed text when nothing fuzzy-matches it, so a new branch name gets its
+--- own entry point.
 --- M.open branches an unknown name off the main worktree's HEAD. The prompt
 --- starts with the prefix, as lazygit's does; delete it for a shared branch.
 function M.new()
@@ -526,9 +526,6 @@ end
 --- In the tab just opened by a fork, give each collected Claude session its old
 --- slot back. show() spawns the shell synchronously, so the fork command can be
 --- sent right away; the pty buffers it until the shell reads.
----
---- Nothing here is git-specific, so the jj backend (util/jjworkspace.lua) forks
---- sessions by calling this rather than repeating it.
 ---@param sessions { slot: integer, session: string }[]
 function M.restore_sessions(sessions)
   local fm = require("fishmonger")
@@ -576,9 +573,7 @@ end
 --- the reflog says nothing about which branch you were in yesterday.
 local recent_file = vim.fn.stdpath("state") .. "/worktree-recent.json"
 
---- The recency record, path -> unix time of the last open. Shared with the jj
---- backend (util/jjworkspace.lua): one list, so the ordering is the same
---- whichever kind of repo a project is.
+--- The recency record, path -> unix time of the last open.
 ---@return table<string, integer>
 function M.recent_load()
   local f = io.open(recent_file, "r")

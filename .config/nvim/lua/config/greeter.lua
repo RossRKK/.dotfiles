@@ -115,8 +115,7 @@ M._instances = instances -- exposed for tests only
 --- WINDOW, without checking what the window shows now. Our greeters outlive
 --- being displayed (bufhidden=hide, so the buffer stays on the bufferline), so
 --- once a file is opened over one, that window is the file's -- and an update
---- would yank the file's cursor to the dashboard item's row and column. Saving
---- triggered exactly that, via the VcsLineChanged refresh below.
+--- would yank the file's cursor to the dashboard item's row and column.
 ---@param buf integer
 ---@param dash snacks.dashboard.Class
 ---@return boolean
@@ -146,17 +145,10 @@ end
 -- first one rather than stacking git processes.
 local fetching = {}
 
--- How many lines of `jj log` to ask for. More than the greeter usually shows,
--- so a tall window fills; graph() cuts the rest to what fits.
-local GRAPH_LINES = 20
-
--- The dashboard pane width. Wider than snacks' default of 60: a `jj log` line
--- carries rails, change id, author, time and bookmarks, and at 60 the
--- description under it lost most of its words. Graph lines are cut to this (or
--- to the window, when that is narrower) so a long description cannot widen the
+-- The dashboard pane width, wider than snacks' default of 60. Long lines are
+-- cut to this (or to the window, when that is narrower) so one cannot widen the
 -- pane and shift everything else.
 local PANE_WIDTH = 90
-M.PANE_WIDTH = PANE_WIDTH
 
 --- Is review mode on for `root`? False when triage isn't loaded.
 ---@param root string
@@ -177,13 +169,6 @@ function M.fetch(root)
     return
   end
   fetching[root] = true
-  -- jj repos show `jj log` in place of the ahead/behind summary (see graph()).
-  -- Same rule as triage's backend pick: a .jj at the root means jj.
-  if vim.uv.fs_stat(root .. "/.jj") then
-    require("util.jjlog").fetch(root, GRAPH_LINES, function()
-      M.update_dashboards()
-    end)
-  end
   triage.report({ root = root }, function(report)
     fetching[root] = nil
     if report then
@@ -197,8 +182,6 @@ function M.fetch(root)
 end
 
 --- Store `report` as `root`'s overview and repaint everything drawing off it.
---- Split out of fetch() because the jj branch lookup above lands a callback
---- later than the triage report, and both finish here.
 ---@param root string workspace cwd
 ---@param report table|false
 function M.cache_report(root, report)
@@ -236,7 +219,7 @@ local PR_TTL_MS = 60 * 1000
 
 --- Fetch the PR for `branch` into M.prs[root] and redraw on a change.
 ---@param root string workspace root
----@param branch string the branch (jj: bookmark) the PR's head is
+---@param branch string the branch the PR's head is
 ---@param force? boolean skip the TTL (review mode was just turned on)
 function M.fetch_pr(root, branch, force)
   local cached = M.prs[root]
@@ -415,8 +398,7 @@ local watchers = {}
 --- instead of describing where it was when the greeter opened. Nothing that
 --- moves a branch raises an autocmd -- a commit or rebase in the side terminal,
 --- a lazygit session, a fetch, another nvim, a plain shell -- but all of it
---- writes here. triage names them per VCS: git's two git dirs, or in a jj repo
---- the operation head, which every jj command rewrites.
+--- writes here.
 ---
 --- Two directories, non-recursively: the worktree's own git dir (HEAD, index,
 --- reflog: commit, stage, checkout, rebase) and the shared common dir
@@ -554,41 +536,6 @@ local function overview(report)
   end
   return items
 end
-
---- The `jj log` graph for a jj repo, in the summary's place. Left-aligned as a
---- block (no `align`): the rails in one line continue into the next, so every
---- line must keep the same left edge. Snacks centres the pane itself, so the
---- block still sits where the summary did. Nil in a git repo, or before the
---- first run lands.
----@param root string normalized workspace root
----@param buf integer the greeter's buffer
----@return table[]?
-local function graph(root, buf)
-  local output = require("util.jjlog").cache[root]
-  if not output then
-    return nil
-  end
-  -- Share the window with the file list: about half the rows below the header
-  -- each, on the same sizing rule as files().
-  local height, width = 30, PANE_WIDTH
-  for _, w in ipairs(vim.api.nvim_list_wins()) do
-    if vim.api.nvim_win_get_buf(w) == buf then
-      height = vim.api.nvim_win_get_height(w)
-      -- A window narrower than the pane would otherwise show lines cut off at
-      -- its right edge, with no ellipsis to say so.
-      width = math.min(PANE_WIDTH, vim.api.nvim_win_get_width(w))
-      break
-    end
-  end
-  local limit = math.max(4, math.floor((height - 12) / 2))
-  local items = require("util.jjlog").items(output, width)
-  if #items > limit then
-    items = vim.list_slice(items, 1, limit)
-    items[#items + 1] = { text = { { "\xe2\x80\xa6", hl = "SnacksDashboardDesc" } } }
-  end
-  return items
-end
-M.graph = graph
 
 --- The changed-file list: every file the branch is responsible for, marked with
 --- its triage glyph, each a keypress from opening. Long branches are cut to what
@@ -862,8 +809,8 @@ function M.pr_items(pr, width, max_lines)
     if l == "" then
       items[#items + 1] = { text = { { "" } } }
     else
-      -- Left-aligned as a block, like the jj graph: centring each line of
-      -- prose separately makes a ragged column that's hard to read.
+      -- Left-aligned as a block: centring each line of prose separately makes
+      -- a ragged column that's hard to read.
       local hl = l.dim and dim or l.heading and "Title" or "Normal"
       items[#items + 1] = { text = { { l.text, hl = hl } } }
     end
@@ -939,7 +886,7 @@ end
 function M.sections(root, buf, tab, report)
   return {
     -- A blank line first. Snacks centres the content vertically, but only while
-    -- it fits: once the graph and file list overrun the window it starts at row
+    -- it fits: once the overview and file list overrun the window it starts at row
     -- 0, and the Agents list sat hard against the top edge.
     { padding = 1 },
     -- Agents first, ABOVE the header: everything below it is about this
@@ -947,13 +894,12 @@ function M.sections(root, buf, tab, report)
     -- agents. Sitting under a "<repo> - <branch>" heading would read as a
     -- claim that these belong to this repo.
     agents,
-    -- jj: "<repo> - <jj workspace>" (the graph below says where @ is). git:
     -- "<repo> - <branch>", the tab label, read from the report cache this
     -- greeter fills, with the plain workspace name as the fallback for a
-    -- directory git can't tell us anything about. See workspace.greeter_name.
+    -- directory git can't tell us anything about. See workspace.display_name.
     function()
       return {
-        text = { { require("config.workspace").greeter_name(tab), hl = "SnacksDashboardHeader" } },
+        text = { { require("config.workspace").display_name(tab), hl = "SnacksDashboardHeader" } },
         align = "center",
         padding = 1,
       }
@@ -992,9 +938,9 @@ function M.sections(root, buf, tab, report)
       end
       return #items > 0 and items or nil
     end,
-    -- jj: the log graph. git: the two-line ahead/behind summary.
+    -- The two-line ahead/behind summary.
     function()
-      local items = graph(root, buf) or overview(report())
+      local items = overview(report())
       return items and vim.list_extend(items, { { padding = 1 } }) or nil
     end,
     {
@@ -1249,14 +1195,6 @@ function M.setup()
   vim.api.nvim_create_autocmd("User", {
     group = group,
     pattern = "FishmongerAgentsChanged",
-    callback = M.update_dashboards,
-  })
-
-  -- The heading of a jj greeter is drawn from vcsline's answer (see
-  -- workspace.greeter_name), which lands async and moves with `@`.
-  vim.api.nvim_create_autocmd("User", {
-    group = group,
-    pattern = "VcsLineChanged",
     callback = M.update_dashboards,
   })
 
