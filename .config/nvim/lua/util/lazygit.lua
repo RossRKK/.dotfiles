@@ -2,7 +2,7 @@ local M = {}
 
 -- The lazygit float we last opened (a snacks.win). snacks keeps one terminal
 -- per cwd alive; tracking the current one lets us hide whatever is up (e.g.
--- util.vcs hides both TUIs before popping the project picker).
+-- before popping the project picker).
 local term = nil
 
 -- Float lazygit at `cwd` (nil = snacks' default: the current file's repo, else
@@ -47,6 +47,26 @@ function M.open()
     return
   end
   M.float()
+end
+
+-- <C-S-g>: pick a project and open lazygit there, for driving a repo other than
+-- nvim's cwd (e.g. within a polyrepo tree).
+function M.pick()
+  -- Hide any open float first: WinLeave doesn't reliably fire when the picker
+  -- grabs focus, so an existing lazygit would otherwise linger over the picker.
+  M.hide()
+  Snacks.picker.projects({
+    confirm = function(picker, item)
+      picker:close()
+      if item and item.file then
+        -- schedule so the picker window is fully torn down before the lazygit
+        -- terminal float takes focus.
+        vim.schedule(function()
+          M.float(item.file)
+        end)
+      end
+    end,
+  })
 end
 
 return M

@@ -1,7 +1,7 @@
 local M = {}
 
 --- Absolute path to the uv .venv interpreter found by searching upward from
---- `start`, or nil. Search stops at the first .venv, so a jj workspace under
+--- `start`, or nil. Search stops at the first .venv, so a worktree under
 --- <repo>/.worktrees/x with its own .venv wins over the main checkout's.
 ---
 --- Without `start`, anchors on the directory argument (`nvim <dir>`) when

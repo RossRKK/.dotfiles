@@ -1175,7 +1175,6 @@ end
 ---@param opts? { review: boolean? } review defaults to true
 function M.open(pr, dir, opts)
   local review = not (opts and opts.review == false)
-  local vcs = require("util.vcs")
   if pr.cross_repo then
     -- The head lives in a fork: origin has no branch by that name, and
     -- worktree.open would quietly branch a new one off HEAD instead.
@@ -1186,7 +1185,6 @@ function M.open(pr, dir, opts)
     )
     return
   end
-  local jj = vcs.is_jj(dir)
 
   local function on_open(path)
     if not review then
@@ -1201,11 +1199,9 @@ function M.open(pr, dir, opts)
     -- an override would stick to the parent after it merges and GitHub
     -- retargets the PR.
     -- An existing worktree keeps its own checkout: say so if it's behind.
-    local head = jj and { "jj", "log", "--no-graph", "-r", "@-", "-T", "commit_id" }
-      or { "git", "rev-parse", "HEAD" }
-    vim.system(head, { cwd = path, text = true }, function(res)
+    vim.system({ "git", "rev-parse", "HEAD" }, { cwd = path, text = true }, function(res)
       local at = vim.trim(res.stdout or "")
-      if res.code == 0 and at ~= pr.head_oid and not (jj and at == "") then
+      if res.code == 0 and at ~= pr.head_oid then
         vim.schedule(function()
           vim.notify(
             ("worktree is at %s, PR head is %s: pull to review the latest"):format(
@@ -1229,27 +1225,15 @@ function M.open(pr, dir, opts)
       )
       return
     end
-    vcs.open_tab(pr.head, dir, on_open)
+    require("util.worktree").open(pr.head, dir, on_open)
   end
-  if jj then
-    vim.system(
-      { "jj", "git", "fetch", "--remote", "origin", "--branch", pr.head },
-      { cwd = dir, text = true },
-      function(res)
-        vim.schedule(function()
-          fetched(nil, res.code ~= 0 and vim.trim(res.stderr or "") or nil)
-        end)
-      end
-    )
-  else
-    -- git_async: a progress float, since a fetch in a big repo takes a while.
-    require("util.worktree").git_async(
-      dir,
-      { "fetch", "origin", pr.head },
-      "fetching " .. pr.head,
-      fetched
-    )
-  end
+  -- git_async: a progress float, since a fetch in a big repo takes a while.
+  require("util.worktree").git_async(
+    dir,
+    { "fetch", "origin", pr.head },
+    "fetching " .. pr.head,
+    fetched
+  )
 end
 
 -- ---------------------------------------------------------------------------
@@ -1279,7 +1263,7 @@ local MINE_TIERS = {
 ---@field err string? the last fetch failed (not a GitHub repo, gh logged out)
 ---@field at integer vim.uv.now() of the fetch
 
---- Repo key -> last fetch. Keyed by the MAIN worktree / workspace root, so all
+--- Repo key -> last fetch. Keyed by the MAIN worktree root, so all
 --- of a repo's worktree tabs share one queue.
 ---@type table<string, reviewqueue.Entry>
 M.cache = {}
@@ -1296,13 +1280,7 @@ local STALE_MS = 60 * 1000
 ---@return string?
 function M.key(dir)
   if keys[dir] == nil then
-    local root
-    if require("util.vcs").is_jj(dir) then
-      root = require("util.jjworkspace").root(dir)
-    else
-      root = require("util.worktree").root(dir)
-    end
-    keys[dir] = root or false
+    keys[dir] = require("util.worktree").root(dir) or false
   end
   return keys[dir] or nil
 end

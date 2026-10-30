@@ -165,26 +165,25 @@ map("n", "<leader>te", function()
   require("config.workspace").explore()
 end, { desc = "New project tab (browse)" })
 -- The same thing for a branch of the project you're in: create (or reuse) a
--- worktree (jj repos: a jj workspace) for it under .worktrees/ and open that as
--- its own tab. util/vcs.lua picks the backend; util/worktree.lua and
--- util/jjworkspace.lua implement them.
+-- worktree for it under .worktrees/ and open that as its own tab. See
+-- util/worktree.lua.
 map("n", "<leader>tw", function()
-  require("util.vcs").pick_tab()
-end, { desc = "New project tab (worktree / jj workspace)" })
--- A branch (jj: bookmark) that does not exist yet: name it, get a worktree /
--- jj workspace for it, opened as its own tab. <leader>tw's picker is for
--- branches that exist; its typed-name fallback only fires when nothing
--- fuzzy-matches, which a ticket name nearly always does.
+  require("util.worktree").pick()
+end, { desc = "New project tab (worktree)" })
+-- A branch that does not exist yet: name it, get a worktree for it, opened as
+-- its own tab. <leader>tw's picker is for branches that exist; its typed-name
+-- fallback only fires when nothing fuzzy-matches, which a ticket name nearly
+-- always does.
 map("n", "<leader>tb", function()
-  require("util.vcs").new_tab()
-end, { desc = "New project tab for a new branch / bookmark" })
--- Fork the current worktree tab: new branch (jj: bookmark) off this tab's
--- current state, dirty changes carried over, opened as its own tab, with every
--- Claude session in this tab's side terminals forked (--fork-session) into its
--- same slot. See util/worktree.lua and util/jjworkspace.lua.
+  require("util.worktree").new()
+end, { desc = "New project tab for a new branch" })
+-- Fork the current worktree tab: new branch off this tab's current state,
+-- dirty changes carried over, opened as its own tab, with every Claude session
+-- in this tab's side terminals forked (--fork-session) into its same slot. See
+-- util/worktree.lua.
 map("n", "<leader>tf", function()
-  require("util.vcs").fork_tab()
-end, { desc = "Fork project tab (worktree/workspace + claude forks)" })
+  require("util.worktree").fork()
+end, { desc = "Fork project tab (worktree + claude forks)" })
 -- The other way into a worktree tab: from the PRs that actually need my review
 -- in this repo, opened in review mode. <leader>r because it's where a review
 -- starts; triage/nitpick own the rest of that namespace. See util/reviewqueue.lua.

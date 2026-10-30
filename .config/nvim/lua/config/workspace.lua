@@ -36,14 +36,7 @@ end
 --- fishmonger's agent view (via project_name in plugins/terminal.lua) -- so
 --- both agree.
 ---
---- In a jj repo: "<repo> - <bookmark>+<n>", the short form of the statusline's
---- jj fragment (util/vcsline), so a tab says the same thing as the statusline
---- under it -- `ionics - main+1`. The repo is the main workspace's directory,
---- so a secondary workspace under `<repo>/.worktrees/` reads as the repo too.
---- Before vcsline's first answer lands it is the bare repo name; the answer
---- raises `User VcsLineChanged`, on which the labels repaint (see below).
----
---- In a git repo: "<repo> - <branch>", so a worktree reads as the repo and the
+--- "<repo> - <branch>", so a worktree reads as the repo and the
 --- branch it holds (ionics/.worktrees/rkk-some-branch -> "ionics -
 --- rkk/some-branch") rather than as its checkout directory. Drawn from the
 --- greeter's cached branch report (config.greeter fetches one per workspace
@@ -55,10 +48,6 @@ end
 function M.display_name(tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
   local cwd = vim.fs.normalize(M.cwd(tab))
-  local jj = M.jj_name(cwd)
-  if jj then
-    return jj
-  end
   -- package.loaded, not require: no reason to drag the greeter in just to name
   -- a tab, and before its setup there is no report to read anyway.
   local greeter = package.loaded["config.greeter"]
@@ -69,62 +58,6 @@ function M.display_name(tab)
   end
   return M.name(tab)
 end
-
---- The jj half of display_name: `<repo> - main+1` for a directory inside a jj
---- workspace, nil outside one.
----@param cwd string normalized directory
----@return string?
-function M.jj_name(cwd)
-  local vcsline = require("util.vcsline")
-  local root = vcsline.root_of(cwd)
-  if not root then
-    return nil
-  end
-  local main = require("util.jjworkspace").root(cwd) or root
-  local repo = vim.fn.fnamemodify(main, ":t")
-  local info = vcsline.info_for(root)
-  if not info then
-    return repo
-  end
-  return repo .. " - " .. vcsline.format(info, true)
-end
-
---- The greeter's heading: in a jj repo "<repo> - <jj workspace>" (`ionics -
---- default`, `ionics - dd-x`), since the `jj log` right under it already says
---- where `@` sits and repeating the bookmark there said nothing new. Outside
---- jj it is display_name.
----@param tab? integer tabpage handle (default: current)
----@return string
-function M.greeter_name(tab)
-  tab = tab or vim.api.nvim_get_current_tabpage()
-  local vcsline = require("util.vcsline")
-  local cwd = vim.fs.normalize(M.cwd(tab))
-  local root = vcsline.root_of(cwd)
-  if not root then
-    return M.display_name(tab)
-  end
-  local main = require("util.jjworkspace").root(cwd) or root
-  local repo = vim.fn.fnamemodify(main, ":t")
-  local info = vcsline.info_for(root)
-  if not info or not info.workspace then
-    return repo
-  end
-  return repo .. " - " .. info.workspace
-end
-
--- vcsline answers async; its first answer for a root, and every later move of
--- `@` or a bookmark it notices, repaints the labels. The greeter's report used
--- to drive this for jj too, from a second `jj` query of its own -- two sources
--- for one label is where the stale titles came from.
-vim.api.nvim_create_autocmd("User", {
-  pattern = "VcsLineChanged",
-  group = vim.api.nvim_create_augroup("workspace_vcsline", { clear = true }),
-  callback = function()
-    for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
-      M.set_label(tab)
-    end
-  end,
-})
 
 --- A workspace's number: the key that reaches it (<M-N>, and fishmonger's
 --- <C-b>mN to send a terminal there), shown on its tab label. Stable the way
@@ -300,8 +233,8 @@ end
 --- <M-b>: the workspace prefix, fishmonger's <C-b> with a different modifier
 --- and the same keys -- N switches (or opens into N), c opens a new one, &
 --- closes this one, .N renumbers it. Plus the other two ways in, aimed at a
---- number: wN opens a branch's worktree / jj workspace (<leader>tw) as
---- workspace N, eN a browsed-to directory (<leader>te). One mapping that then reads the next key
+--- number: wN opens a branch's worktree (<leader>tw) as workspace N, eN a
+--- browsed-to directory (<leader>te). One mapping that then reads the next key
 --- (as fishmonger's prefix does) rather than separate <M-b>N maps, which race
 --- the mapping timeout in terminal mode and leak a late key to the shell.
 function M.prefix()
@@ -324,7 +257,7 @@ function M.prefix()
     if key == "." then
       M.renumber(n)
     elseif key == "w" then
-      require("util.vcs").pick_tab(n)
+      require("util.worktree").pick(n)
     else
       M.explore({ tab = true, slot = n })
     end
