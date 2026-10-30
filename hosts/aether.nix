@@ -6,7 +6,6 @@
   ];
 
   programs.git.settings.user.email = "ross@rosskelso.com";
-  programs.jujutsu.settings.user.email = "ross@rosskelso.com";
 
   # This Nix-built fish reports an empty $__fish_sysconfdir, so it never scans
   # /etc/fish/conf.d — the usual place Nix's per-shell PATH setup would live.

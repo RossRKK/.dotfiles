@@ -2,7 +2,6 @@
 
 {
   programs.git.settings.user.email = "ross@rosskelso.com";
-  programs.jujutsu.settings.user.email = "ross@rosskelso.com";
 
   home.sessionVariables = {
     NIXOS_OZONE_WL = "1";

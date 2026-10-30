@@ -10,7 +10,6 @@
   ];
 
   programs.git.settings.user.email = "ross@rosskelso.com";
-  programs.jujutsu.settings.user.email = "ross@rosskelso.com";
 
   # SteamOS is not NixOS: nothing system-side knows about the nix profile, so
   # home-manager has to set up XDG_DATA_DIRS (desktop entries, icons) and the
