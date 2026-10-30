@@ -13,7 +13,7 @@ let
   link = path: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/${path}";
 in
 {
-  # Home for repo-tracked scripts (clipboard-copy, jj-lfs — see home.file).
+  # Home for repo-tracked scripts (clipboard-copy, git-worktree-clean — see home.file).
   home.sessionPath = [ "$HOME/.local/bin" ];
 
   programs.fish = {
@@ -55,26 +55,9 @@ in
         # (No upstream support: https://github.com/ajeetdsouza/zoxide/discussions/970)
         #
         # Prints two lines for a directory: the checkout root and an identity
-        # shared by every checkout of the same repo. jj is asked first: a
-        # secondary jj workspace has .jj but no .git, so git walks up past it
-        # and reports the main checkout as the root. `.jj/repo` is a directory
-        # in the main workspace and, in secondary ones, a file holding a
-        # relative path to it. --ignore-working-copy keeps `jj root` from
-        # snapshotting the working copy on every cd. `jj -R` does not search
-        # upward, so pushd into the directory; fish substitutions share cwd.
+        # shared by every checkout of the same repo (the common git dir).
         function __checkout_identity --argument-names dir
-            pushd $dir
-            set -l root (jj root --ignore-working-copy 2>/dev/null)
-            popd
-            if test -n "$root"
-                set -l repo $root/.jj/repo
-                if test -f $repo
-                    set repo (realpath $root/.jj/(cat $repo))
-                end
-                printf '%s\n%s\n' $root $repo
-                return
-            end
-            set root (git -C $dir rev-parse --show-toplevel 2>/dev/null)
+            set -l root (git -C $dir rev-parse --show-toplevel 2>/dev/null)
             or return 1
             printf '%s\n%s\n' $root (git -C $dir rev-parse --path-format=absolute --git-common-dir)
         end
@@ -120,12 +103,7 @@ in
     ];
   };
 
-  programs.starship = {
-    enable = true;
-    # Put on starship's own PATH (via a wrapper), not the shell's: the binary
-    # exists only to serve [custom.vcs] in .config/starship.toml.
-    extraPackages = [ pkgs.jj-starship ];
-  };
+  programs.starship.enable = true;
 
   programs.git = {
     enable = true;
@@ -145,35 +123,6 @@ in
       # user.email is set per-host (personal vs. work).
       merge.ff = "only";
       init.defaultBranch = "main";
-    };
-  };
-
-  programs.jujutsu = {
-    enable = true;
-    settings = {
-      user.name = "Ross Kelso";
-      # user.email is set per-host (personal vs. work), same as git.
-      ui.default-command = "log";
-      # Git-style conflict markers (<<< === >>>) so nvim's git-conflict.nvim
-      # (see .config/nvim/lua/plugins/git.lua) can parse and resolve conflicts
-      # in place. jj's native markers are 3+ sided and git-conflict can't read
-      # them; N-sided conflicts still fall back to jj's diff format.
-      ui.conflict-marker-style = "git";
-      # git-lfs in jj: jj runs no git filters and a secondary workspace has no
-      # .git, so `git lfs pull` cannot work there. `jj lfs pull` smudges the
-      # pointers for @ and `jj lfs clean` restores them before a commit; see
-      # .local/bin/jj-lfs. `util exec` passes JJ_WORKSPACE_ROOT to the script.
-      aliases.lfs = [ "util" "exec" "--" "jj-lfs" ];
-      # `jj wsclean [-f]`: forget the secondary workspaces whose @ is empty and
-      # fully pushed, and delete their .worktrees/<name> directory. Dry run
-      # unless -f is given; see .local/bin/jj-workspace-clean.
-      aliases.wsclean = [ "util" "exec" "--" "jj-workspace-clean" ];
-      # Reuse the same SSH signing key as git.
-      signing = {
-        behavior = "own";
-        backend = "ssh";
-        key = "~/.ssh/id_ed25519.pub";
-      };
     };
   };
 
@@ -198,11 +147,10 @@ in
 
   # These modules only write config files when their `settings` options are
   # set, so plain `enable` just installs the package and the out-of-store
-  # symlinks below (lazygit, jjui) stay authoritative. Neovim deliberately
+  # symlinks below (lazygit) stay authoritative. Neovim deliberately
   # stays a plain package: programs.neovim's wrapper always generates an
   # init.lua, which collides with the symlinked ~/.config/nvim.
   programs.lazygit.enable = true;
-  programs.jjui.enable = true; # TUI for jujutsu (jj), wired to <C-g> in nvim (jj repos; lazygit else)
   programs.htop.enable = true;
   programs.btop.enable = true;
   programs.claude-code.enable = true;
@@ -235,8 +183,6 @@ in
       [
         "nvim"
         "lazygit"
-        "jjui"
-        "jj-bond"
         "starship.toml"
         "nix/nix.conf"
       ]
@@ -250,10 +196,6 @@ in
       [
         ".tmux.conf"
         ".local/bin/clipboard-copy"
-        # `jj lfs pull` / `jj lfs clean` (aliases.lfs in programs.jujutsu).
-        ".local/bin/jj-lfs"
-        # `jj wsclean` (aliases.wsclean in programs.jujutsu).
-        ".local/bin/jj-workspace-clean"
         # `git worktree-clean` (git runs git-<name> from PATH).
         ".local/bin/git-worktree-clean"
         # Claude Code hook publishing each session's state for fishmonger's
@@ -381,8 +323,5 @@ in
       # too so anything outside the wrapper (terminals, scripts) gets a clipboard provider.
       # Wayland-only, so skip it on hosts (e.g. macOS) that can't build it.
       wl-clipboard
-      # jj-bond (`jb`), a second jj TUI on trial beside jjui. Linux-only because
-      # only the Linux overlay in flake.nix defines it (see there).
-      jj-bond
     ];
 }

@@ -190,7 +190,7 @@ After that use the `hms` alias.
 
 ### 5. SSH key
 
-`base.nix` signs both git and jj commits with `~/.ssh/id_ed25519.pub`, so
+`base.nix` signs git commits with `~/.ssh/id_ed25519.pub`, so
 commits fail until a key exists. Generate one and add it to GitHub (as both an
 authentication *and* a signing key), then switch the remote over to SSH:
 

@@ -1,29 +1,15 @@
 # Explicit format: only directory + git, no language/runtime modules.
 # Prompt character on its own line so typing starts at column 0.
-format = "$directory${custom.vcs}$git_state$git_status$kubernetes$line_break$character"
+format = "$directory$git_branch$git_state$git_status$kubernetes$line_break$character"
 
 [directory]
 truncation_length = 3
 truncate_to_repo = true
 
-# One custom module covers both git and jj repos: jj-starship (nixpkgs, on
-# starship's PATH via programs.starship.extraPackages). The built-in git_branch
-# can't stand down in a jj repo -- jj repos are colocated, git's HEAD sits
-# detached, and git_branch would render a bare sha. jj-starship detects which
-# VCS is driving and prints branch, or change id + nearest bookmark (main~1).
-# It colours its own output, so there is no $style here.
-#
-# git_state and git_status stay built-in and unconditional -- jj keeps the
-# index in sync, so what they say about a rebase in flight or a dirty tree is
-# true in either kind of repo. jj-starship's own [status] is switched off so
-# it isn't shown twice.
-[custom.vcs]
-description = "git branch, or jj change + bookmark"
-when = "jj-starship detect"
-# --truncate-name matches util/jj.lua so long names cut at the same place in
-# the prompt and in neovim's tab labels.
-command = "jj-starship --truncate-name 32 --jj-symbol '\uf418' --no-jj-status --no-git-status"
-format = "$output "
+[git_branch]
+# No leading "on ", like the rest of this compact prompt; long names cut short.
+truncation_length = 32
+format = "[$symbol$branch(:$remote_branch)]($style) "
 
 [kubernetes]
 disabled = false

@@ -54,9 +54,6 @@
             openspec = pkgs-unstable.openspec;
             claude-code = claude-code.packages.${system}.default;
             kache = kache.packages.${system}.default;
-            # Not in nixpkgs; its build deps want rustc >= 1.96, which only
-            # unstable carries, so build it with the unstable toolchain.
-            jj-bond = pkgs-unstable.callPackage ./pkgs/jj-bond.nix {};
           }) ];
         };
 
