@@ -609,7 +609,7 @@ that repo's buffers until toggled off.
 
 `Space+rq` lists the open PRs in the current repo that actually need **your**
 review, and `Enter` opens one as a worktree / jj workspace tab with review mode
-already on (fetched to the PR head, targeted at the PR's base). `Ctrl+o` opens
+already on (fetched to the PR head, targeted at the PR's base). `Ctrl+o` (or `G` in normal mode, as in lazygit) opens
 it in the browser instead. Each tier lists the newest PR first. Each row shows
 the diff size (`+adds -dels`) without generated files: `linguist-generated` in
 `.gitattributes` (read from the base branch), plus lockfiles (`Cargo.lock`,
@@ -647,7 +647,7 @@ git config --add reviewqueue.excludeTeam org/team
 The other way round: `Space+rm` lists **your** open PRs in the current repo by
 what they're waiting on. `Enter` opens the branch as a worktree / jj workspace
 tab, with review mode on only if there are threads to answer or resolve, since
-review mode is what shows them inline. `Ctrl+o` opens the PR in the browser. It comes
+review mode is what shows them inline. `Ctrl+o` (or `G` in normal mode) opens the PR in the browser. It comes
 from the same background fetch as the review queue, and the greeter shows
 `2 to fix · 1 ready to merge · 3 to finish · 1 in merge queue` (PRs only
 waiting on reviewers aren't counted there).

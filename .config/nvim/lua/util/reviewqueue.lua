@@ -1443,6 +1443,12 @@ local VIEWS = {
   mine = { tiers = MINE_TIERS, title = "My PRs", empty = "you have no open PRs here", mine = true },
 }
 
+-- G as in lazygit, so it takes over snacks' normal-mode jump to the bottom.
+local BROWSE_KEYS = {
+  ["<c-o>"] = { "browse", mode = { "n", "i" }, desc = "Open PR in browser" },
+  ["G"] = { "browse", mode = "n", desc = "Open PR in browser" },
+}
+
 --- The picker over one of a cached entry's lists.
 ---@param list "items"|"mine"
 ---@param entry reviewqueue.Entry
@@ -1542,9 +1548,8 @@ local function show(list, entry, dir)
       end,
     },
     win = {
-      input = {
-        keys = { ["<c-o>"] = { "browse", mode = { "n", "i" }, desc = "Open PR in browser" } },
-      },
+      input = { keys = BROWSE_KEYS },
+      list = { keys = BROWSE_KEYS },
     },
   })
 end
