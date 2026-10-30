@@ -539,7 +539,8 @@ end
 function M.pick_new(opts)
   opts = opts or { tab = true }
   Snacks.picker.projects({
-    dev = { "~/dev" }, -- snacks' default also lists ~/projects, which doesn't exist here
+    -- ~ too: repos cloned there otherwise vanish once shada stops holding a file edited in them
+    dev = { "~/dev", "~" }, -- snacks' default also lists ~/projects, which doesn't exist here
     confirm = function(picker, item)
       picker:close()
       if item then
