@@ -21,6 +21,10 @@ saying what and why. Keep mechanical changes (moves, renames, formatting,
 generated files) in their own commits, separate from behaviour changes. Never
 commit to the default branch -- branch first. Don't push unless asked.
 
+When a prototype of a new feature has been built, never use it directly as a
+reference for the new build. The learnings from it can come from the user or
+from handover notes, specs and designs.
+
 # Environment
 
 This is nixos on WSL. That means you can install new tools using nix-shell on
