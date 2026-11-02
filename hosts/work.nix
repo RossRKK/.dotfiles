@@ -14,6 +14,13 @@
     end
   '';
 
+  # nvim's side terminals run in background.slice (util/background.lua): past
+  # this, a leaky build there is throttled and reclaimed before nvim swaps.
+  xdg.configFile."systemd/user/background.slice.d/memory.conf".text = ''
+    [Slice]
+    MemoryHigh=75%
+  '';
+
   home.shellAliases = {
     hms = "home-manager switch --flake ~/.dotfiles#rosskelso@work";
   };
