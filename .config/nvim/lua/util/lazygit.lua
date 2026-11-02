@@ -49,6 +49,17 @@ function M.open()
   M.float()
 end
 
+-- lazygit's <c-b> on a commit (config.yml): review `root` against that commit.
+-- Returns "" because --remote-expr needs a value back.
+---@param sha string
+---@param root string the repo lazygit is in, which may not be nvim's cwd
+---@return string
+function M.set_review_base(sha, root)
+  M.hide()
+  require("triage").set_target(sha, root)
+  return ""
+end
+
 -- <C-S-g>: pick a project and open lazygit there, for driving a repo other than
 -- nvim's cwd (e.g. within a polyrepo tree).
 function M.pick()

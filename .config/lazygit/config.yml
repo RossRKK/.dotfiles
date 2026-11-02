@@ -39,6 +39,14 @@ customCommands:
       [ -n "$NVIM" ] && nvim --server "$NVIM" --remote-expr
       "v:lua.require'util.worktree'.open_from_lazygit('{{.SelectedRemoteBranch.RemoteName}}/{{.SelectedRemoteBranch.Name}}')"
     loadingText: "Opening worktree tab..."
+  # Review this repo from the selected commit on in the surrounding nvim
+  # (triage.nvim's review base, as Space+rb picks it). No-op outside nvim.
+  - key: "<c-b>"
+    context: "commits"
+    description: "Set nvim's review base to this commit"
+    command: >-
+      [ -n "$NVIM" ] && nvim --server "$NVIM" --remote-expr
+      "v:lua.require'util.lazygit'.set_review_base('$(git rev-parse --short {{.SelectedCommit.Hash}})', '$(git rev-parse --show-toplevel)')"
   - key: "p"
     context: "commits"
     description: "Export selected commit(s) to a single squashed patch"
