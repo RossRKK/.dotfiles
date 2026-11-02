@@ -554,6 +554,8 @@ match wins, and the statusline says which (` feat/a · #412`):
 `Space+rb` picks the override from the branch's commits, HEAD down to the auto
 target, each marked `pushed` or `local`, so you can review only what came after
 a commit you've already seen. Its last row, `auto`, clears the override.
+From **lazygit**, `Ctrl+B` on a commit sets the same override for lazygit's repo
+and hides the float.
 
 | Key        | Action                                     |
 | ---------- | ------------------------------------------ |
