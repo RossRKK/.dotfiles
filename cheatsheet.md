@@ -358,6 +358,11 @@ The finder is the [snacks picker](https://github.com/folke/snacks.nvim) (input o
 top, preview on the right); it also backs `vim.ui.select`, so selection prompts
 (e.g. branch-review menus) use the same UI.
 
+Pickers open in normal mode in the query: `j`/`k`, `gg`/`G`, `Enter` and `q` work
+straight away, `p` pastes (a copied branch name into `Space+tw`), and `i`/`a`
+start typing. Live grep (`Space+fg`/`Space+fd`) is the exception and opens in
+insert, since it lists nothing until you type.
+
 `Space+fs` / `Space+fw` search LSP *symbols* (functions, types, …) rather than
 text — the "Go to Symbol" analogues. `fw` re-queries the language server on each
 keystroke, so it needs an LSP attached (e.g. rust-analyzer on a `.rs` file).
