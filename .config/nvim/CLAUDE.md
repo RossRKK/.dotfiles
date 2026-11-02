@@ -104,6 +104,7 @@ draws its tab strip as a window-local winbar on its own side window.
   worth learning.** A mapping should exist for a real gap (usually layout /
   window routing, which no amount of Vim fluency changes), not to replace a
   native command. Example: `gf`/`gF` differ from the builtins *only* by opening
-  in the main window; resolution is still Vim's own (`<cfile>`, `findfile()`,
-  `path`/`suffixesadd`). Things with a native answer stay native — fuzzy finding
-  is `Ctrl-P`, extracting a path from text is `yi(`/`yiW`.
+  in the main window; resolution is the builtin itself (`<C-w>f`/`<C-w>F`
+  into a split that's folded into the main window). Things with a native answer
+  stay native — fuzzy finding is `Ctrl-P`, extracting a path from text is
+  `yi(`/`yiW`.
