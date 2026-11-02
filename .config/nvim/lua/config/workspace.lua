@@ -33,7 +33,7 @@ function M.name(tab)
 end
 
 --- What a workspace is called wherever it's on display -- the tab labels, and
---- fishmonger's agent view (via project_name in plugins/terminal.lua) -- so
+--- fishmonger's agent view (via project_name in plugins/fishmonger.lua) -- so
 --- both agree.
 ---
 --- "<repo> - <branch>", so a worktree reads as the repo and the
