@@ -67,11 +67,25 @@ return {
         Snacks.rename.on_rename_file(args.source, args.destination)
       end
 
+      -- neo-tree won't replace a terminal (the list below), so with a <C-b>t
+      -- terminal as the main window it would split; open over that terminal.
+      local function on_file_open_requested(args)
+        local windows = require("config.windows")
+        local win = windows.main_window()
+        if args.open_cmd ~= "edit" or not win or not windows.is_main_terminal(win) then
+          return
+        end
+        vim.api.nvim_set_current_win(win)
+        vim.cmd.edit(vim.fn.fnameescape(args.path))
+        return { handled = true }
+      end
+
       require("neo-tree").setup({
         sources = { "filesystem", "document_symbols" },
         event_handlers = {
           { event = events.FILE_MOVED, handler = on_file_moved },
           { event = events.FILE_RENAMED, handler = on_file_moved },
+          { event = events.FILE_OPEN_REQUESTED, handler = on_file_open_requested },
         },
         -- Keep focus in the editor when neo-tree closes a window, and don't let
         -- opening a directory hijack the current window (the VimEnter handler
