@@ -9,6 +9,15 @@
 -- LSP navigation pickers (gd/gi/gr) live in lua/plugins/lsp.lua (they attach
 -- per-buffer on LspAttach). TODO search is TodoTrouble; see todo-comments.lua.
 
+-- Snacks only opens over file windows, and with none it takes any split (the
+-- side panel, say); a <C-b>t terminal as the main window should be the target.
+local function target_main_window(picker)
+  local windows = require("config.windows")
+  if not windows.is_editor_window(picker.main) then
+    picker.main = windows.main_window() or picker.main
+  end
+end
+
 return {
   "folke/snacks.nvim",
   ---@type snacks.Config
@@ -22,11 +31,12 @@ return {
       -- Open in normal mode in the query: j/k/gg/G/q/<CR> still drive the list,
       -- and `p` pastes a copied name. Snacks enters insert on the input's
       -- BufEnter in the same tick as on_show, so the stopinsert is scheduled.
-      on_show = function()
+      on_show = function(picker)
+        target_main_window(picker)
         vim.schedule(vim.cmd.stopinsert)
       end,
       -- Live grep lists nothing until you type, so it stays in insert.
-      sources = { grep = { on_show = function() end } },
+      sources = { grep = { on_show = target_main_window } },
     },
   },
   keys = {
