@@ -618,8 +618,8 @@ git config --add reviewqueue.excludeTeam org/team
 
 The other way round: `Space+rm` lists **your** open PRs in the current repo by
 what they're waiting on. `Enter` opens the branch as a worktree
-tab, with review mode on only if there are threads to answer or resolve, since
-review mode is what shows them inline. `Ctrl+o` (or `G` in normal mode) opens the PR in the browser. It comes
+tab, with review mode on and the PR comments shown only if there are threads
+to answer or resolve. `Ctrl+o` (or `G` in normal mode) opens the PR in the browser. It comes
 from the same background fetch as the review queue, and the greeter shows
 `2 to fix · 1 ready to merge · 3 to finish · 1 in merge queue` (PRs only
 waiting on reviewers aren't counted there).
@@ -640,8 +640,9 @@ A draft is always `to finish`, with anything else wrong noted
 With review mode on, drop line comments in your normal buffers. New comments
 queue as **local drafts** (rendered inline in a dimmer hue) rather than posting
 one-by-one, so a whole pass goes out as a single GitHub review — no
-notification per line. Everyone's comments render inline; yours-in-waiting sit
-alongside them.
+notification per line. Review mode shows **only your drafts** by default;
+everyone else's comments are opt-in with `Space+rh` (per repo, and off again the
+next time review mode turns on).
 
 | Key        | Action                                                    |
 | ---------- | --------------------------------------------------------- |
@@ -657,7 +658,7 @@ alongside them.
 | `Space+rC` | Refresh PR comments from GitHub                           |
 | `Space+ro` | Toggle showing outdated comments (anchor line gone)       |
 | `Space+rs` | Toggle showing resolved-thread comments                   |
-| `Space+rh` | Hide / show all comments for the repo (review mode stays) |
+| `Space+rh` | Show / hide PR comments for the repo (drafts always show) |
 
 Submit infers the verdict from the triage rollup — no picking: any live
 rejection → **request changes**, all approved → **approve**, anything still
@@ -672,9 +673,9 @@ immediately.
 
 Outdated comments (GitHub dropped their anchor line) show by default, tagged
 `(outdated)`; resolved-thread comments are hidden by default. Toggle each with
-`Space+ro` / `Space+rs`, or hide every comment at once with `Space+rh` while
-review mode (triage status, diff base) stays on. The review-mode status string (top-left) shows the
-target branch and which comment categories are currently on show.
+`Space+ro` / `Space+rs` once PR comments are on with `Space+rh`. The
+review-mode status string (top-left) shows the target branch, plus a 💬 and
+which comment categories are on show while PR comments are.
 
 ---
 
@@ -769,7 +770,7 @@ the filter after selecting, `C-Enter` selects and clears it.
 | `✓`   | Approved and unchanged since                                              |
 | `✗`   | Rejected / flagged, unchanged since                                       |
 | `↻`   | Was rejected, then edited — re-review the fix                             |
-| 💬    | Has PR comments or unsent drafts (review mode on)                         |
+| 💬    | Has unsent drafts, or PR comments once shown (review mode on)             |
 
 Folders show the highest-priority child status, ordered by what needs *your*
 attention: revised > changed > rejected > approved. So a folder surfaces work
