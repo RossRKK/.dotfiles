@@ -293,7 +293,7 @@ still gets its own tab.
 | `gd` | Go to definition                         |
 | `gi` | Go to implementation                     |
 | `gr` | Go to references                         |
-| `gf` / `gF` | Native goto-file under cursor, opened in the **main window** — the *only* difference from the builtins. `gF` also jumps to a trailing line (`foo.rs:42`). Works from the terminal (enter terminal-normal mode with `Ctrl+N` first): jump to a path a program printed |
+| `gf` / `gF` | The builtins (nvim's own parsing, via `Ctrl-W f` / `Ctrl-W F`), opened in the **main window**. `gF` also jumps to the line (`foo.rs:42`, `foo.rs (42)`, …). Works from the terminal (enter terminal-normal mode with `Ctrl+N` first): jump to a path a program printed |
 | `Space+o` | Open the path in a register in the main window (`"a Space+o` for register a; bare = clipboard) |
 | `Space+yf` | Yank the open **file's** path (jumps back via `gf` / `Space+o`) |
 | `Space+yl` | Yank the open file's `path:line` at cursor |

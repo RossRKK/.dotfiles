@@ -97,3 +97,77 @@ describe("<leader>ya", function()
     assert.same({}, sent)
   end)
 end)
+
+-- gf/gF are the builtins, routed to the main editor window: from a panel (the
+-- terminal, here a nofile stand-in) the file opens in the main window and the
+-- panel keeps its buffer.
+describe("gf/gF", function()
+  local target, previous, main, panel, panel_buf
+
+  before_each(function()
+    require("config.keymaps")
+    vim.cmd("silent only!")
+    target = vim.fn.tempname() .. ".txt"
+    previous = vim.fn.tempname() .. ".txt"
+    vim.fn.writefile({ "one", "two", "three", "four" }, target)
+    vim.fn.writefile({ "previous" }, previous)
+    vim.cmd("edit " .. previous)
+    main = vim.api.nvim_get_current_win()
+    vim.cmd("vnew")
+    panel = vim.api.nvim_get_current_win()
+    panel_buf = vim.api.nvim_get_current_buf()
+    vim.bo.buftype = "nofile"
+  end)
+
+  after_each(function()
+    vim.cmd("silent only!")
+    vim.cmd("silent! %bwipeout!")
+    vim.fn.delete(target)
+    vim.fn.delete(previous)
+  end)
+
+  local function press_on(keys, text)
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { text })
+    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+    vim.api.nvim_feedkeys(keys, "mx", false)
+  end
+
+  it("gF from a panel opens the file at the line in the main window", function()
+    press_on("gF", target .. ":3")
+    assert.equals(main, vim.api.nvim_get_current_win())
+    assert.equals(target, vim.api.nvim_buf_get_name(0))
+    assert.same({ 3, 0 }, vim.api.nvim_win_get_cursor(0))
+    assert.equals(panel_buf, vim.api.nvim_win_get_buf(panel))
+    assert.equals(2, #vim.api.nvim_tabpage_list_wins(0))
+  end)
+
+  it("gf from a panel opens the file in the main window, ignoring the line", function()
+    press_on("gf", target .. ":3")
+    assert.equals(main, vim.api.nvim_get_current_win())
+    assert.equals(target, vim.api.nvim_buf_get_name(0))
+    assert.same({ 1, 0 }, vim.api.nvim_win_get_cursor(0))
+  end)
+
+  it("keeps the main window's previous file as the alternate", function()
+    press_on("gF", target .. ":3")
+    assert.equals(previous, vim.fn.fnamemodify(vim.fn.bufname("#"), ":p"))
+  end)
+
+  it("changes nothing when the file doesn't exist", function()
+    press_on("gF", "/nonexistent/file.txt:3")
+    assert.equals(panel, vim.api.nvim_get_current_win())
+    assert.equals(panel_buf, vim.api.nvim_win_get_buf(panel))
+    assert.equals(previous, vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(main)))
+    assert.equals(2, #vim.api.nvim_tabpage_list_wins(0))
+  end)
+
+  it("from the main window opens in place, as the builtin", function()
+    vim.api.nvim_set_current_win(main)
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { target .. ":3" })
+    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+    vim.api.nvim_feedkeys("gF", "mx", false)
+    assert.equals(main, vim.api.nvim_get_current_win())
+    assert.equals(target, vim.api.nvim_buf_get_name(0))
+    assert.same({ 3, 0 }, vim.api.nvim_win_get_cursor(0))
+  end)
+end)

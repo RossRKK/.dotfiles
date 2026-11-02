@@ -278,43 +278,33 @@ local function goto_ref(ref)
   end
 end
 
--- gf/gF: native "goto file under cursor", differing from the builtins in exactly
--- one way — the file opens in the main editor window, not the current one — so it
--- works from the terminal (the primary use case: jump to a path a program
--- printed; enter terminal-normal mode first with Ctrl-\ Ctrl-n / <C-n>). Resolution
--- is Vim's own: <cfile> for the name, findfile() honouring 'path'/'suffixesadd'.
--- No wrapper-stripping or fuzzy fallback — for a wrapped path use yi( then
--- <leader>o, for a guess use Ctrl-P. gF additionally jumps to a trailing line
--- number (foo.rs:42), like the builtin. Routing happens before the edit, so the
--- terminal is never replaced.
-local function goto_file_main(with_line)
-  local cfile = vim.fn.expand("<cfile>")
-  if cfile == "" then
-    vim.notify("gf: no file name under cursor", vim.log.levels.WARN)
+-- gf/gF: the builtins, opened in the main editor window instead of the current
+-- one, so they work from the terminal (jump to a path a program printed; enter
+-- terminal-normal mode first with <C-n>). From a panel, the builtin <C-w>f/<C-w>F
+-- does all the parsing into a split, which is then folded into the main window,
+-- so name and line resolution is exactly nvim's.
+local function goto_file_main(key)
+  local count = vim.v.count > 0 and tostring(vim.v.count) or ""
+  if require("config.windows").is_editor_window(0) then
+    vim.cmd("normal! " .. count .. "g" .. key)
     return
   end
-  local found = vim.fn.findfile(cfile)
-  if found == "" then
-    vim.notify("gf: can't find " .. cfile .. " in 'path'", vim.log.levels.WARN)
+  local ok, err = pcall(vim.cmd, "normal! " .. count .. "\23" .. key)
+  if not ok then
+    vim.notify((err:gsub("^Vim%(%a+%):", "")), vim.log.levels.ERROR)
     return
   end
-  -- gF: the number trailing the name on this line (foo.rs:42, foo.rs 42, :42:5).
-  local line
-  if with_line then
-    local after = vim.api.nvim_get_current_line():match(vim.pesc(cfile) .. "%D*(%d+)")
-    line = after and tonumber(after)
-  end
+  local buf, cursor = vim.api.nvim_get_current_buf(), vim.api.nvim_win_get_cursor(0)
+  vim.cmd("close")
   goto_main_window()
-  vim.cmd("edit " .. vim.fn.fnameescape(found))
-  if line then
-    pcall(vim.api.nvim_win_set_cursor, 0, { line, 0 })
-  end
+  vim.api.nvim_win_set_buf(0, buf)
+  vim.api.nvim_win_set_cursor(0, cursor)
 end
 map("n", "gf", function()
-  goto_file_main(false)
+  goto_file_main("f")
 end, { desc = "Goto file under cursor (main window)" })
 map("n", "gF", function()
-  goto_file_main(true)
+  goto_file_main("F")
 end, { desc = "Goto file:line under cursor (main window)" })
 
 -- <leader>o: open (goto) the path held in a register, in the main window.
