@@ -96,8 +96,10 @@ return {
         },
       },
       right = {
-        -- The fishmonger side terminal. Exclude floats so lazygit (a float) is
-        -- never pulled into the edgebar. fishmonger draws its own tmux-style tab
+        -- The fishmonger side panel: the window it marks w:fishmonger_side, so a
+        -- terminal opened in the editor area (<C-b>t) stays there. Exclude floats
+        -- so lazygit (a float) and a zoomed panel are never pulled into the
+        -- edgebar. fishmonger draws its own tmux-style tab
         -- strip as the window's winbar, so edgy only needs to adopt and size
         -- this window.
         --
@@ -116,7 +118,7 @@ return {
           wo = { winbar = false },
           size = { width = 0.4 }, -- opening width, ~40% of the screen
           filter = function(_, win)
-            return vim.api.nvim_win_get_config(win).relative == ""
+            return vim.w[win].fishmonger_side and vim.api.nvim_win_get_config(win).relative == ""
           end,
         },
       },

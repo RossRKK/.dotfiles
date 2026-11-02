@@ -803,7 +803,12 @@ author / …).
 tmux-style tabs in the side terminal: one fills the slot, the others stay alive
 but hidden. The `Ctrl+B` prefix works straight from the terminal (and from normal
 mode). `Ctrl+T` toggles the terminal from anywhere. A
-titled tab strip shows across the top when the side terminal is open.
+titled tab strip shows across the top of each terminal window.
+
+`Ctrl+B t` opens a terminal in the editor area too (`Ctrl+O` goes back to the
+file). Every terminal window shares the same tabs: picking one shown in the
+other window swaps the two. `Ctrl+B` acts on the terminal you're in, or from the
+editor on the one you used last; its strip has the bright tab.
 
 Slots 1–9 are **per workspace** (see [Workspaces](#workspaces)): each project tab
 has its own nine, spawned in that project's directory, and closing the project
@@ -813,7 +818,9 @@ tab with `Space+tx` shuts its shells down.
 | ------------- | ------------------------------------------------- |
 | `Ctrl+B 1-9`  | Switch to tab N (creates it on demand)            |
 | `Ctrl+B c`    | New tab in the next free slot                     |
-| `Ctrl+B z`    | Zoom: the terminal fills the screen, tabs still work; again (or entering another split) docks it |
+| `Ctrl+B t`    | Open a terminal in the current window (the most recent tab not on screen) |
+| `Ctrl+B o`    | Jump to the next terminal window                  |
+| `Ctrl+B z`    | Zoom: the current window (terminal, editor or explorer) fills the screen; again (or entering another split) puts it back |
 | `Ctrl+B &`    | Kill the current tab                              |
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
 | `Ctrl+B m N`  | Move the current tab to workspace N (the number on its label; you follow it) |
