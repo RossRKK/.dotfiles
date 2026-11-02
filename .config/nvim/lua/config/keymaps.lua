@@ -86,6 +86,9 @@ map({ "n", "i" }, "<C-s>", "<cmd>w<cr>", { desc = "Save file" })
 -- Reload current file from disk (checks for on-disk changes). Not under
 -- <leader>r: that prefix is the review namespace (triage/nitpick).
 map("n", "<leader>R", "<cmd>checktime<cr>", { desc = "Reload file from disk" })
+-- Its config counterpart: re-run the config modules edited since they loaded,
+-- keeping workspaces and terminals (see util/reload.lua).
+map("n", "<leader>C", "<cmd>ConfigReload<cr>", { desc = "Reload changed config modules" })
 
 -- Spell check is on by default in prose filetypes (see config/autocmds.lua);
 -- this toggles it per-window, either to silence it in a quote-heavy paragraph

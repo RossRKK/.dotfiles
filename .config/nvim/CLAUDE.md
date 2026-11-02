@@ -29,6 +29,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
 | `reviewqueue_spec.lua` | CODEOWNERS glob matching / last-match-wins, "does this PR need my review" tiers, "what's my PR waiting on" tiers |
 | `diffsize_spec.lua` | PR diff size without generated files (`git check-attr` parsing, lockfiles) |
+| `reload_spec.lua` | `:ConfigReload` swaps edited functions in keeping module state, drops deleted keymaps, doesn't double autocmds, survives a parse error |
 | `background_spec.lua` | side-terminal shells wrapped into systemd's `background.slice` only when a user manager is running |
 | `neotree_leak_spec.lua` | the pinned neo-tree doesn't leak timers/process handles across renders. The one spec that loads a real plugin (and its git status): it guards the lazy pin, not our code. `NEOTREE_PATH=<checkout>` tests another build |
 
