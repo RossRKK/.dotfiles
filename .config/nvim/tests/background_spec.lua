@@ -1,0 +1,16 @@
+local assert = require("luassert")
+local background = require("util.background")
+
+describe("background.command", function()
+  it("runs the shell as is without a systemd user manager", function()
+    assert.equals("fish", background.command("fish", false))
+  end)
+
+  it("runs the shell as the last argument of a background.slice scope", function()
+    local cmd = background.command("fish", true)
+    assert.equals("systemd-run", cmd[1])
+    assert.is_true(vim.tbl_contains(cmd, "--scope"))
+    assert.is_true(vim.tbl_contains(cmd, "--slice=background.slice"))
+    assert.equals("fish", cmd[#cmd])
+  end)
+end)

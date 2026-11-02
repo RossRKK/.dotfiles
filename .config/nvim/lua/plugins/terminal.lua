@@ -20,8 +20,10 @@ return {
       -- config.workspace is the one place that names a workspace, so the agent
       -- view borrows its "<repo> - <branch>" display name rather than growing
       -- a second naming rule.
+      -- Wrapped into background.slice where systemd allows (util/background.lua).
+      local background = require("util.background")
       require("fishmonger").setup({
-        shell = "fish",
+        shell = background.command("fish", background.user_manager()),
         project_name = function(tab)
           return require("config.workspace").display_name(tab)
         end,
