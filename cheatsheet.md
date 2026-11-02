@@ -812,6 +812,7 @@ tab with `Space+tx` shuts its shells down.
 | ------------- | ------------------------------------------------- |
 | `Ctrl+B 1-9`  | Switch to tab N (creates it on demand)            |
 | `Ctrl+B c`    | New tab in the next free slot                     |
+| `Ctrl+B z`    | Zoom: the terminal fills the screen, tabs still work; again (or entering another split) docks it |
 | `Ctrl+B &`    | Kill the current tab                              |
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
 | `Ctrl+B m N`  | Move the current tab to workspace N (the number on its label; you follow it) |
