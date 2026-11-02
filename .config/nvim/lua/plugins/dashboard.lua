@@ -4,7 +4,7 @@
 -- Bare `nvim` is text-editor mode (see config/ide.lua): nothing auto-opens, and
 -- until now that meant an empty buffer with no route to a project. The dashboard
 -- fills that gap with the two workspace entry points (<leader>tn recent projects,
--- <leader>te browse) plus plain file finding, so opening a project is a keypress from
+-- <M-b>e browse) plus plain file finding, so opening a project is a keypress from
 -- startup rather than something you have to remember the mapping for.
 --
 -- snacks shows it only when nvim starts with no file arguments and no stdin, so
