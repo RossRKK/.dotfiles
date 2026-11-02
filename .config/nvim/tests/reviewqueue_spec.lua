@@ -472,6 +472,12 @@ describe("reviewqueue.classify_mine", function()
     )
   end)
 
+  it("opens mine with comments shown only when there are threads to answer", function()
+    assert.equals("answer", rq.open_mode(true, { tier = 1, reason = "", review = true }))
+    assert.equals("browse", rq.open_mode(true, { tier = 1, reason = "" }))
+    assert.equals("review", rq.open_mode(false, { tier = 1, reason = "" }))
+  end)
+
   it("leaves threads I've answered or that went outdated as loose ends", function()
     assert.same({ 3, "2 threads to resolve (1 outdated)" }, {
       verdict({

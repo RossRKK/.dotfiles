@@ -1163,18 +1163,35 @@ end
 -- ---------------------------------------------------------------------------
 -- Opening a PR for review
 
+---@alias reviewqueue.OpenMode
+---| "review" # someone else's PR: review mode, PR comments opt-in as usual
+---| "answer" # my PR with threads to answer or resolve: review mode + comments
+---| "browse" # my PR with nothing to answer: just the tab
+
+--- How a picked PR opens: mine only enters review mode when there are threads
+--- to answer, and then with them shown.
+---@param mine boolean
+---@param verdict reviewqueue.Verdict
+---@return reviewqueue.OpenMode
+function M.open_mode(mine, verdict)
+  if not mine then
+    return "review"
+  end
+  return verdict.review and "answer" or "browse"
+end
+
 --- Fetch the PR head so the worktree starts at what's actually on the PR (a
 --- tier-2 PR is there BECAUSE it moved), open it as a workspace tab, and turn
 --- review mode on there against the PR's own base.
 ---
---- `review = false` (my own PRs, nothing to answer) just opens the tab: no
+--- "answer" also shows the PR's comments inline, since replying to them is the
+--- point. "browse" (my own PRs, nothing to answer) just opens the tab: no
 --- review mode, and no "behind the PR head" warning -- my checkout being
 --- ahead of what's pushed is normal.
 ---@param pr reviewqueue.PR
 ---@param dir string a directory inside the repo
----@param opts? { review: boolean? } review defaults to true
-function M.open(pr, dir, opts)
-  local review = not (opts and opts.review == false)
+---@param mode reviewqueue.OpenMode
+function M.open(pr, dir, mode)
   if pr.cross_repo then
     -- The head lives in a fork: origin has no branch by that name, and
     -- worktree.open would quietly branch a new one off HEAD instead.
@@ -1187,12 +1204,15 @@ function M.open(pr, dir, opts)
   end
 
   local function on_open(path)
-    if not review then
+    if mode == "browse" then
       return
     end
     local triage = require("triage")
     if not triage.is_enabled() then
       triage.toggle()
+    end
+    if mode == "answer" then
+      require("nitpick").set_comments_shown(true, path)
     end
     -- No set_target here: triage asks for the PR's base itself (greeter.pr_base,
     -- answered from this queue's cache until the greeter fetches the PR), and
@@ -1513,9 +1533,7 @@ local function show(list, entry, dir)
     confirm = function(picker, item)
       picker:close()
       if item then
-        -- My own PR: review mode only when there are comments to answer,
-        -- which is what shows them inline (nitpick).
-        M.open(item.pr, dir, { review = not view.mine or item.verdict.review })
+        M.open(item.pr, dir, M.open_mode(view.mine, item.verdict))
       end
     end,
     actions = {
