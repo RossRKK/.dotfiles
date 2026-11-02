@@ -541,12 +541,14 @@ match wins, and the statusline says which (` feat/a · #412`):
 
 | Statusline | Target                                                          |
 | ---------- | --------------------------------------------------------------- |
-| `· set`    | Your override: `Space+rb` (or `:ReviewBase <branch>`)           |
+| `· set`    | Your override: `Space+rb` (or `:ReviewBase <ref>`)              |
 | `· #412`   | The branch's open PR base (`origin/<base>`); follows GitHub retargeting it when the parent merges |
 | `· stack`  | No PR: the nearest other branch below this one that the default branch doesn't already contain |
 | (nothing)  | The default branch (`origin/HEAD`, else `main` / `master`)      |
 
-An empty `Space+rb` clears the override back to auto.
+`Space+rb` picks the override from the branch's commits, HEAD down to the auto
+target, each marked `pushed` or `local`, so you can review only what came after
+a commit you've already seen. Its last row, `auto`, clears the override.
 
 | Key        | Action                                     |
 | ---------- | ------------------------------------------ |
@@ -554,7 +556,7 @@ An empty `Space+rb` clears the override back to auto.
 | `Space+rj` | Mark file / folder rejected (flag)         |
 | `Space+ru` | Clear decision (untriage)                  |
 | `Space+rt` | Toggle review mode on / off                |
-| `Space+rb` | Set the target branch (empty = auto-detect) |
+| `Space+rb` | Pick the base commit (`auto` = auto-detect) |
 | `Space+rd` | Toggle inline diff of current file vs base |
 | `Space+rR` | Refresh review status                      |
 
