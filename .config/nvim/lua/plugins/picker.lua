@@ -19,6 +19,14 @@ return {
       -- the old telescope layout (horizontal + prompt_position=top). The snacks
       -- "telescope" preset instead puts the prompt at the bottom.
       layout = { preset = "default" },
+      -- Open in normal mode in the query: j/k/gg/G/q/<CR> still drive the list,
+      -- and `p` pastes a copied name. Snacks enters insert on the input's
+      -- BufEnter in the same tick as on_show, so the stopinsert is scheduled.
+      on_show = function()
+        vim.schedule(vim.cmd.stopinsert)
+      end,
+      -- Live grep lists nothing until you type, so it stays in insert.
+      sources = { grep = { on_show = function() end } },
     },
   },
   keys = {
