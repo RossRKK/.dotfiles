@@ -114,7 +114,7 @@ in
       key = "~/.ssh/id_ed25519.pub";
       signByDefault = true;
     };
-    # nvim's <leader>tw creates worktrees under <repo>/.worktrees/ (see
+    # nvim's <M-b>w creates worktrees under <repo>/.worktrees/ (see
     # .config/nvim/lua/util/worktree.lua). Ignoring it globally keeps them out of
     # every repo's git status without touching each repo's .gitignore.
     ignores = [ ".worktrees/" ];

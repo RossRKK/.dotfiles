@@ -198,8 +198,6 @@ renumbering the rest.
 | Key         | Action                                                     |
 | ----------- | ---------------------------------------------------------- |
 | `Space+tn`  | New project tab — names one from zoxide's list             |
-| `Space+te`  | New project tab — browse the filesystem for one (float)    |
-| `Space+tw`  | New project tab — a worktree of a branch here               |
 | `Space+tf`  | Fork this tab — new branch + checkout, Claudes forked along |
 | `Alt+1-9`   | Switch to workspace N (works in terminal mode too); an unused number opens the project picker, and the pick becomes workspace N |
 | `Space+tt`  | Switch to an open project (picker; matches number or name) |
@@ -216,8 +214,8 @@ Alt instead of Ctrl. It works from the terminal too (there it takes fish's
 | `Alt+B c`     | Open a new workspace (project picker, lowest free number)   |
 | `Alt+B &`     | Close this workspace (asks first if an agent there is live) |
 | `Alt+B . N`   | Renumber this workspace to N (`.` then `1-9`); swaps if N is taken |
-| `Alt+B w N`   | Open a branch's worktree as workspace N (the `Space+tw` picker) |
-| `Alt+B e N`   | Browse to a directory and open it as workspace N (the `Space+te` browser) |
+| `Alt+B w`     | Open a new workspace — a worktree of a branch here (lowest free number) |
+| `Alt+B e`     | Open a new workspace — browse the filesystem for one (float, lowest free number) |
 
 Tab labels sit at the **right end of the bufferline**, showing the project name —
 prefixed with the agent status icon of each of that project's Claude Code
@@ -232,13 +230,13 @@ tab's project, and `Shift+L`/`Shift+H` cycle that filtered list.
 The two openers are the fast path and the fallback. `Space+tn` ranks by
 **frecency** — the same zoxide database `z` uses in the shell — so a couple of
 letters of somewhere you work often lands it, but a directory you've never `cd`'d
-into isn't in there at all. `Space+te` browses instead — a file tree in a float
+into isn't in there at all. `Alt+B e` browses instead — a file tree in a float
 over the editor, rooted at `~`: `l` / `h` / `Backspace` to move around (or
 `Space` to expand a folder, as in the explorer), typing filters live, and `Enter`
 opens the highlighted directory as a workspace. That's
 the one for a fresh clone.
 
-`Space+tw` is the third opener, and the only one that can open a project that
+`Alt+B w` is the third opener, and the only one that can open a project that
 doesn't exist yet: it lists the branches of the repo you're in (local and
 remote), and `Enter` opens that branch's **git worktree** as a new tab — creating
 the worktree under `<repo>/.worktrees/<branch>` if there isn't one. Type (or
@@ -359,7 +357,7 @@ top, preview on the right); it also backs `vim.ui.select`, so selection prompts
 (e.g. branch-review menus) use the same UI.
 
 Pickers open in normal mode in the query: `j`/`k`, `gg`/`G`, `Enter` and `q` work
-straight away, `p` pastes (a copied branch name into `Space+tw`), and `i`/`a`
+straight away, `p` pastes (a copied branch name into `Alt+B w`), and `i`/`a`
 start typing. Live grep (`Space+fg`/`Space+fd`) is the exception and opens in
 insert, since it lists nothing until you type.
 

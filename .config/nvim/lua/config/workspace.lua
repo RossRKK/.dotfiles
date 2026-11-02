@@ -232,10 +232,11 @@ end
 
 --- <M-b>: the workspace prefix, fishmonger's <C-b> with a different modifier
 --- and the same keys -- N switches (or opens into N), c opens a new one, &
---- closes this one, .N renumbers it. Plus the other two ways in, aimed at a
---- number: wN opens a branch's worktree (<leader>tw) as workspace N, eN a
---- browsed-to directory (<leader>te). One mapping that then reads the next key
---- (as fishmonger's prefix does) rather than separate <M-b>N maps, which race
+--- closes this one, .N renumbers it. Plus the other two ways in, numbered as c
+--- is: w opens a branch's worktree (util/worktree.lua), e a browsed-to
+--- directory for a project the recent list doesn't know (a fresh clone). One
+--- mapping that then reads the next key (as fishmonger's prefix does) rather
+--- than separate <M-b>N maps, which race
 --- the mapping timeout in terminal mode and leak a late key to the shell.
 function M.prefix()
   local ok, key = pcall(vim.fn.getcharstr)
@@ -246,20 +247,16 @@ function M.prefix()
     M.switch(tonumber(key))
   elseif key == "c" then
     M.pick_new()
+  elseif key == "w" then
+    require("util.worktree").pick()
+  elseif key == "e" then
+    M.explore()
   elseif key == "&" then
     M.close()
-  elseif key == "." or key == "w" or key == "e" then
+  elseif key == "." then
     local ok2, dest = pcall(vim.fn.getcharstr)
-    if not (ok2 and dest:match("^[1-9]$")) then
-      return
-    end
-    local n = tonumber(dest)
-    if key == "." then
-      M.renumber(n)
-    elseif key == "w" then
-      require("util.worktree").pick(n)
-    else
-      M.explore({ tab = true, slot = n })
+    if ok2 and dest:match("^[1-9]$") then
+      M.renumber(tonumber(dest))
     end
   end
 end

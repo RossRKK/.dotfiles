@@ -150,28 +150,18 @@ for n = 1, 9 do
   end, { desc = "Switch to workspace " .. n })
 end
 -- <M-b>: the workspace prefix -- fishmonger's <C-b> terminal keys with Alt
--- instead of Ctrl (N switch, c new, & close, .N renumber), plus wN / eN to
--- open a worktree / browsed-to directory as workspace N. In terminal mode it
--- takes fish's alt-b (back a word) from the shell; ctrl-left does the same.
+-- instead of Ctrl (N switch, c new, & close, .N renumber), plus w / e for the
+-- other two ways into a new workspace (a branch's worktree, a browsed-to
+-- directory). In terminal mode it takes fish's alt-b (back a word) from the
+-- shell; ctrl-left does the same.
 map({ "n", "i", "x", "t" }, "<M-b>", function()
   require("config.workspace").prefix()
-end, { desc = "Workspace prefix (N switch / c new / & close / .N renumber / wN worktree / eN browse)" })
+end, { desc = "Workspace prefix (N switch / c new / & close / .N renumber / w worktree / e browse)" })
 map("n", "<leader>tn", function()
   require("config.workspace").pick_new()
 end, { desc = "New project tab (recent/dev)" })
--- The same thing for a project the recent list doesn't know (a fresh clone):
--- browse to it instead of naming it.
-map("n", "<leader>te", function()
-  require("config.workspace").explore()
-end, { desc = "New project tab (browse)" })
--- The same thing for a branch of the project you're in: create (or reuse) a
--- worktree for it under .worktrees/ and open that as its own tab. See
--- util/worktree.lua.
-map("n", "<leader>tw", function()
-  require("util.worktree").pick()
-end, { desc = "New project tab (worktree)" })
 -- A branch that does not exist yet: name it, get a worktree for it, opened as
--- its own tab. <leader>tw's picker is for branches that exist; its typed-name
+-- its own tab. <M-b>w's picker is for branches that exist; its typed-name
 -- fallback only fires when nothing fuzzy-matches, which a ticket name nearly
 -- always does.
 map("n", "<leader>tb", function()

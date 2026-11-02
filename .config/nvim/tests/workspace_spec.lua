@@ -2,7 +2,7 @@
 
 local assert = require("luassert")
 
--- <leader>te: a browser for a project that is NOT open yet, so it must start at
+-- <M-b>e: a browser for a project that is NOT open yet, so it must start at
 -- ~ rather than following the current buffer's file (the explorer default).
 describe("workspace.explore", function()
   local saved_snacks, got
@@ -168,26 +168,25 @@ describe("workspace numbers", function()
     assert.equals(one, vim.api.nvim_get_current_tabpage())
   end)
 
-  it("aims <M-b> w N at the worktree picker and <M-b> e N at the browser", function()
+  it("opens the worktree picker on <M-b> w and the browser on <M-b> e without waiting for a number", function()
     require("config.keymaps")
-    local picked, explored
+    local picked, explored = 0, 0
     package.loaded["util.worktree"] = {
-      pick = function(slot)
-        picked = slot
+      pick = function()
+        picked = picked + 1
       end,
     }
-    ws.explore = function(opts)
-      explored = opts
+    ws.explore = function()
+      explored = explored + 1
     end
     local keys = function(k)
       vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(k, true, false, true), "x", false)
     end
-    keys("<M-b>w4")
-    keys("<M-b>e6")
-    keys("<M-b>wx") -- not a number: nothing
+    keys("<M-b>w")
+    keys("<M-b>e")
     package.loaded["util.worktree"] = nil
-    assert.equals(4, picked)
-    assert.same({ tab = true, slot = 6 }, explored)
+    assert.equals(1, picked)
+    assert.equals(1, explored)
   end)
 
   it("closes a workspace without asking when no agent is live", function()
