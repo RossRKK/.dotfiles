@@ -68,8 +68,8 @@ purpose — mocking it would test the mock.
   `<repo>/.worktrees/` and hands the directory to `workspace.open`.
 - `lua/plugins/` — one file per plugin, lazy.nvim specs. Three of our own live
   as external plugins under `~/dev` (lazy `dev` path), each declared in a small
-  spec here: `fishmonger.lua` (the side terminal, wired into the snacks terminal
-  in `terminal.lua`), and `review.lua` (branch review mode = triage.nvim +
+  spec here: `fishmonger.lua` (the side terminal, set up in that spec's
+  `config`), and `review.lua` (branch review mode = triage.nvim +
   nitpick.nvim, whose neo-tree glyphs are registered in `explorer.lua`).
 
 The side terminal (fishmonger.nvim) runs shells directly in an nvim terminal

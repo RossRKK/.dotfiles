@@ -11,37 +11,6 @@ return {
     config = function(_, opts)
       require("snacks").setup(opts)
 
-      -- fishmonger owns its own default width; edgy (see edgy.lua) adopts the
-      -- window via the "fishmonger" filetype and re-governs sizing in this config.
-      -- shell: bare "fish" (jobstart resolves it via $PATH) rather than a
-      -- hardcoded path, so this works whether fish lives at /usr/bin,
-      -- /opt/homebrew/bin, or elsewhere.
-      -- project_name: fishmonger's own default is the tabpage cwd's basename;
-      -- config.workspace is the one place that names a workspace, so the agent
-      -- view borrows its "<repo> - <branch>" display name rather than growing
-      -- a second naming rule.
-      -- Wrapped into background.slice where systemd allows (util/background.lua).
-      local background = require("util.background")
-      require("fishmonger").setup({
-        shell = background.command("fish", background.user_manager()),
-        project_name = function(tab)
-          return require("config.workspace").display_name(tab)
-        end,
-        -- <C-b>mN sends a terminal to workspace N by its stable number (the one
-        -- on the tab label and behind <M-N>), not the tabpage position.
-        workspace = function(n)
-          return require("config.workspace").tab(n)
-        end,
-      })
-      -- Tab keymaps for the side terminal (<C-b>{1-9}, etc).
-      require("fishmonger").setup_keymaps()
-      require("fishmonger").setup_exit()
-
-      -- The side terminal auto-opens as part of a workspace (IDE mode, and every
-      -- <leader>tn project tabpage) -- config.workspace.open does it, so there is
-      -- one place that knows the layout. Text-editor mode (single file, bare
-      -- nvim, commit message) opens nothing; <C-t> summons it anywhere.
-
       -- <C-g> works from normal and terminal mode (pairs with the <C-t>
       -- side-terminal toggle) so the git TUI is reachable wherever the cursor
       -- is; a second press hides it. A leader map can't serve here -- <space>
