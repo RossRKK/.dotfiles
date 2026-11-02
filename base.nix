@@ -204,6 +204,8 @@ in
         # claude-agent-status-hooks activation script below, because that file
         # is co-owned with Claude itself (model, theme) and cannot be generated.
         ".claude/hooks/agent-status"
+        # Out-of-store so Claude can still append to it in place.
+        ".claude/CLAUDE.md"
       ]
       (path: {
         source = link path;
