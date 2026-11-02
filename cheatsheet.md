@@ -143,7 +143,7 @@ so `Space+a` then `.` walks an argument along the list.
 | `Space+S`             | Pick among all scratch buffers              |
 
 The **greeter** is the leftmost buffer tab, labelled `Overview` — one per
-workspace, always there, so going back to it is `Space+h`, a click, or `<S-h>`
+workspace, always there, so going back to it is `Space+h` or `<S-h>`
 off the left end. It's also what the main window falls back to when the last
 buffer closes, rather than a blank `[No Name]`. It shows a branch overview:
 `repo - branch` (a worktree reads as its repo, not its checkout directory), how
@@ -159,7 +159,7 @@ greeter. Outside a git repo there's no overview, so it falls back to the pickers
 The IDE layout is pinned by [edgy](https://github.com/folke/edgy.nvim): explorer +
 outline on the **left**, the side terminal on the **right**, the editor in the
 middle. edgy sets each panel's *opening* size, then tracks whatever you resize
-it to — so drags, `Ctrl+w` splits, and the arrow keys below all stick (after a
+it to — so `Ctrl+w` resizes and the arrow keys below all stick (after a
 brief warm-up on open). Keys work while focused inside an edge window (explorer,
 outline, terminal):
 
@@ -681,7 +681,7 @@ are inside the tree; `?` shows the full, live list.
 
 | Key             | Action                               |
 | --------------- | ------------------------------------ |
-| `Enter` / click | Open file / expand folder            |
+| `Enter`         | Open file / expand folder            |
 | `S` / `s`       | Open in horizontal / vertical split  |
 | `t`             | Open in a new tab                    |
 | `w`             | Open via the window picker           |

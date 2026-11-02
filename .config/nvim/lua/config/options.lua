@@ -32,7 +32,7 @@ opt.inccommand = "split" -- preview :s/ matches live, and list every changed lin
 opt.confirm = true -- prompt to save on :q of a dirty buffer, rather than erroring
 
 opt.termguicolors = true
-opt.mouse = "a"
+opt.mouse = "" -- keyboard only
 
 opt.swapfile = false
 
