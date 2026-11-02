@@ -128,6 +128,8 @@ return {
         },
         filesystem = {
           follow_current_file = { enabled = true },
+          -- The tree is the workspace's: navigating it must not :tcd the tab.
+          bind_to_cwd = false,
           -- Don't take over the window when nvim opens on a directory; the
           -- VimEnter handler below arranges the panel explicitly.
           hijack_netrw_behavior = "disabled",
@@ -212,9 +214,7 @@ return {
       vim.keymap.set("n", "<leader>lo", "<cmd>Neotree document_symbols float toggle reveal<cr>", {
         desc = "Outline (symbols popup)",
       })
-      vim.keymap.set("n", "<leader>v", "<cmd>Neotree filesystem reveal left reveal_force_cwd<cr>", {
-        desc = "Reveal file in explorer",
-      })
+      vim.keymap.set("n", "<leader>v", sidebar.reveal, { desc = "Reveal file in explorer" })
       -- Link neo-tree's git-status highlight groups to semantic groups so the
       -- colours follow any theme.
       local function set_git_highlights()

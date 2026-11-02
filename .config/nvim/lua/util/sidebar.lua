@@ -57,4 +57,43 @@ function M.toggle()
   end
 end
 
+-- Markers for "the project a file belongs to" when it sits outside the workspace.
+local project_markers = { "Cargo.toml", "go.mod", "package.json", "pyproject.toml", ".git" }
+
+---@alias sidebar.RevealTarget
+---| { kind: "tree" } reveal in the docked tree, which stays rooted at the workspace
+---| { kind: "float", root: string } browse `root` in a float, leaving the tree alone
+
+--- Where <leader>v should show `file` from a workspace rooted at `workspace`.
+---@param file string? absolute path of the current buffer, nil when it has none
+---@param workspace string
+---@return sidebar.RevealTarget
+function M.reveal_target(file, workspace)
+  if not file or vim.fs.relpath(workspace, file) then
+    return { kind = "tree" }
+  end
+  return { kind = "float", root = vim.fs.root(file, project_markers) or vim.fs.dirname(file) }
+end
+
+--- Show the current file in context without ever re-rooting the docked tree: a
+--- file outside the workspace (a crate in ~/.cargo) opens a float of its project.
+function M.reveal()
+  local workspace = vim.fn.getcwd(-1, 0)
+  local name = vim.api.nvim_buf_get_name(0)
+  local file = vim.bo.buftype == "" and name ~= "" and vim.fs.normalize(name) or nil
+  local target = M.reveal_target(file, workspace)
+  if target.kind == "tree" then
+    -- dir pins the root (and restores it if it was navigated away) and makes
+    -- neo-tree skip its "change cwd?" prompt.
+    require("neo-tree.command").execute({ source = "filesystem", position = "left", reveal = true, dir = workspace })
+  else
+    Snacks.picker.explorer({
+      cwd = target.root,
+      title = vim.fn.fnamemodify(target.root, ":~"),
+      auto_close = true,
+      layout = { preset = "dropdown", preview = false },
+    })
+  end
+end
+
 return M
