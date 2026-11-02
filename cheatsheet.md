@@ -43,6 +43,11 @@
 | `Ctrl+U` / `Ctrl+D` | Scroll half page up / down |
 | `Ctrl+O` / `Ctrl+I` | Jump back / forward        |
 
+Hardtime (hint mode) flags repeated `hjkl`/arrows and suggests a better motion
+(`5j`, `Ctrl+D`, `w`/`f`, flash's `s`); it never blocks. `:Hardtime report` lists
+the habits it has seen most; `:Hardtime toggle` turns it off. Inactive in the
+terminal.
+
 ### Editing
 
 | Key               | Action                                 |
