@@ -85,6 +85,15 @@ describe("edgy_pin", function()
     assert.same({}, pin.pin({ win }))
   end)
 
+  it("never pins a panel floated out of its edgebar", function()
+    local win = open_left(20)
+    fake_edgy_window(win, true, 20)
+    vim.api.nvim_win_set_config(win, { relative = "editor", row = 0, col = 0, width = vim.o.columns, height = 10 })
+    assert.same({}, pin.pin({ win }))
+    assert.is_nil(vim.w[win].edgy_width)
+    vim.api.nvim_win_close(win, true) -- :only can't run from a float
+  end)
+
   it("skips a frame of edgy's animation", function()
     local win = open_left(20)
     local ewin = fake_edgy_window(win, true, 35)

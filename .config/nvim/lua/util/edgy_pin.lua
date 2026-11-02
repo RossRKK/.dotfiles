@@ -42,7 +42,8 @@ function M.pin(wins)
   local pinned = {}
   for _, win in ipairs(wins) do
     local ewin = cache[win]
-    if ewin and vim.api.nvim_win_is_valid(win) then
+    -- A float has left its edgebar (fishmonger's zoom); edgy's cache entry is stale.
+    if ewin and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_config(win).relative == "" then
       local dim = ewin.view.edgebar.vertical and "width" or "height"
       local size = vim.api["nvim_win_get_" .. dim](win)
       local frame = anim[ewin] and math.floor(anim[ewin][dim] + 0.5)
