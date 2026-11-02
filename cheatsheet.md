@@ -689,7 +689,7 @@ are inside the tree; `?` shows the full, live list.
 | Key       | Action                          |
 | --------- | ------------------------------- |
 | `Space+e` | Toggle explorer + outline       |
-| `Space+v` | Reveal current file in explorer |
+| `Space+v` | Reveal current file in explorer (outside the workspace, e.g. a crate: float of its project instead; the tree never re-roots) |
 
 **Open & navigate**
 
