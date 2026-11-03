@@ -16,8 +16,6 @@ return {
     dev = true,
     config = function()
       require("triage").setup({
-        -- <leader>rd is diffbandit's side-by-side (spec below) while we trial it.
-        keys = { diff = "<leader>ri" },
         -- Review mode is per repo, so the toggle carries the root it applies
         -- to: with one project per tab, both plugins must follow the SAME repo
         -- rather than each resolving the cwd's on its own.
@@ -40,30 +38,5 @@ return {
     config = function()
       require("nitpick").setup({ verdict = require("triage").verdict })
     end,
-  },
-  {
-    "CoreyKaylor/diffbandit.nvim",
-    cmd = { "DiffBandit", "DiffBanditGit", "DiffBanditGitCurrent", "DiffBanditLaunch" },
-    keys = {
-      {
-        "<leader>rd",
-        function()
-          local gsbase = require("triage.gitsigns")
-          local root = gsbase.buf_root(0)
-          -- The fork point triage gave the gutter, so both views show the same lines.
-          local base = root and gsbase.bases[root]
-          if not base then
-            vim.notify("review: turn on review mode (Space+rt) first", vim.log.levels.WARN)
-            return
-          end
-          local ok, err = require("diffbandit").git({ mode = "all", base = base, root = root })
-          if not ok then
-            vim.notify("diffbandit: " .. tostring(err), vim.log.levels.ERROR)
-          end
-        end,
-        desc = "Review: side-by-side diff of the branch (diffbandit)",
-      },
-    },
-    opts = {},
   },
 }
