@@ -568,7 +568,8 @@ and hides the float.
 | `Space+ru` | Clear decision (untriage)                  |
 | `Space+rt` | Toggle review mode on / off                |
 | `Space+rb` | Pick the base commit (`auto` = auto-detect) |
-| `Space+rd` | Toggle inline diff of current file vs base |
+| `Space+rd` | Side-by-side diff of the branch (diffbandit) |
+| `Space+ri` | Toggle inline diff of current file vs base |
 | `Space+rR` | Refresh review status                      |
 
 `Space+rr` / `Space+rj` / `Space+ru` act on the node under the cursor in the
@@ -576,11 +577,18 @@ explorer, otherwise the current buffer. An approved file flips back to "changed"
 if it's edited again; a rejected file becomes "revised" when edited (the flag
 was acted on — re-review the fix) rather than losing the flag.
 
-`Space+rd` overlays a combined inline diff on the file itself — deleted lines
+`Space+ri` overlays a combined inline diff on the file itself — deleted lines
 shown inline, added / changed lines highlighted — against the review base
 (default branch tip), instead of a side-by-side split. Works whether or not
 review mode is on; it's a mode across the current buffer's repo, applying to
 that repo's buffers until toggled off.
+
+`Space+rd` (trial) opens [diffbandit](https://github.com/CoreyKaylor/diffbandit.nvim)
+on every file the branch changes, against the same base as the gutter: the old
+file on the left, the real (editable) file on the right, a connector gutter
+between. Needs review mode on. `]f` / `[f` next / prev file, `]c` / `[c` next /
+prev hunk, `]s` snap the other side to the cursor, `q` close. Connectors are
+bezier ribbons in Ghostty; Unicode cells in Neovide (no graphics protocol).
 
 ### Review queue (Space+rq)
 
