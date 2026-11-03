@@ -19,6 +19,8 @@ function M.float(cwd)
   term = Snacks.lazygit({
     cwd = cwd,
     win = {
+      -- Buffer-local: lazygit is a terminal, and the global <C-g> is normal-mode only.
+      keys = { hide_lazygit = { "<C-g>", "hide", mode = "t" } },
       on_win = function(self)
         self:on("WinLeave", function()
           if vim.api.nvim_get_current_win() == self.win then
