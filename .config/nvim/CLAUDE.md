@@ -29,7 +29,6 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
 | `reviewqueue_spec.lua` | CODEOWNERS glob matching / last-match-wins, "does this PR need my review" tiers, "what's my PR waiting on" tiers |
 | `diffsize_spec.lua` | PR diff size without generated files (`git check-attr` parsing, lockfiles) |
-| `reload_spec.lua` | `:ConfigReload` swaps edited functions in keeping module state, drops deleted keymaps, doesn't double autocmds, survives a parse error |
 | `background_spec.lua` | side-terminal shells wrapped into systemd's `background.slice` only when a user manager is running |
 | `sidebar_reveal_spec.lua` | `<leader>v` reveals in the tree without re-rooting it or `:tcd`-ing the tab; files outside the workspace float at their project root. Loads real neo-tree |
 | `windows_spec.lua` | main-window routing: a file window first, else a terminal in the main area (never the side panel or a float) |
