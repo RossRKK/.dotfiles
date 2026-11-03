@@ -168,12 +168,15 @@ describe("workspace numbers", function()
     assert.equals(one, vim.api.nvim_get_current_tabpage())
   end)
 
-  it("opens the worktree picker on <M-b> w and the browser on <M-b> e without waiting for a number", function()
+  it("opens the worktree picker on <M-b> w, a new branch on <M-b> b and the browser on <M-b> e without waiting for a number", function()
     require("config.keymaps")
-    local picked, explored = 0, 0
+    local picked, branched, explored = 0, 0, 0
     package.loaded["util.worktree"] = {
       pick = function()
         picked = picked + 1
+      end,
+      new = function()
+        branched = branched + 1
       end,
     }
     ws.explore = function()
@@ -183,9 +186,11 @@ describe("workspace numbers", function()
       vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(k, true, false, true), "x", false)
     end
     keys("<M-b>w")
+    keys("<M-b>b")
     keys("<M-b>e")
     package.loaded["util.worktree"] = nil
     assert.equals(1, picked)
+    assert.equals(1, branched)
     assert.equals(1, explored)
   end)
 

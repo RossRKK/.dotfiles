@@ -221,6 +221,7 @@ Alt instead of Ctrl. It works from the terminal too (there it takes fish's
 | `Alt+B &`     | Close this workspace (asks first if an agent there is live) |
 | `Alt+B . N`   | Renumber this workspace to N (`.` then `1-9`); swaps if N is taken |
 | `Alt+B w`     | Open a new workspace — a worktree of a branch here (lowest free number) |
+| `Alt+B b`     | Open a new workspace — name a new branch, get its worktree (lowest free number) |
 | `Alt+B e`     | Open a new workspace — browse the filesystem for one (float, lowest free number) |
 
 Tab labels sit at the **right end of the bufferline**, showing the project name —

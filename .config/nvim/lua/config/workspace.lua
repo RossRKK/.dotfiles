@@ -232,8 +232,10 @@ end
 
 --- <M-b>: the workspace prefix, fishmonger's <C-b> with a different modifier
 --- and the same keys -- N switches (or opens into N), c opens a new one, &
---- closes this one, .N renumbers it. Plus the other two ways in, numbered as c
---- is: w opens a branch's worktree (util/worktree.lua), e a browsed-to
+--- closes this one, .N renumbers it. Plus the other ways in, numbered as c
+--- is: w opens a branch's worktree (util/worktree.lua), b names a new branch
+--- for one (w's typed-name fallback only fires when nothing fuzzy-matches,
+--- which a ticket name nearly always does), e a browsed-to
 --- directory for a project the recent list doesn't know (a fresh clone). One
 --- mapping that then reads the next key (as fishmonger's prefix does) rather
 --- than separate <M-b>N maps, which race
@@ -249,6 +251,8 @@ function M.prefix()
     M.pick_new()
   elseif key == "w" then
     require("util.worktree").pick()
+  elseif key == "b" then
+    require("util.worktree").new()
   elseif key == "e" then
     M.explore()
   elseif key == "&" then

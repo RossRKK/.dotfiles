@@ -150,23 +150,16 @@ for n = 1, 9 do
   end, { desc = "Switch to workspace " .. n })
 end
 -- <M-b>: the workspace prefix -- fishmonger's <C-b> terminal keys with Alt
--- instead of Ctrl (N switch, c new, & close, .N renumber), plus w / e for the
--- other two ways into a new workspace (a branch's worktree, a browsed-to
--- directory). In terminal mode it takes fish's alt-b (back a word) from the
--- shell; ctrl-left does the same.
+-- instead of Ctrl (N switch, c new, & close, .N renumber), plus w / b / e for
+-- the other ways into a new workspace (a branch's worktree, a new branch's
+-- worktree, a browsed-to directory). In terminal mode it takes fish's alt-b
+-- (back a word) from the shell; ctrl-left does the same.
 map({ "n", "i", "x", "t" }, "<M-b>", function()
   require("config.workspace").prefix()
-end, { desc = "Workspace prefix (N switch / c new / & close / .N renumber / w worktree / e browse)" })
+end, { desc = "Workspace prefix (N switch / c new / & close / .N renumber / w worktree / b new branch / e browse)" })
 map("n", "<leader>tn", function()
   require("config.workspace").pick_new()
 end, { desc = "New project tab (recent/dev)" })
--- A branch that does not exist yet: name it, get a worktree for it, opened as
--- its own tab. <M-b>w's picker is for branches that exist; its typed-name
--- fallback only fires when nothing fuzzy-matches, which a ticket name nearly
--- always does.
-map("n", "<leader>tb", function()
-  require("util.worktree").new()
-end, { desc = "New project tab for a new branch" })
 -- Fork the current worktree tab: new branch off this tab's current state,
 -- dirty changes carried over, opened as its own tab, with every Claude session
 -- in this tab's side terminals forked (--fork-session) into its same slot. See
