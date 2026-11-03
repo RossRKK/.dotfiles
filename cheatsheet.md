@@ -141,7 +141,7 @@ so `Space+a` then `.` walks an argument along the list.
 | `Ctrl+W s` / `:sp`    | Horizontal split                            |
 | `Ctrl+W q`            | Close this split                            |
 | `Ctrl+W o`            | Close all other splits                      |
-| `Ctrl+H/L/J/K`        | Move between splits (`Ctrl+N` first from a terminal) |
+| `Ctrl+H/L/J/K`        | Move between splits (works in terminal too) |
 | `Ctrl+W H/J/K/L`      | Move this split to the far left/bottom/top/right |
 | `Ctrl+W x`            | Swap with the next split                    |
 | `Ctrl+W =`            | Equalise split sizes                        |
