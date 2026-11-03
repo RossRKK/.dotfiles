@@ -137,9 +137,15 @@ so `Space+a` then `.` walks an argument along the list.
 
 | Key                   | Action                                      |
 | --------------------- | ------------------------------------------- |
-| `:vsp`                | Vertical split                              |
-| `:sp`                 | Horizontal split                            |
+| `Ctrl+W v` / `:vsp`   | Vertical split                              |
+| `Ctrl+W s` / `:sp`    | Horizontal split                            |
+| `Ctrl+W q`            | Close this split                            |
+| `Ctrl+W o`            | Close all other splits                      |
 | `Ctrl+H/L/J/K`        | Move between splits (works in terminal too) |
+| `Ctrl+W H/J/K/L`      | Move this split to the far left/bottom/top/right |
+| `Ctrl+W x`            | Swap with the next split                    |
+| `Ctrl+W =`            | Equalise split sizes                        |
+| `Ctrl+W _` / `Ctrl+W \|` | Maximise height / width                  |
 | `:vert res 80`        | Resize vertical split to 80 columns         |
 | `Shift+L` / `Shift+H` | Next / prev buffer (within this workspace)  |
 | `Space+h`             | Go to the workspace overview (leftmost tab) |
