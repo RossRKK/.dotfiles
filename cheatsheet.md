@@ -141,7 +141,7 @@ so `Space+a` then `.` walks an argument along the list.
 | `Ctrl+W s` / `:sp`    | Horizontal split                            |
 | `Ctrl+W q`            | Close this split                            |
 | `Ctrl+W o`            | Close all other splits                      |
-| `Ctrl+H/L/J/K`        | Move between splits (works in terminal too) |
+| `Ctrl+H/L/J/K`        | Move between splits (`Ctrl+N` first from a terminal) |
 | `Ctrl+W H/J/K/L`      | Move this split to the far left/bottom/top/right |
 | `Ctrl+W x`            | Swap with the next split                    |
 | `Ctrl+W =`            | Equalise split sizes                        |
@@ -793,7 +793,7 @@ scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI munging).
 
 | Key                    | Action                                                |
 | ---------------------- | ----------------------------------------------------- |
-| `Ctrl+T`               | Toggle the side terminal                              |
+| `Ctrl+T`               | Toggle the side terminal; from a terminal, `Ctrl+N` first |
 | `Ctrl+G`               | Toggle the git TUI (lazygit); from a terminal, `Ctrl+N` first |
 | `Ctrl+Shift+G`         | Open the git TUI in a picked project (`Ctrl+N` first from a terminal) |
 | `Ctrl+N` (in terminal) | Enter terminal-normal mode (then `gf` jumps to a ref) |
@@ -808,7 +808,7 @@ author / …).
 
 tmux-style tabs in the side terminal: one fills the slot, the others stay alive
 but hidden. The `Ctrl+B` prefix works straight from the terminal (and from normal
-mode). `Ctrl+T` toggles the terminal from anywhere. A
+mode). `Ctrl+T` toggles the terminal from normal mode (`Ctrl+N` first). A
 titled tab strip shows across the top of each terminal window.
 
 `Ctrl+B t` opens a terminal in the editor area too (`Ctrl+O` goes back to the
@@ -831,7 +831,7 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
 | `Ctrl+B m N`  | Move the current tab to workspace N (the number on its label; you follow it) |
 | `Ctrl+B a`    | Agent view: every agent across all workspaces, blocked first; the row's key jumps to it |
-| `Ctrl+T`      | Toggle the side terminal                          |
+| `Ctrl+T`      | Toggle the side terminal (`Ctrl+N` first from a terminal) |
 
 ---
 
