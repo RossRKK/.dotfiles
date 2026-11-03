@@ -60,7 +60,6 @@ terminal.
 | `Ctrl+S`          | Save                                   |
 | `Ctrl+V`          | Paste clipboard (Neovide only; insert/cmdline/terminal). In a terminal, an image goes to the program inside -- so screenshots paste into Claude Code |
 | `Space+R`         | Reload file from disk                  |
-| `Space+C`         | Reload the nvim config modules edited since they loaded, keeping workspaces and terminals (`:ConfigReload`; plugin specs need a restart) |
 | `Space+N`         | Toggle relative line numbers (absolute is the default) |
 | `Space+s`         | Toggle spell check (see Spelling below)  |
 | `.`               | Repeat last change                     |

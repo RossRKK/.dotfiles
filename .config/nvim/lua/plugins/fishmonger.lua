@@ -1,7 +1,6 @@
 -- fishmonger: the tmux-style side-terminal tab manager, split out as a local
--- plugin (dev = ~/dev, see config/lazy.lua). Its setup lives in `config` here so
--- :ConfigReload can re-run it, and edgy (edgy.lua) governs its side panel via
--- the w:fishmonger_side window marker.
+-- plugin (dev = ~/dev, see config/lazy.lua). edgy (edgy.lua) governs its side
+-- panel via the w:fishmonger_side window marker.
 return {
   {
     "RossRKK/fishmonger.nvim",

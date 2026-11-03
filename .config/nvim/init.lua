@@ -1,4 +1,3 @@
-require("util.reload").setup(vim.fn.stdpath("config") .. "/lua")
 require("config.options")
 require("config.keymaps")
 require("config.autocmds")
