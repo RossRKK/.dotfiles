@@ -1,14 +1,10 @@
 local map = vim.keymap.set
 
--- Window navigation (normal and terminal mode)
+-- Window navigation, normal mode only: terminal programs own their ctrl keys
 map("n", "<C-h>", "<C-w>h", { desc = "Move to left window" })
 map("n", "<C-l>", "<C-w>l", { desc = "Move to right window" })
 map("n", "<C-j>", "<C-w>j", { desc = "Move to lower window" })
 map("n", "<C-k>", "<C-w>k", { desc = "Move to upper window" })
-map("t", "<C-h>", "<C-\\><C-n><C-w>h", { desc = "Move to left window" })
-map("t", "<C-l>", "<C-\\><C-n><C-w>l", { desc = "Move to right window" })
-map("t", "<C-j>", "<C-\\><C-n><C-w>j", { desc = "Move to lower window" })
-map("t", "<C-k>", "<C-\\><C-n><C-w>k", { desc = "Move to upper window" })
 
 -- Exit to terminal-normal mode (then gf jumps to a file:line ref under the cursor)
 map("t", "<C-n>", "<C-\\><C-n>", { desc = "Terminal: enter normal mode" })
