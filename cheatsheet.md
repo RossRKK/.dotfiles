@@ -828,7 +828,7 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B o`    | Jump to the next terminal window                  |
 | `Ctrl+B "` / `Ctrl+B %` | Split the terminal below / right into a new shell (in the side column, edgy stacks both) |
 | `Ctrl+B x`    | Kill the pane: its shell and its window           |
-| `Ctrl+B arrows` | Move to the pane in that direction (`Ctrl+K` passes through to the side terminal) |
+| `Ctrl+B arrows` | Move to the pane in that direction (`Ctrl+K` from the top terminal pane goes to the program instead) |
 | `Ctrl+B z`    | Zoom: the current window (terminal, editor or explorer) fills the screen; again (or entering another split) puts it back |
 | `Ctrl+B &`    | Kill the current tab                              |
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
