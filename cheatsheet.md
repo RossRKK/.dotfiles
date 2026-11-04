@@ -845,7 +845,7 @@ session ends or you dismiss them.
 | Key (in the list) | Action                                                    |
 | ----------------- | --------------------------------------------------------- |
 | `Ctrl+J` / `Ctrl+K` | Into the list from the terminal / back up               |
-| `Enter`           | Open the task's output in a pane above (`less`: running tasks follow — `Ctrl+C` to stop, `F` to resume; `q` closes) |
+| `Enter`           | Open the task's output in a pane above: a normal buffer (search, yank, motions) that follows new output while the cursor is on the last line (`G`); `q` closes |
 | `x`               | Dismiss the task                                          |
 
 ---
