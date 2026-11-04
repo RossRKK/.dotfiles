@@ -836,6 +836,11 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B a`    | Agent view: every agent across all workspaces, blocked first; the row's key jumps to it |
 | `Ctrl+T`      | Toggle the side terminal (`Ctrl+N` first from a terminal) |
 
+**Yanking Claude's replies.** A yank from a terminal comes back as the lines
+Claude wrote, not the rows it wrapped them into: the `line-end-marks` plugin
+ends every real line of a reply with an invisible marker, and the yank joins
+the rows that lack one. Tool output and tables are left as they are.
+
 **Background tasks.** When an agent starts background commands (Claude's
 `run_in_background` Bash), a list opens under its terminal with one line per
 task: what it is, how long it has run, and pass/fail counts (or the last line of
