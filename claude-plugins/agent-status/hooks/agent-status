@@ -129,9 +129,10 @@ agent=
 pid=$PPID
 while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
   pids="$pids$pid "
-  if [ -z "$agent" ] && [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "claude" ]; then
-    agent=$pid
-  fi
+  # nix's binary is .claude-unwrapped, which comm truncates to 15 chars.
+  case $(cat "/proc/$pid/comm" 2>/dev/null) in
+  claude | .claude-unwrapp) [ -n "$agent" ] || agent=$pid ;;
+  esac
   # /proc/<pid>/stat: ppid is the field after the parenthesised comm and state,
   # and comm may itself contain spaces or brackets, so cut at the LAST ")".
   line=$(cat "/proc/$pid/stat" 2>/dev/null) || break
