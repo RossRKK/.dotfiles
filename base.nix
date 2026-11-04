@@ -233,6 +233,7 @@ in
       any-nix-shell
       gcx # Grafana Cloud CLI
       gnumake # plugin test suites (fishmonger.nvim etc.) drive nvim via make test
+      bats # claude-plugins/agent-status/tests
       imagemagick
       jq # claude-plugins/agent-status parses its hook payloads with it
       openspec # spec-driven development for AI coding agents (openspec.dev)
