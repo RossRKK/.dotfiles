@@ -121,6 +121,16 @@ return {
             return vim.w[win].fishmonger_side and vim.api.nvim_win_get_config(win).relative == ""
           end,
         },
+        -- fishmonger's background-task list, under the panel; fishmonger sets
+        -- its height to the task count.
+        {
+          ft = "fishmonger-tasks",
+          wo = { winbar = false },
+          size = { height = 1 },
+          filter = function(_, win)
+            return vim.w[win].fishmonger_side
+          end,
+        },
       },
     },
   },
