@@ -156,7 +156,10 @@ in
   programs.claude-code = {
     enable = true;
     # A string, not a nix path, so --plugin-dir sees edits without a switch.
-    plugins = [ "${dotfilesDir}/claude-plugins/agent-status" ];
+    plugins = [
+      "${dotfilesDir}/claude-plugins/agent-status"
+      "${dotfilesDir}/claude-plugins/line-end-marks"
+    ];
   };
   programs.ripgrep.enable = true;
   programs.fd.enable = true;
