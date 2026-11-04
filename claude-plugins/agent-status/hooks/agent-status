@@ -13,13 +13,15 @@
 # Wired to several hook events by hooks.json alongside this script,
 # each passing the event as $1; the hook's JSON payload arrives on stdin.
 #
-#   agent-status busy         UserPromptSubmit, PostToolUse
+#   agent-status busy         UserPromptSubmit
+#   agent-status ran          PostToolUse           (a background task is recorded)
 #   agent-status tool         PreToolUse            (.tool_name decides)
 #   agent-status notify       Notification          (.message decides)
 #   agent-status stop         Stop                  (transcript decides)
 #   agent-status end          SessionEnd
 #
-# Output: $XDG_RUNTIME_DIR/claude-agents/<session_id>.json, written atomically
+# Output: $XDG_RUNTIME_DIR/claude-agents/<session_id>.json, plus one
+# <session_id>.<task_id>.task per background Bash task, all written atomically
 # (write to .tmp, rename) so a reader never sees half a file.
 set -euo pipefail
 
@@ -52,12 +54,47 @@ last_assistant() {
   ' 2>/dev/null || true
 }
 
+# Records a background Bash task. Its pid and output path come from the agent's
+# child whose stdout is the task's output file: the payload carries only the id.
+record_task() {
+  local agent=$1 id=$2 child output stat
+  for child in $(cat /proc/"$agent"/task/*/children 2>/dev/null); do
+    output=$(readlink "/proc/$child/fd/1" 2>/dev/null) || continue
+    [[ $output == */tasks/"$id".output ]] || continue
+    stat=$(cat "/proc/$child/stat")
+    # starttime is field 22 of stat, i.e. the 20th after the parenthesised comm.
+    jq -nc \
+      --arg session "$session" \
+      --arg id "$id" \
+      --arg description "$(get .tool_input.description)" \
+      --arg command "$(get .tool_input.command)" \
+      --arg output "$output" \
+      --argjson pid "$child" \
+      --argjson pid_start "$(printf '%s' "${stat##*) }" | cut -d' ' -f20)" \
+      '{session: $session, id: $id, description: $description, command: $command,
+        output: $output, pid: $pid, pid_start: $pid_start}' |
+      write_atomically "$dir/$session.$id.task"
+    return
+  done
+}
+
+write_atomically() {
+  cat >"$1.tmp"
+  mv -f "$1.tmp" "$1"
+}
+
 state=$event
 detail=
+task_id=
 
 case $event in
 busy)
   state=busy
+  ;;
+ran)
+  state=busy
+  # Set both for run_in_background and for a foreground call Claude backgrounded.
+  task_id=$(get .tool_response.backgroundTaskId)
   ;;
 tool)
   # PreToolUse on the tools whose whole purpose is to stop and ask. Unlike the
@@ -110,7 +147,7 @@ stop)
   detail=$(printf '%s' "$text" | tail -c 400 | tr '\n' ' ' | sed -e 's/  */ /g' -e 's/^ *//' | tail -c 120)
   ;;
 end)
-  rm -f "$dir/$session.json"
+  rm -f "$dir/$session.json" "$dir/$session".*.task
   exit 0
   ;;
 esac
@@ -140,7 +177,8 @@ while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
 done
 : "${agent:=$PPID}"
 
-tmp="$dir/$session.json.tmp"
+[ -z "$task_id" ] || record_task "$agent" "$task_id"
+
 jq -nc \
   --arg session "$session" \
   --arg state "$state" \
@@ -150,6 +188,5 @@ jq -nc \
   --arg pids "$pids" \
   --argjson agent "$agent" \
   '{session: $session, state: $state, detail: $detail, cwd: $cwd, agent_pid: $agent,
-    transcript: $transcript, pids: ($pids | split(" ") | map(select(. != "") | tonumber))}' \
-  >"$tmp"
-mv -f "$tmp" "$dir/$session.json"
+    transcript: $transcript, pids: ($pids | split(" ") | map(select(. != "") | tonumber))}' |
+  write_atomically "$dir/$session.json"
