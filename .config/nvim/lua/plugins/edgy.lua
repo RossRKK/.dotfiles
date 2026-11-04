@@ -31,6 +31,16 @@ local function is_explorer(buf)
   return vim.b[buf].neo_tree_source == "filesystem"
 end
 
+-- The rows fishmonger wants for this tabpage's task list (one per task).
+local function tasks_height()
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.w[win].fishmonger_tasks_height then
+      return vim.w[win].fishmonger_tasks_height
+    end
+  end
+  return 1
+end
+
 return {
   {
     "folke/edgy.nvim",
@@ -121,12 +131,13 @@ return {
             return vim.w[win].fishmonger_side and vim.api.nvim_win_get_config(win).relative == ""
           end,
         },
-        -- fishmonger's background-task list, under the panel; fishmonger sets
-        -- its height to the task count.
+        -- fishmonger's background-task list, under the panel. Sized by the
+        -- height fishmonger asks for: a fixed one here would undo fishmonger's
+        -- resize on every layout pass, and the list hopped between the two.
         {
           ft = "fishmonger-tasks",
           wo = { winbar = false },
-          size = { height = 1 },
+          size = { height = tasks_height },
           filter = function(_, win)
             return vim.w[win].fishmonger_side
           end,
