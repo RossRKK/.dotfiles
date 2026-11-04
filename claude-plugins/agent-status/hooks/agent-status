@@ -10,7 +10,7 @@
 # hook cannot borrow the channel. Hooks know the answer exactly, so they write it
 # somewhere nvim can watch instead.
 #
-# Installed as the command for several hook events in ~/.claude/settings.json,
+# Wired to several hook events by hooks.json alongside this script,
 # each passing the event as $1; the hook's JSON payload arrives on stdin.
 #
 #   agent-status busy         UserPromptSubmit, PostToolUse
