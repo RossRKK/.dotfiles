@@ -6,7 +6,9 @@ project.
 Challenge my assumptions. Do not assume that the way the code works is the same
 as how the code should work.
 
-When designing APIs always follow the Google AIPs https://google.aip.dev/general
+When designing APIs always follow the Google AIPs
+https://google.aip.dev/general. When referencing them is PRs and other docs link
+to them.
 
 Always consider prior art. When discussing designs always consider previous well
 known implementations. When using common algorithms like hash functions always
@@ -73,6 +75,23 @@ comment or a conversation -- add a one-line entry here with a short why.
 - Diagrams in docs aren't mermaid; hand-drawn SVG or none.
 
 # Code I do want
+
+Prefer composition over inheritance.
+
+Support distributed tracing and logging.
+
+## Layout
+
+Prefer top down function definitions: have higher level functions that establish
+the context of what is going on at the top of the file with lower level
+functions towards the bottom.
+
+## Minimising Complexity
+
+Code should be minimally complex as it can be while achieving the goal.
+Especially in areas of code with significant impact. Consider if the benefit to
+the business warrants the extra complexity. For example, don't add caching
+layers to non-performance critical code.
 
 ## Testable and extendable
 
