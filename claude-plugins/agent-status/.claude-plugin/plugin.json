@@ -1,0 +1,4 @@
+{
+  "name": "agent-status",
+  "description": "Publishes each session's state to $XDG_RUNTIME_DIR/claude-agents for fishmonger's agent view"
+}
