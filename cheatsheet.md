@@ -557,9 +557,13 @@ match wins, and the statusline says which (` feat/a · #412`):
 | `· stack`  | No PR: the nearest other branch below this one that the default branch doesn't already contain |
 | (nothing)  | The default branch (`origin/HEAD`, else `main` / `master`)      |
 
-`Space+rb` picks the override from the branch's commits, HEAD down to the auto
-target, each marked `pushed` or `local`, so you can review only what came after
-a commit you've already seen. Its last row, `auto`, clears the override.
+`Space+rb` reviews a range of the branch's commits, tip down to the auto target,
+each marked `pushed` or `local` (✓ once approved). Pick the top ("review up
+to"), then the bottom ("review from"): the top is checked out and the bottom
+becomes the override. Picking the tip as the top goes back to the branch, and
+`auto` as the bottom clears the override. Git refuses while you have uncommitted
+changes; jj does a `jj new` on the top. `Space+rA` approves the commits under
+review, by patch id, so the ✓ survives a rebase that doesn't change the diff.
 From **lazygit**, `Ctrl+B` on a commit sets the same override for lazygit's repo
 and hides the float.
 
@@ -569,7 +573,8 @@ and hides the float.
 | `Space+rj` | Mark file / folder rejected (flag)         |
 | `Space+ru` | Clear decision (untriage)                  |
 | `Space+rt` | Toggle review mode on / off                |
-| `Space+rb` | Pick the base commit (`auto` = auto-detect) |
+| `Space+rb` | Pick a commit range: top checked out, bottom as base |
+| `Space+rA` | Approve the commits under review (✓ in `Space+rb`) |
 | `Space+rd` | Toggle inline diff of current file vs base |
 | `Space+rR` | Refresh review status                      |
 
@@ -667,7 +672,8 @@ next time review mode turns on).
 | `Space+rs` | Toggle showing resolved-thread comments                   |
 | `Space+rh` | Show / hide PR comments for the repo (drafts always show) |
 
-Submit infers the verdict from the triage rollup — no picking: any live
+Submit infers the verdict from the triage rollup (`Ctrl+E` in the compose split
+cycles it to override; the winbar then names the inferred one): any live
 rejection → **request changes**, all approved → **approve**, anything still
 untriaged → **comment**. So an early submit goes out as a plain comment batch,
 and only firms up to approve/request-changes once nothing's pending. A short
