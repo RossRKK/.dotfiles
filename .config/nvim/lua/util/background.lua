@@ -5,7 +5,7 @@ local M = {}
 
 --- The command to start `shell` with: inside background.slice when a systemd
 --- user manager can take it, else the shell as is (macOS, no systemd).
----@param shell string
+---@param shell string|string[] a program, or a program and its arguments
 ---@param user_manager boolean
 ---@return string|string[]
 function M.command(shell, user_manager)
@@ -13,7 +13,8 @@ function M.command(shell, user_manager)
     return shell
   end
   -- --scope execs the shell in place, so the job pid is still the shell's.
-  return { "systemd-run", "--user", "--scope", "--slice=background.slice", "--quiet", "--collect", shell }
+  local scope = { "systemd-run", "--user", "--scope", "--slice=background.slice", "--quiet", "--collect" }
+  return vim.list_extend(scope, type(shell) == "table" and shell or { shell })
 end
 
 --- Whether a systemd user manager is running for this session.
