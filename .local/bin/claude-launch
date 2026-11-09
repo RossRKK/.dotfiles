@@ -4,8 +4,10 @@
 #
 #   claude-launch <claude> [args...]
 #
-# A new session (a fork too) gets a petname; a resumed one keeps the name it was
-# saved with but is recoloured, since its saved colour may now be taken.
+# A session's name is derived from its id, so it is the same every time it is
+# resumed and an old unnamed session gets one too. A new session (a fork too) is
+# given its id here; -c resumes this directory's newest conversation by id. Every
+# launch is recoloured, since a saved colour may now belong to a live session.
 # Any other arguments pass straight through: Claude takes only one opening
 # prompt, and ours ("/color ...") would collide with the caller's.
 #
@@ -21,31 +23,53 @@ dir=${XDG_RUNTIME_DIR:-/tmp}/claude-agents
 palette='["red","blue","green","yellow","purple","cyan","pink","orange"]'
 
 main() {
-  local plugins=() name=()
+  local plugins=() id= name=()
   # home-manager's wrapper puts these ahead of the caller's arguments.
   while [ "${1-}" = --plugin-dir ]; do
     plugins+=("$1" "$2")
     shift 2
   done
+  case "$*" in
+  -c | --continue) set -- $(newest_session_args) ;;
+  esac
   case $(session_kind "$@") in
-  new) name=(--name "$(petname --lists small)") ;;
-  resumed) ;;
+  new)
+    id=$(uuidgen | tr '[:upper:]' '[:lower:]')
+    set -- --session-id "$id" "$@"
+    ;;
+  resume) id=$2 ;;
+  pick) ;;
   other) exec "$claude" "${plugins[@]}" "$@" ;;
   esac
+  [ -z "$id" ] || name=(--name "$(name_for "$id")")
   mkdir -p "$dir"
   local colour
   colour=$(claim_colour)
   exec "$claude" "${plugins[@]}" "${name[@]}" "/color $colour" "$@"
 }
 
-# new, resumed, or other: arguments this launcher leaves alone.
+# new (a fork too), resume <id>, pick (the resume picker), or other: arguments
+# this launcher leaves alone.
 session_kind() {
   case "$#:${1-}:${3-}" in
-  0::) echo new ;;
-  1:-c: | 1:--continue: | [12]:-r: | [12]:--resume:) echo resumed ;;
-  3:-r:--fork-session | 3:--resume:--fork-session) echo new ;;
+  0:: | 3:-r:--fork-session | 3:--resume:--fork-session) echo new ;;
+  2:-r: | 2:--resume:) echo resume ;;
+  1:-r: | 1:--resume:) echo pick ;;
   *) echo other ;;
   esac
+}
+
+# What -c means, by id: --resume the newest conversation Claude stored for this
+# directory, or nothing (a new session) when there is none.
+newest_session_args() {
+  local project newest
+  project=$(pwd -P | sed 's/[^A-Za-z0-9]/-/g')
+  newest=$(ls -t "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$project"/*.jsonl 2>/dev/null | head -n 1 || true)
+  [ -z "$newest" ] || printf -- '--resume %s\n' "$(basename "$newest" .jsonl)"
+}
+
+name_for() {
+  petname --lists small --seed $((16#$(printf '%s' "$1" | sha256sum | cut -c1-15)))
 }
 
 # Under a lock so sessions started together don't pick the same colour.
