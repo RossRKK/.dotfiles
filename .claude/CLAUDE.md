@@ -58,6 +58,16 @@ Only big-cheese talks to other people's Claude sessions, for example through a
 shared artifact's comments. Any other session must not contact them, even when
 it has the link: ask big-cheese to pass the message on.
 
+# Worktrees
+
+Inside nvim (`$NVIM` set), don't make worktrees yourself: no `git worktree add`,
+`EnterWorktree` or `isolation: "worktree"`. Run `worktree-tab <branch>` from
+the repo (in the background if the checkout is big). It opens the worktree as an
+nvim tab and prints the name of the Claude in it once that Claude is up.
+SendMessage it the task with everything it needs, since it has none of your
+context, and ask it to message you back when done. Outside nvim, use worktrees
+as usual.
+
 # Attribution
 
 When opening a PR yourself title it "Claude's Blog" I will add my own
