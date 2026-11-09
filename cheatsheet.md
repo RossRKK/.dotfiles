@@ -246,7 +246,7 @@ listed in `~/.config/claude-roles` (`<checkout> <role>` per line, kept out of
 this repo) it gets a fixed name. In the main work checkout it is **big-cheese**:
 its role (`claude-plugins/session-identity/roles/big-cheese.md`, in its system
 prompt) is the board of what every session is doing, the reviews you owe, your
-PRs and your tickets, and which need you. In
+PRs and your tickets, and which need you; it starts the board on its own. In
 `~/.dotfiles` it is **dotty**. Everywhere else,
 worktrees included, it keeps its pet name. Agents run `worktree-tab <branch>`
 instead of making worktrees themselves: it opens the branch as a tab here
