@@ -234,25 +234,25 @@ OS window title still tracks the workspace you're _in_.)
 
 Opening a workspace starts **Claude in terminal 1**, continuing that directory's
 last conversation (`claude --continue`), or a new one if there is none; quitting
-it leaves a fish prompt. Every `claude` goes through `.local/bin/claude-launch`,
-which gives each session a **name** derived from its id (`--name`, e.g.
-`calm-otter` -- the same every time it is resumed, old sessions included) and the
-`/color` fewest live sessions are using. The name is what other sessions address
-it by (`ListAgents` / `SendMessage`), and fishmonger draws that terminal's tab and
-agent-view row in the same colour as its prompt bar. Arguments other than a bare
-`-c` / `-r [id]` / `-r <id> --fork-session` pass through unnamed and uncoloured;
-the `-r` picker is coloured but not named. `/clear` keeps the name and gets its
-colour back (`claude-plugins/session-colour`).
+it leaves a fish prompt. Once a session starts, the `claude-plugins/session-identity`
+mod gives it a **name** derived from its id (`/rename`, e.g. `calm-otter` -- the
+same every time it is resumed, old sessions included) and the `/color` fewest
+live sessions are using, and gives both back after `/clear`. The name is what
+other sessions address it by (`ListAgents` / `SendMessage`), and fishmonger draws
+that terminal's tab and agent-view row in the same colour as its prompt bar.
 
-Terminal 1's Claude runs with `WORKSPACE_TERMINAL=1`, and in two checkouts the
-launcher gives it a fixed name. In the main ionics checkout it is **big-cheese**
-(`claude-plugins/big-cheese`): it keeps the board of what every session is doing,
-the reviews you owe, your PRs and your tickets, and tells you which need you. In
-`~/.dotfiles` it is **dotty**. Everywhere else, worktrees included, it keeps
-its pet name. Agents run `worktree-tab <branch>` instead of making worktrees
-themselves: it opens the branch as a tab here (resolved as `Alt+B w` resolves
-it) in the background, leaving you on your tab, and prints the name of the Claude that starts there once it can take
-messages, so the agent knows who to hand the work to.
+Terminal 1's Claude runs with `WORKSPACE_TERMINAL=1`, and in the checkouts
+listed in `~/.config/claude-roles` (`<checkout> <role>` per line, kept out of
+this repo) it gets a fixed name. In the main work checkout it is **big-cheese**:
+its role (`claude-plugins/session-identity/roles/big-cheese.md`, in its system
+prompt) is the board of what every session is doing, the reviews you owe, your
+PRs and your tickets, and which need you. In
+`~/.dotfiles` it is **dotty**. Everywhere else,
+worktrees included, it keeps its pet name. Agents run `worktree-tab <branch>`
+instead of making worktrees themselves: it opens the branch as a tab here
+(resolved as `Alt+B w` resolves it) in the background, leaving you on your tab,
+and prints the name of the Claude that starts there once it can take messages,
+so the agent knows who to hand the work to.
 
 Buffers are global in Vim, but the bufferline shows only those under the current
 tab's project, and `Shift+L`/`Shift+H` cycle that filtered list.

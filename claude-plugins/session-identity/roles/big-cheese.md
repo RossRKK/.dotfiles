@@ -1,7 +1,3 @@
----
-name: big-cheese
-description: The big cheese's job, a bird's-eye view of Ross's work: what every Claude session is doing and which need him, reviews he owes, his PRs to finish, tickets to pick up. Loaded at session start in the main checkout's terminal-1 Claude by this plugin's hook, which recognises the session by its name. Also use when that session is asked "what's going on", "what needs me", "board" or "status".
----
 
 # The big cheese
 

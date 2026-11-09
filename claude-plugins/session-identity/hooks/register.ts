@@ -1,18 +1,56 @@
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
-// /clear resets the prompt-bar colour but keeps the process, whose launcher
-// claim still names it; fishmonger colours the tab from the same claim.
+// Who this session is: the name other sessions address it by, the prompt-bar
+// colour fewest live sessions share, and for a standing role its brief.
+type Identity = { name?: string; colour?: string; role?: string }
+
 export const register: Register = (on) => {
+  let identity: Identity = {}
+
+  on('session.start', async ($, e, next) => {
+    const started = await next(e)
+    identity = await discover($)
+    show($, identity)
+    return started
+  })
+
+  // /clear resets the name and the colour but keeps the process, and so the claim.
   on('command.run', { command: 'clear' }, async ($, e, next) => {
     const cleared = await next(e)
-    const { exitCode, stdout } = await $.process.run([`${$.plugin.root}/hooks/claimed-colour`])
-    const colour = stdout.trim()
-    if (exitCode === 0 && colour !== '') {
-      // A command can't run from inside another's hook, so after this one returns.
-      $.clock.after(0, () => {
-        $.command.run({ command: 'color', args: colour }).catch((err) => $.ui.log(`/color ${colour} failed: ${err}`))
-      })
-    }
+    show($, identity)
     return cleared
   })
+
+  // In the system prompt, not a skill or a message, so compaction can't drop it.
+  on('prompt.compose', async ($, e, next) => {
+    const composed = await next(e)
+    if (!identity.role) return composed
+    return { sections: [...composed.sections, { id: 'session-identity:role', text: identity.role, scope: 'session' }] }
+  })
+}
+
+async function discover($: EngineInterface): Promise<Identity> {
+  const name = await output($, ['session-name', await $.session.id()])
+  return { name, colour: await output($, ['claim-colour']), role: name && (await roleBrief($, name)) }
+}
+
+// A command can't run from inside another's hook, so after this one returns.
+function show($: EngineInterface, { name, colour }: Identity) {
+  $.clock.after(0, async () => {
+    for (const [command, args] of [['rename', name], ['color', colour]] as const) {
+      if (args) await $.command.run({ command, args }).catch((err) => $.ui.log(`/${command} ${args} failed: ${err}`))
+    }
+  })
+}
+
+// What one of this mod's scripts printed, or nothing when it failed.
+async function output($: EngineInterface, [script, ...args]: string[]): Promise<string | undefined> {
+  const { exitCode, stdout } = await $.process.run([`${$.plugin.root}/hooks/${script}`, ...args])
+  const printed = stdout.trim()
+  return exitCode === 0 && printed !== '' ? printed : undefined
+}
+
+async function roleBrief($: EngineInterface, name: string): Promise<string | undefined> {
+  const path = `${$.plugin.root}/roles/${name}.md`
+  return (await $.fs.exists(path)) ? $.fs.read(path) : undefined
 }
