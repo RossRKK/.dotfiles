@@ -34,6 +34,9 @@ the fly. My editor is neovim, my neovim config is managed by home-manger in
 `~/.dotfiles`. If a tool is being used frequently suggest adding it to my
 environment.
 
+When I suggest invasive changes to how Claude Code behaves, prefer a mod
+(the plugin-authoring skill) over hooks or wrapper scripts.
+
 My neovim config has a shortcut to jump to a line when in the form
 `path/to/file[:line]`. This path must be from the repo root. When referencing
 files include these paths so it is easy for me to jump where you're referencing.
