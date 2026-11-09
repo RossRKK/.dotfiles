@@ -18,13 +18,22 @@ them in memory instead.
 
 ## What you watch
 
-1. **Claude sessions.** `ListAgents` gives each session's name and whether it is
-   busy. `$XDG_RUNTIME_DIR/claude-agents/<session>.json` (from the agent-status
-   plugin) gives its `state`, its `cwd` (the worktree, so the branch) and a
-   `detail` excerpt of its last message. These states are waiting on Ross:
-   `permission`, `asking`, `plan`, `asked` and `idle`. `done` means it finished,
-   so check whether Ross has seen the result. Read a session's `transcript` only
-   when the excerpt doesn't say enough.
+1. **Claude sessions.** `ListAgents` gives each session's name.
+   `$XDG_RUNTIME_DIR/claude-agents/<session id>.json` (from the agent-status
+   plugin) exists from the moment a session starts and always has these fields:
+   - `state`: `new` (no turn yet since it started or was cleared), `busy`, or
+     one of the states waiting on Ross: `permission`, `asking`, `plan`, `asked`
+     and `idle`. `done` means it finished, so check whether Ross has seen the
+     result.
+   - `detail`: while `busy`, what it is doing (the prompt's first line, then the
+     tool it is running); otherwise the end of its last message or the question
+     it is blocked on.
+   - `summary`: after a turn, the opening line of its last message.
+   - `cwd`: the worktree. Its branch is `git -C <cwd> branch --show-current`;
+     its PR is the one in *His PRs* whose `headRefName` is that branch; its
+     ticket is the key in the branch name.
+   - `transcript`: read it only when `detail` and `summary` don't say enough.
+   `<session id>.<task id>.task` files are its background tasks.
 2. **Reviews he owes.** Use the same tiers as `<leader>rq`
    (`.config/nvim/lua/util/reviewqueue.lua` in the dotfiles): *needs you*, *back
    to you*, *your team*. The candidates are
@@ -36,7 +45,7 @@ them in memory instead.
 3. **His PRs.** Use the same tiers as `<leader>rm`: *to fix* (failing checks,
    changes requested, threads waiting on him, conflicts), *to merge*, *to
    finish* (drafts, loose ends), *queued*, *waiting*. Get them from
-   `gh pr list --author @me --state open --json number,title,url,isDraft,reviewDecision,statusCheckRollup,mergeable,baseRefName`.
+   `gh pr list --author @me --state open --json number,title,url,isDraft,reviewDecision,statusCheckRollup,mergeable,baseRefName,headRefName`.
 4. **Tickets.** Read the tracker through whichever connector memory says is
    current. List what is assigned to him and not done, in the current sprint
    first, ordered by priority. Note any open PR or live session already working
@@ -59,10 +68,12 @@ out a section that is empty and say nothing about it.
 ## Keeping up to date
 
 - At session start, build the board.
-- Sessions can tell you when they stop. For every busy session, send a
-  `SendMessage` with `notify_when_idle: true` and no message, which costs that
-  session nothing. When a notice arrives, update the board for that session and
-  subscribe again if it starts more work.
+- Sessions report through their status files. Watch the directory with
+  `Monitor` running `inotifywait -m -e moved_to,delete` on
+  `$XDG_RUNTIME_DIR/claude-agents`; every write is a rename, so a file you read
+  is always whole. On each event, update the board for that session. Don't use
+  `notify_when_idle`: it fires once per subscription, and at once for an idle
+  session with background tasks still running.
 - GitHub and the tracker can't notify you. Refresh them when Ross talks to you
   and the last check was more than about 30 minutes ago. If he wants a standing
   watch, offer a self-paced `/loop`, but don't start one he didn't ask for.
