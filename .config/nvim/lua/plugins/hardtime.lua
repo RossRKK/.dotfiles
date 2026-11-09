@@ -8,7 +8,7 @@ return {
     opts = {
       -- Hint rather than swallow the key: the nudge without the lockout.
       restriction_mode = "hint",
-      -- The mouse is on in options.lua; hardtime shouldn't take it away.
+      -- <leader>um owns the mouse; hardtime shouldn't fight it.
       disable_mouse = false,
     },
     keys = {

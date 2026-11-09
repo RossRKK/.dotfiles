@@ -74,6 +74,13 @@ return {
       desc = "Toggle inlay hints",
     },
     {
+      "<leader>um",
+      function()
+        Snacks.toggle.option("mouse", { name = "Mouse", on = "a", off = "", global = true }):toggle()
+      end,
+      desc = "Toggle mouse",
+    },
+    {
       "<leader>ghi",
       function()
         Snacks.picker.gh_issue()

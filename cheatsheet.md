@@ -46,7 +46,8 @@
 Hardtime hints on the 4th quick repeat of `hjkl` (arrows are off entirely) with a
 better motion (`5j`, `Ctrl+D`, `w`/`f`, flash's `s`) but lets the key through.
 `:Hardtime report` lists the habits it has seen most; `Space+up` toggles it off
-and on (arrows come back while off). Inactive in the terminal. The mouse is on.
+and on (arrows come back while off). Inactive in the terminal. The mouse is off
+by default; `Space+um` toggles it.
 
 ### Editing
 
@@ -423,6 +424,7 @@ server to rewrite the imports pointing at the old path.
 | Key        | Action                                              |
 | ---------- | --------------------------------------------------- |
 | `Space+uh` | Toggle inlay hints (off by default; current buffer) |
+| `Space+um` | Toggle the mouse (off by default)                   |
 
 ### Space+cf — Format (conform)
 
