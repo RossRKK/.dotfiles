@@ -140,3 +140,38 @@ name_of() {
   [ "${#lines[@]}" -eq 2 ]
   [ -z "$(ls "$claims")" ]
 }
+
+@test "terminal 1 of the main ionics checkout is always the big cheese" {
+  export HOME="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$HOME/ionics" && cd "$HOME/ionics"
+
+  WORKSPACE_TERMINAL=1 run "$launch" "$claude"
+  [ "$(name_of)" = big-cheese ]
+
+  WORKSPACE_TERMINAL=1 run "$launch" "$claude" --resume abc
+  [ "$(name_of)" = big-cheese ]
+}
+
+@test "terminal 1 of the dotfiles is always dotty" {
+  export HOME="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$HOME/.dotfiles" && cd "$HOME/.dotfiles"
+
+  WORKSPACE_TERMINAL=1 run "$launch" "$claude"
+  [ "$(name_of)" = dotty ]
+}
+
+@test "other terminals, worktrees and directories keep the name from their id" {
+  export HOME="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$HOME/ionics/.worktrees/branch" && cd "$HOME/ionics"
+
+  WORKSPACE_TERMINAL=2 run "$launch" "$claude"
+  [ "$(name_of)" = "pet-$((16#$(printf '%s' "$new_id" | sha256sum | cut -c1-15)))" ]
+
+  cd "$HOME/ionics/.worktrees/branch"
+  WORKSPACE_TERMINAL=1 run "$launch" "$claude"
+  [ "$(name_of)" != big-cheese ]
+
+  cd "$BATS_TEST_TMPDIR/work"
+  WORKSPACE_TERMINAL=1 run "$launch" "$claude"
+  [ "$(name_of)" != big-cheese ] && [ "$(name_of)" != dotty ]
+}

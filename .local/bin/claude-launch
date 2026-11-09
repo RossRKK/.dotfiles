@@ -5,9 +5,11 @@
 #   claude-launch <claude> [args...]
 #
 # A session's name is derived from its id, so it is the same every time it is
-# resumed and an old unnamed session gets one too. A new session (a fork too) is
-# given its id here; -c resumes this directory's newest conversation by id. Every
-# launch is recoloured, since a saved colour may now belong to a live session.
+# resumed and an old unnamed session gets one too; terminal 1 of a checkout with
+# a standing role is named for the role instead (role_name). A new session (a
+# fork too) is given its id here; -c resumes this directory's newest
+# conversation by id. Every launch is recoloured, since a saved colour may now
+# belong to a live session.
 # Any other arguments pass straight through: Claude takes only one opening
 # prompt, and ours ("/color ...") would collide with the caller's.
 #
@@ -68,8 +70,20 @@ newest_session_args() {
   [ -z "$newest" ] || printf -- '--resume %s\n' "$(basename "$newest" .jsonl)"
 }
 
+# A session's name: its role's, or else one derived from <id>.
 name_for() {
-  petname --lists small --seed $((16#$(printf '%s' "$1" | sha256sum | cut -c1-15)))
+  role_name || petname --lists small --seed $((16#$(printf '%s' "$1" | sha256sum | cut -c1-15)))
+}
+
+# Terminal 1 of these checkouts holds a standing role, under a fixed name other
+# sessions can always address it by. Fails for any other session.
+role_name() {
+  [ "${WORKSPACE_TERMINAL-}" = 1 ] || return 1
+  case $(pwd -P) in
+  "$(realpath -m "$HOME/ionics")") echo big-cheese ;;
+  "$(realpath -m "$HOME/.dotfiles")") echo dotty ;;
+  *) return 1 ;;
+  esac
 }
 
 # Under a lock so sessions started together don't pick the same colour.
