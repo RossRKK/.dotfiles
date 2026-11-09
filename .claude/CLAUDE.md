@@ -47,12 +47,13 @@ Two sessions have standing roles and fixed names, so any session can
 `SendMessage` them by name. The `session-identity` mod names terminal 1 of these
 checkouts.
 
-- **big-cheese**: terminal 1 of the main ionics checkout. It keeps a bird's-eye
+- **big-cheese**: terminal 1 of the main work checkout. It keeps a bird's-eye
   view of every session, the reviews I owe, my PRs and my tickets, and tells me
   what needs my input (`claude-plugins/session-identity/roles/big-cheese.md`).
-  It already hears when you go idle. Tell it in one line when you open, merge or
-  abandon a PR, or finish a ticket, and when you hand me a step you were blocked
-  from doing (a force push, say), so it survives a restart. Ask it when you need to know what another session is doing.
+  It already sees your status from agent-status. Tell it in one line when you
+  open, merge or abandon a PR, or finish a ticket, and when you hand me a step
+  you were blocked from doing (a force push, say), so it survives a restart. Ask
+  it when you need to know what another session is doing.
 - **dotty**: terminal 1 of `~/.dotfiles`, the session working on my dotfiles:
   nvim, the Claude mods and plugins, and this file.
 
