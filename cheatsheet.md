@@ -251,7 +251,7 @@ the reviews you owe, your PRs and your tickets, and tells you which need you. In
 `~/.dotfiles` it is **dotty**. Everywhere else, worktrees included, it keeps
 its pet name. Agents run `worktree-tab <branch>` instead of making worktrees
 themselves: it opens the branch as a tab here (resolved as `Alt+B w` resolves
-it) and prints the name of the Claude that starts there once it can take
+it) in the background, leaving you on your tab, and prints the name of the Claude that starts there once it can take
 messages, so the agent knows who to hand the work to.
 
 Buffers are global in Vim, but the bufferline shows only those under the current
