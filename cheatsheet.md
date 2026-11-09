@@ -241,7 +241,8 @@ which gives each session a **name** derived from its id (`--name`, e.g.
 it by (`ListAgents` / `SendMessage`), and fishmonger draws that terminal's tab and
 agent-view row in the same colour as its prompt bar. Arguments other than a bare
 `-c` / `-r [id]` / `-r <id> --fork-session` pass through unnamed and uncoloured;
-the `-r` picker is coloured but not named.
+the `-r` picker is coloured but not named. `/clear` keeps the name and gets its
+colour back (`claude-plugins/session-colour`).
 
 Terminal 1's Claude runs with `WORKSPACE_TERMINAL=1`, and in two checkouts the
 launcher gives it a fixed name. In the main ionics checkout it is **big-cheese**

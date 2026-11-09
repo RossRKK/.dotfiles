@@ -1,0 +1,4 @@
+{
+  "name": "session-colour",
+  "description": "Gives a session its claude-launch colour back after /clear, which resets it"
+}

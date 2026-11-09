@@ -172,6 +172,7 @@ in
       "${dotfilesDir}/claude-plugins/agent-status"
       "${dotfilesDir}/claude-plugins/line-end-marks"
       "${dotfilesDir}/claude-plugins/big-cheese"
+      "${dotfilesDir}/claude-plugins/session-colour"
     ];
   };
   programs.ripgrep.enable = true;
@@ -251,7 +252,7 @@ in
       any-nix-shell
       gcx # Grafana Cloud CLI
       gnumake # plugin test suites (fishmonger.nvim etc.) drive nvim via make test
-      bats # claude-plugins/{agent-status,big-cheese}/tests
+      bats # claude-plugins/{agent-status,big-cheese,session-colour}/tests
       imagemagick
       jq # agent-status hook payloads, worktree-tab's session registry
       rust-petname # .local/bin/claude-launch names new sessions with it
