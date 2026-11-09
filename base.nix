@@ -155,6 +155,18 @@ in
   programs.btop.enable = true;
   programs.claude-code = {
     enable = true;
+    # Every `claude` goes through the launcher, which names and colours the session.
+    # symlinkJoin keeps the first bin/claude, so this shadows the package's own.
+    package = pkgs.symlinkJoin {
+      name = "claude-code";
+      paths = [
+        (pkgs.writeShellScriptBin "claude" ''
+          exec ${dotfilesDir}/.local/bin/claude-launch ${pkgs.claude-code}/bin/claude "$@"
+        '')
+        pkgs.claude-code
+      ];
+      inherit (pkgs.claude-code) meta;
+    };
     # A string, not a nix path, so --plugin-dir sees edits without a switch.
     plugins = [
       "${dotfilesDir}/claude-plugins/agent-status"
@@ -239,6 +251,7 @@ in
       bats # claude-plugins/agent-status/tests
       imagemagick
       jq # claude-plugins/agent-status parses its hook payloads with it
+      rust-petname # .local/bin/claude-launch names new sessions with it
       openspec # spec-driven development for AI coding agents (openspec.dev)
       terraform
       cmake
