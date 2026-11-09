@@ -218,6 +218,8 @@ in
         ".local/bin/clipboard-copy"
         # `git worktree-clean` (git runs git-<name> from PATH).
         ".local/bin/git-worktree-clean"
+        # Agents open their worktrees as nvim tabs with it (.claude/CLAUDE.md).
+        ".local/bin/worktree-tab"
         # Out-of-store so Claude can still append to it in place.
         ".claude/CLAUDE.md"
       ]
@@ -251,7 +253,7 @@ in
       gnumake # plugin test suites (fishmonger.nvim etc.) drive nvim via make test
       bats # claude-plugins/{agent-status,big-cheese}/tests
       imagemagick
-      jq # claude-plugins/agent-status parses its hook payloads with it
+      jq # agent-status hook payloads, worktree-tab's session registry
       rust-petname # .local/bin/claude-launch names new sessions with it
       openspec # spec-driven development for AI coding agents (openspec.dev)
       terraform

@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Opens <branch>'s worktree as a tab of the surrounding nvim and prints the name
+# of the Claude in its terminal 1 once that session can be sent messages, so an
+# agent can hand it the work (SendMessage) instead of doing it here.
+#
+#   worktree-tab [--timeout <seconds>] <branch>
+#
+# The branch is resolved as the nvim picker resolves it (util/worktree.lua): an
+# existing worktree is reused, a remote branch gets a local one, and any other
+# name becomes a new branch off the main checkout's HEAD. Run it from inside the
+# repo. Waiting covers the checkout and Claude's start; a live session is found
+# in Claude's registry of running sessions, by name and directory.
+set -euo pipefail
+
+sessions=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions
+
+main() {
+  local timeout=600 opened agent path
+  if [ "${1-}" = --timeout ]; then
+    timeout=$2
+    shift 2
+  fi
+  [ $# -eq 1 ] && [ -n "$1" ] || fail "usage: worktree-tab [--timeout <seconds>] <branch>"
+  [ -n "${NVIM-}" ] || fail "not inside nvim (\$NVIM is unset)"
+
+  opened=$(nvim --server "$NVIM" --remote-expr \
+    "luaeval(\"require('util.worktree').open_for_agent(_A[1], _A[2])\", [$(json "$1"), $(json "$PWD")])")
+  if ! agent=$(jq -er .agent <<<"$opened"); then
+    fail "$(jq -r '.error // "nvim gave no answer"' <<<"$opened" 2>/dev/null || echo "$opened")"
+  fi
+  path=$(jq -r .path <<<"$opened")
+
+  local deadline=$((SECONDS + timeout))
+  until live_session "$agent" "$path"; do
+    [ $SECONDS -lt $deadline ] || fail "no Claude named $agent started in $path within ${timeout}s"
+    sleep 1
+  done
+  printf '%s\n' "$agent"
+}
+
+# Succeeds when a running session named <name> in <dir> has a messaging socket.
+live_session() {
+  local file pid
+  for file in "$sessions"/*.json; do
+    [ -e "$file" ] || continue
+    pid=$(jq -r --arg name "$1" --arg dir "$(realpath -m "$2")" '
+      select(.name == $name and .cwd == $dir and .messagingSocketPath != null) | .pid' \
+      "$file" 2>/dev/null) || continue
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+# <text> as a vimscript string literal (JSON's string syntax is a subset).
+json() {
+  jq -Rn --arg s "$1" '$s'
+}
+
+fail() {
+  printf 'worktree-tab: %s\n' "$1" >&2
+  exit 1
+}
+
+main "$@"
