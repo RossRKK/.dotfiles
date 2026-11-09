@@ -2,6 +2,15 @@
 
 local assert = require("luassert")
 
+describe("workspace.agent_shell", function()
+  it("continues this directory's last Claude conversation, else starts one, at a fish prompt", function()
+    assert.same(
+      { "fish", "-C", "claude --continue; or claude" },
+      require("config.workspace").agent_shell(false)
+    )
+  end)
+end)
+
 -- <M-b>e: a browser for a project that is NOT open yet, so it must start at
 -- ~ rather than following the current buffer's file (the explorer default).
 describe("workspace.explore", function()

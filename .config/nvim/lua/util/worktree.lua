@@ -515,7 +515,8 @@ function M.fork()
         end
       end
 
-      require("config.workspace").open(path, { tab = true })
+      -- The forked sessions are typed into plain shells; tab 1's own Claude would take that input.
+      require("config.workspace").open(path, { tab = true, agent = false })
 
       M.restore_sessions(sessions)
     end)

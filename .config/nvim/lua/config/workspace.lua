@@ -390,7 +390,7 @@ end
 
 --- Set the current (or a new) tabpage up as a workspace on `dir`.
 ---@param dir string project directory
----@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer }
+---@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer, agent?: boolean }
 ---   tab: open a new tabpage first, and scope the cwd to it with :tcd -- or,
 ---     if a workspace on `dir` is already open, switch to that instead of
 ---     opening a second one (slot is then ignored: it keeps its number).
@@ -400,6 +400,7 @@ end
 ---   drop_buf: a buffer to delete once a real editor buffer exists (startup's
 ---     directory buffer, which nvim creates for `nvim <dir>`).
 ---   slot: the workspace number to take, if free (see M.assign_slot).
+---   agent: false leaves terminal 1 a plain shell instead of M.agent_shell.
 function M.open(dir, opts)
   opts = opts or {}
   dir = vim.fn.fnamemodify(dir, ":p"):gsub("/$", "")
@@ -439,7 +440,11 @@ function M.open(dir, opts)
   vim.schedule(function()
     -- Go through fishmonger so slot 1 is registered as a tab of this workspace.
     -- insert = false because we hand focus straight back to the editor.
-    require("fishmonger").show(1, { insert = false })
+    local background = require("util.background")
+    require("fishmonger").show(1, {
+      insert = false,
+      shell = opts.agent ~= false and M.agent_shell(background.user_manager()) or nil,
+    })
     if vim.api.nvim_win_is_valid(editor) then
       vim.api.nvim_set_current_win(editor)
     end
@@ -450,6 +455,18 @@ function M.open(dir, opts)
     -- but edgy's sizing doesn't reliably produce one for this window.)
     Snacks.dashboard.update()
   end)
+end
+
+--- What a workspace's first terminal runs: Claude, back in this directory's last
+--- conversation, or a new one when there is none (--continue then exits 1). fish
+--- -C runs it at the prompt, so a shell remains once Claude exits.
+---@param user_manager boolean see util/background.lua
+---@return string|string[]
+function M.agent_shell(user_manager)
+  return require("util.background").command(
+    { "fish", "-C", "claude --continue; or claude" },
+    user_manager
+  )
 end
 
 --- Fast path: pick a known project. Type a couple of letters of somewhere you
