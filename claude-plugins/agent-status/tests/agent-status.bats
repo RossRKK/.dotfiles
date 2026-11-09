@@ -158,3 +158,12 @@ transcript_ending() {
   run jq -c 'keys' "$status_dir/s1.json"
   [ "$output" = '["agent_pid","cwd","detail","pids","session","state","summary","transcript"]' ]
 }
+
+@test "at stop, the message in the payload wins over a transcript not yet written" {
+  transcript=$(transcript_ending "an older answer")
+  run_under_agent stop "$(jq -nc --arg t "$transcript" '{session_id: "s1", cwd: "/w",
+    transcript_path: $t, last_assistant_message: "Shipped the fix"}')"
+
+  run jq -r .summary "$status_dir/s1.json"
+  [ "$output" = "Shipped the fix" ]
+}

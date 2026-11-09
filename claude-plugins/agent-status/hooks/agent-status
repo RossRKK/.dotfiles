@@ -168,7 +168,9 @@ notify)
   esac
   ;;
 stop)
-  text=$(last_assistant)
+  # The transcript may not hold the final message yet when Stop fires.
+  text=$(get .last_assistant_message)
+  [ -n "$text" ] || text=$(last_assistant)
   # Trailing "?" (ignoring trailing whitespace and markdown list/emphasis noise)
   # means the turn ended on a question to you, which reads as "done" to every
   # other signal. A heuristic, deliberately: it is wrong occasionally and cheap
