@@ -78,7 +78,8 @@ out a section that is empty and say nothing about it.
   `$XDG_RUNTIME_DIR/claude-agents` (through `nix-shell -p inotify-tools` if it
   isn't installed); every write is a rename, so a file you read is always
   whole. Skip your own session's file, or each of your replies comes back as an
-  event, and treat a watch that exits at once as failed. On each event, update the board for that session. Don't use
+  event. Match it by its `agent_pid` (your claude process), not the session id,
+  which `/clear` changes. Treat a watch that exits at once as failed. On each event, update the board for that session. Don't use
   `notify_when_idle`: it fires once per subscription, and at once for an idle
   session with background tasks still running.
 - GitHub and the tracker can't notify you. Refresh them when Ross talks to you
