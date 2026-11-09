@@ -1,12 +1,14 @@
 -- Nudges away from hjkl/arrow repetition toward real motions: past max_count it
--- swallows the key and says what to use instead; :Hardtime report lists habits.
+-- says what to use instead; :Hardtime report lists habits.
 return {
   {
     "m4xshen/hardtime.nvim",
     lazy = false,
     dependencies = { "MunifTanjim/nui.nvim" },
     opts = {
-      -- The mouse is off in options.lua; hardtime shouldn't own it as well.
+      -- Hint rather than swallow the key: the nudge without the lockout.
+      restriction_mode = "hint",
+      -- The mouse is on in options.lua; hardtime shouldn't take it away.
       disable_mouse = false,
     },
     keys = {
@@ -14,21 +16,24 @@ return {
         "<leader>up",
         function()
           local hardtime = require("hardtime")
-          local presenting = require("util.presenting")
           Snacks.toggle
             .new({
-              id = "presenting",
-              name = "Presenting (no hardtime, mouse on)",
+              id = "hardtime",
+              name = "Hardtime",
               get = function()
-                return presenting.is_on(hardtime)
+                return hardtime.is_plugin_enabled
               end,
               set = function(on)
-                presenting.set(hardtime, on)
+                if on then
+                  hardtime.enable()
+                else
+                  hardtime.disable()
+                end
               end,
             })
             :toggle()
         end,
-        desc = "Toggle presenting (hardtime off, mouse on)",
+        desc = "Toggle hardtime",
       },
     },
   },

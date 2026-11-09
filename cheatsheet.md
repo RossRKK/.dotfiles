@@ -43,11 +43,10 @@
 | `Ctrl+U` / `Ctrl+D` | Scroll half page up / down |
 | `Ctrl+O` / `Ctrl+I` | Jump back / forward        |
 
-Hardtime blocks the 4th quick repeat of `hjkl` (arrows are off entirely) and
-suggests a better motion (`5j`, `Ctrl+D`, `w`/`f`, flash's `s`). `:Hardtime report` lists
-the habits it has seen most; `:Hardtime toggle` turns it off. Inactive in the
-terminal. `Space+up` toggles **presenting**: hardtime off and the mouse on, for
-pointing and clicking while someone watches; again for keyboard-only.
+Hardtime hints on the 4th quick repeat of `hjkl` (arrows are off entirely) with a
+better motion (`5j`, `Ctrl+D`, `w`/`f`, flash's `s`) but lets the key through.
+`:Hardtime report` lists the habits it has seen most; `Space+up` toggles it off
+and on (arrows come back while off). Inactive in the terminal. The mouse is on.
 
 ### Editing
 
