@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Prints the standing role of a session in the current directory, or fails when
+# it has none. Terminal 1 of a checkout listed in
+# ${XDG_CONFIG_HOME:-~/.config}/claude-roles takes that checkout's role; the file
+# holds one "<checkout> <role>" per line (a leading ~ is $HOME) and is kept out
+# of this repo since the checkouts are private.
+set -euo pipefail
+
+roles=${XDG_CONFIG_HOME:-$HOME/.config}/claude-roles
+
+[ "${WORKSPACE_TERMINAL-}" = 1 ] && [ -r "$roles" ] || exit 1
+here=$(pwd -P)
+while read -r checkout role; do
+  [ -n "$role" ] || continue
+  [ "$(realpath -m "${checkout/#\~/$HOME}")" = "$here" ] && echo "$role" && exit 0
+done <"$roles"
+exit 1

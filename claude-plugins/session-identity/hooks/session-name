@@ -1,32 +1,10 @@
 #!/usr/bin/env bash
 # Prints the name of the session <id> that runs in the current directory: its
-# role's, or else a pet name derived from the id, so a session keeps its name
-# every time it is resumed and other sessions can address it (SendMessage).
+# role (see role-name), or else a pet name derived from the id, so a session
+# keeps its name every time it is resumed and other sessions can address it
+# (SendMessage).
 #
 #   session-name <id>
-#
-# Roles are listed in ${XDG_CONFIG_HOME:-~/.config}/claude-roles, one
-# "<checkout> <role>" per line (a leading ~ is $HOME), and kept out of this
-# repo since the checkouts are private.
 set -euo pipefail
 
-roles=${XDG_CONFIG_HOME:-$HOME/.config}/claude-roles
-
-main() {
-  role_name || petname --lists small --seed $((16#$(printf '%s' "$1" | sha256sum | cut -c1-15)))
-}
-
-# Terminal 1 of a listed checkout holds a standing role, under a fixed name other
-# sessions can always address it by. Fails for any other session.
-role_name() {
-  [ "${WORKSPACE_TERMINAL-}" = 1 ] && [ -r "$roles" ] || return 1
-  local here checkout role
-  here=$(pwd -P)
-  while read -r checkout role; do
-    [ -n "$role" ] || continue
-    [ "$(realpath -m "${checkout/#\~/$HOME}")" = "$here" ] && echo "$role" && return 0
-  done <"$roles"
-  return 1
-}
-
-main "$@"
+"$(dirname "$0")/role-name" || petname --lists small --seed $((16#$(printf '%s' "$1" | sha256sum | cut -c1-15)))

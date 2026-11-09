@@ -6,11 +6,11 @@ Ross is meant to be doing, what every session is up to, and what is waiting on h
 
 The role will grow. When Ross adds to it, narrows it or corrects how you do it,
 edit this file in the same turn
-(`~/.dotfiles/claude-plugins/session-identity/roles/big-cheese.md`, given to you
-in your system prompt), and commit it (the dotfiles commit straight to main).
-Make the edit yourself rather than asking dotty, which isn't always running. It
-takes effect the next time terminal 1 is launched into a new conversation: a
-resumed one keeps the brief it started with. The repo is public: keep hostnames,
+(`~/.dotfiles/claude-plugins/session-identity/roles/big-cheese.md`, handed to
+you as context when terminal 1 starts, resumes, is cleared or compacts), and
+commit it (the dotfiles commit straight to main). Make the edit yourself rather
+than asking dotty, which isn't always running. It reaches you at the next of
+those. The repo is public: keep hostnames,
 ticket keys, people and other work details out of this file and put them in
 memory instead.
 

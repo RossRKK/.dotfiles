@@ -4,9 +4,6 @@ import { expect, mock, test } from 'claude-code/testing'
 // /clear as the person types it at the prompt.
 const CLEAR = { command: 'clear', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } } as const
 const START = { cwd: '/w', surface: 'terminal', isInteractive: true } as const
-const ROLE = 'You are big-cheese.'
-// A system prompt render as the engine raises one.
-const COMPOSE = { model: 'm', promptModel: 'm', surfaces: ['terminal'], tools: [], outputStyle: null, traits: [] } as const
 
 // Stands for the engine: records each command the mod runs and each prompt it
 // submits (as "prompt"), answers its scripts with <printed> (a script left out
@@ -30,13 +27,14 @@ function engine(on: On, printed: Record<string, string>) {
     return { value: { exitCode: stdout === undefined ? 1 : 0, stdout: stdout ?? '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
   on('fs.exists', (_, e) => ({ value: e.path.endsWith('/roles/big-cheese.md') }))
-  on('fs.read', () => ({ value: ROLE }))
-  on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'intro', scope: 'shared' }] }))
   return { ran, clock: mock.clock(on) }
 }
 
+const PET = { 'session-name': 'loyal-fly\n', 'claim-colour': 'blue\n' }
+const BIG_CHEESE = { 'role-name': 'big-cheese\n', 'session-name': 'big-cheese\n', 'claim-colour': 'red\n' }
+
 test('a session is named and coloured once it starts', async ($, on) => {
-  const { ran, clock } = engine(on, { 'session-name': 'loyal-fly\n', 'claim-colour': 'blue\n' })
+  const { ran, clock } = engine(on, PET)
 
   await $.session.start(START)
   await clock.settle()
@@ -44,7 +42,7 @@ test('a session is named and coloured once it starts', async ($, on) => {
 })
 
 test('/clear gives the session its name and colour back', async ($, on) => {
-  const { ran, clock } = engine(on, { 'session-name': 'loyal-fly\n', 'claim-colour': 'blue\n' })
+  const { ran, clock } = engine(on, PET)
   await $.session.start(START)
   await clock.settle()
   ran.length = 0
@@ -62,32 +60,20 @@ test('a script that fails leaves that part as Claude has it', async ($, on) => {
   expect(ran).toEqual(['/rename loyal-fly'])
 })
 
-test("a role's brief is the system prompt's last section", async ($, on) => {
-  engine(on, { 'session-name': 'big-cheese\n', 'claim-colour': 'red\n' })
-
-  await $.session.start(START)
-  const { sections } = await $.prompt.compose(COMPOSE)
-  expect(sections.map((s) => s.id)).toEqual(['intro', 'session-identity:role'])
-  expect(sections[1].text).toBe(ROLE)
-  expect(sections[1].scope).toBe('session')
-})
-
-test('a session with no role keeps the system prompt as it is', async ($, on) => {
-  engine(on, { 'session-name': 'loyal-fly\n', 'claim-colour': 'red\n' })
-
-  await $.session.start(START)
-  const { sections } = await $.prompt.compose(COMPOSE)
-  expect(sections.map((s) => s.id)).toEqual(['intro'])
-})
-
-const BIG_CHEESE = { 'session-name': 'big-cheese\n', 'claim-colour': 'red\n' }
-
 test('a role session starts on its own, once it has its name', async ($, on) => {
   const { ran, clock } = engine(on, BIG_CHEESE)
 
   await $.session.start(START)
   await clock.settle()
   expect(ran).toEqual(['/rename big-cheese', '/color red', 'prompt'])
+})
+
+test('a role with no brief is named but waits for you', async ($, on) => {
+  const { ran, clock } = engine(on, { 'role-name': 'dotty\n', 'session-name': 'dotty\n', 'claim-colour': 'red\n' })
+
+  await $.session.start(START)
+  await clock.settle()
+  expect(ran).toEqual(['/rename dotty', '/color red'])
 })
 
 test('a reload of the mod in the same process does not start the role again', async ($, on) => {
