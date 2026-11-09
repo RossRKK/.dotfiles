@@ -566,13 +566,12 @@ function M.open_from_lazygit(branch)
 end
 
 --- M.open for another program (.local/bin/worktree-tab) over `nvim
---- --remote-expr`. Answers at once with where the worktree is to be and the name
---- its terminal-1 Claude will take (claude-launch names it for its branch), so
---- the caller can wait for that session and hand it work; the tab itself opens
---- once the (async) checkout is done.
+--- --remote-expr`. Answers at once with where the worktree is to be, so the
+--- caller can wait for the Claude that starts there and hand it work; the tab
+--- itself opens once the (async) checkout is done.
 ---@param branch string
 ---@param cwd string a directory inside the repo
----@return string json: {"path": ..., "agent": ...} or {"error": ...}
+---@return string json: {"path": ...} or {"error": ...}
 function M.open_for_agent(branch, cwd)
   local root, err = M.root(cwd)
   if not root then
@@ -582,7 +581,7 @@ function M.open_for_agent(branch, cwd)
   vim.schedule(function()
     M.open(branch, cwd)
   end)
-  return vim.json.encode({ path = M.path(root, local_branch, existing(root)), agent = M.slug(local_branch) })
+  return vim.json.encode({ path = M.path(root, local_branch, existing(root)) })
 end
 
 --- Pick a branch to open as a worktree tab.

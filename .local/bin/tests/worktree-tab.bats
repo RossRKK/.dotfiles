@@ -12,42 +12,53 @@ setup() {
   chmod +x "$BATS_TEST_TMPDIR/bin/nvim"
   PATH="$BATS_TEST_TMPDIR/bin:$PATH"
   wt="$BATS_TEST_TMPDIR/repo/.worktrees/feat-x"
-  export ANSWER="{\"agent\":\"feat-x\",\"path\":\"$wt\"}"
+  export ANSWER="{\"path\":\"$wt\"}"
   cd "$BATS_TEST_TMPDIR/repo"
 }
 
-# Registers a session <name> in <dir> run by <pid>, reachable unless "nosocket".
+# Registers a session <name> in <dir> run by <pid>, started at <ms>, reachable
+# unless "nosocket".
 session() {
   local socket='"/run/s.sock"'
-  [ "${4-}" != nosocket ] || socket=null
-  printf '{"pid":%s,"name":"%s","cwd":"%s","messagingSocketPath":%s}\n' \
-    "$3" "$1" "$2" "$socket" >"$sessions/$3.json"
+  [ "${5-}" != nosocket ] || socket=null
+  printf '{"pid":%s,"name":"%s","cwd":"%s","startedAt":%s,"messagingSocketPath":%s}\n' \
+    "$3" "$1" "$2" "$4" "$socket" >"$sessions/$3.json"
 }
 
-@test "prints the tab's agent once it can be messaged" {
-  session feat-x "$wt" $$
+@test "prints the name of the Claude in the worktree once it can be messaged" {
+  session swift-otter "$wt" $$ 100
 
   run "$tab" --timeout 0 feat/x
-  [ "$status" -eq 0 ] && [ "$output" = feat-x ]
+  [ "$status" -eq 0 ] && [ "$output" = swift-otter ]
+}
+
+@test "of several Claudes in the worktree, the earliest started is terminal 1's" {
+  sleep 600 &
+  session later-one "$wt" $! 200
+  session first-one "$wt" $$ 100
+
+  run "$tab" --timeout 0 feat/x
+  kill $!
+  [ "$status" -eq 0 ] && [ "$output" = first-one ]
 }
 
 @test "asks nvim to open the branch from here, quoting both safely" {
-  session feat-x "$wt" $$
+  session swift-otter "$wt" $$ 100
 
   run "$tab" --timeout 0 "it's \"x\""
   grep -qF "[\"it's \\\"x\\\"\", \"$BATS_TEST_TMPDIR/repo\"]" "$BATS_TEST_TMPDIR/nvim-args"
 }
 
 @test "a session that is dead, elsewhere, or not yet listening doesn't count" {
-  session feat-x "$wt" 999999999
-  session feat-x "$BATS_TEST_TMPDIR/repo" $$
+  session dead-one "$wt" 999999999 1
+  session elsewhere "$BATS_TEST_TMPDIR/repo" $$ 1
   sleep 600 &
-  session feat-x "$wt" $! nosocket
+  session deaf-one "$wt" $! 1 nosocket
 
   run "$tab" --timeout 0 feat/x
   kill $!
   [ "$status" -eq 1 ]
-  [[ "$output" == *"no Claude named feat-x started in $wt"* ]]
+  [[ "$output" == *"no Claude started in $wt"* ]]
 }
 
 @test "nvim's error is passed on" {
