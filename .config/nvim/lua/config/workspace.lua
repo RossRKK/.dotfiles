@@ -390,7 +390,7 @@ end
 
 --- Set the current (or a new) tabpage up as a workspace on `dir`.
 ---@param dir string project directory
----@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer, agent?: boolean }
+---@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer, agent?: boolean, background?: boolean }
 ---   tab: open a new tabpage first, and scope the cwd to it with :tcd -- or,
 ---     if a workspace on `dir` is already open, switch to that instead of
 ---     opening a second one (slot is then ignored: it keeps its number).
@@ -401,6 +401,8 @@ end
 ---     directory buffer, which nvim creates for `nvim <dir>`).
 ---   slot: the workspace number to take, if free (see M.assign_slot).
 ---   agent: false leaves terminal 1 a plain shell instead of M.agent_shell.
+---   background: with tab, leave focus (and the mode) where it was once the tab
+---     is built, for a tab an agent opened rather than you.
 function M.open(dir, opts)
   opts = opts or {}
   dir = vim.fn.fnamemodify(dir, ":p"):gsub("/$", "")
@@ -409,10 +411,13 @@ function M.open(dir, opts)
     return
   end
 
+  local return_to = opts.background and M.focus()
   if opts.tab then
     local existing = M.find(dir)
     if existing then
-      vim.api.nvim_set_current_tabpage(existing)
+      if not return_to then
+        vim.api.nvim_set_current_tabpage(existing)
+      end
       return
     end
     vim.cmd("tabnew")
@@ -454,7 +459,37 @@ function M.open(dir, opts)
     -- the editor window is its final size. (snacks re-renders on WinResized,
     -- but edgy's sizing doesn't reliably produce one for this window.)
     Snacks.dashboard.update()
+    -- Building the tab has to happen in it: fishmonger and the sidebar act on the current tabpage.
+    if return_to then
+      M.restore_focus(return_to)
+    end
   end)
+end
+
+---@class workspace.Focus
+---@field tab integer
+---@field inserting boolean in insert or terminal mode
+
+--- Where focus is now, for M.restore_focus.
+---@return workspace.Focus
+function M.focus()
+  local mode = vim.api.nvim_get_mode().mode
+  return {
+    tab = vim.api.nvim_get_current_tabpage(),
+    inserting = mode:sub(1, 1) == "i" or mode:sub(1, 1) == "t",
+  }
+end
+
+--- Put focus back where M.focus found it; a tabpage closed since is left alone.
+---@param focus workspace.Focus
+function M.restore_focus(focus)
+  if not vim.api.nvim_tabpage_is_valid(focus.tab) then
+    return
+  end
+  vim.api.nvim_set_current_tabpage(focus.tab)
+  if focus.inserting then
+    vim.cmd("startinsert")
+  end
 end
 
 --- What a workspace's first terminal runs: Claude, back in this directory's last

@@ -303,3 +303,74 @@ describe("workspace.open on a directory already open", function()
     assert.is_nil(ws.find(root .. "/wt"))
   end)
 end)
+
+-- A tab an agent opens (worktree-tab) is built, then hands focus back.
+describe("workspace.open in the background", function()
+  local ws, dir, saved
+
+  before_each(function()
+    pcall(vim.cmd, "tabonly")
+    vim.t.workspace_slot = nil
+    saved = {
+      snacks = _G.Snacks,
+      greeter = package.loaded["config.greeter"],
+      sidebar = package.loaded["util.sidebar"],
+      fishmonger = package.loaded["fishmonger"],
+    }
+    _G.Snacks = { dashboard = { update = function() end } }
+    package.loaded["config.greeter"] = { open = function() end }
+    package.loaded["util.sidebar"] = { open = function() end }
+    package.loaded["fishmonger"] = { show = function(_, _) end }
+    package.loaded["config.workspace"] = nil
+    ws = require("config.workspace")
+    ws.set_label = function() end -- the tab label reads fishmonger and bufferline
+    ws.assign_slot()
+    dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+  end)
+
+  after_each(function()
+    pcall(vim.cmd, "tabonly")
+    vim.fn.delete(dir, "rf")
+    _G.Snacks = saved.snacks
+    package.loaded["config.greeter"] = saved.greeter
+    package.loaded["util.sidebar"] = saved.sidebar
+    package.loaded["fishmonger"] = saved.fishmonger
+  end)
+
+  --- Opens `dir` with `opts` and waits for open()'s deferred half to finish.
+  local function open(opts)
+    local tabs = #vim.api.nvim_list_tabpages()
+    local built = false
+    package.loaded["fishmonger"].show = function()
+      vim.schedule(function()
+        built = true
+      end)
+    end
+    ws.open(dir, opts)
+    assert.is_true(vim.wait(1000, function()
+      return built
+    end))
+    assert.equals(tabs + 1, #vim.api.nvim_list_tabpages())
+  end
+
+  it("builds the new tab, then returns to the tab you were on", function()
+    local origin = vim.api.nvim_get_current_tabpage()
+    open({ tab = true, background = true })
+    assert.equals(origin, vim.api.nvim_get_current_tabpage())
+    assert.is_not_nil(ws.find(dir))
+  end)
+
+  it("without background, leaves you on the new tab", function()
+    open({ tab = true })
+    assert.equals(ws.find(dir), vim.api.nvim_get_current_tabpage())
+  end)
+
+  it("does not switch to a tab already open on the directory", function()
+    open({ tab = true })
+    vim.cmd("tabprevious")
+    local origin = vim.api.nvim_get_current_tabpage()
+    ws.open(dir, { tab = true, background = true })
+    assert.equals(origin, vim.api.nvim_get_current_tabpage())
+  end)
+end)

@@ -368,8 +368,11 @@ end
 --- directory left behind at the expected path.
 ---@param branch string
 ---@param dir? string a directory inside the repo (default: the tab's cwd)
----@param on_open? fun(path: string) runs once the tab is open (creation is async)
-function M.open(branch, dir, on_open)
+---@param opts? { on_open?: fun(path: string), background?: boolean }
+---   on_open: runs once the tab is open (creation is async).
+---   background: leave focus where it is (config.workspace's option of that name).
+function M.open(branch, dir, opts)
+  opts = opts or {}
   branch = vim.trim(branch)
   if branch == "" then
     return
@@ -387,15 +390,19 @@ function M.open(branch, dir, on_open)
 
   -- Second half: the branch is now known (or known to be new); create the
   -- worktree if needed and open the tab.
+  local function open_tab(path)
+    M.touch(path)
+    require("config.workspace").open(path, { tab = true, background = opts.background })
+    if opts.on_open then
+      opts.on_open(path)
+    end
+  end
+
   local function create(ref)
     local local_branch = M.local_name(ref, locals, remotes)
     local path = M.path(root, local_branch, existing(root))
     if vim.fn.isdirectory(path) == 1 then
-      M.touch(path)
-      require("config.workspace").open(path, { tab = true })
-      if on_open then
-        on_open(path)
-      end
+      open_tab(path)
       return
     end
     git_async(
@@ -407,11 +414,7 @@ function M.open(branch, dir, on_open)
           status("git worktree add: " .. add_err, vim.log.levels.ERROR)
           return
         end
-        M.touch(path)
-        require("config.workspace").open(path, { tab = true })
-        if on_open then
-          on_open(path)
-        end
+        open_tab(path)
       end
     )
   end
@@ -579,7 +582,7 @@ function M.open_for_agent(branch, cwd)
   end
   local local_branch = M.local_name(vim.trim(branch), local_branches(root), remote_names(root))
   vim.schedule(function()
-    M.open(branch, cwd)
+    M.open(branch, cwd, { background = true })
   end)
   return vim.json.encode({ path = M.path(root, local_branch, existing(root)) })
 end

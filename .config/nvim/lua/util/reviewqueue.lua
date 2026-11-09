@@ -1245,7 +1245,7 @@ function M.open(pr, dir, mode)
       )
       return
     end
-    require("util.worktree").open(pr.head, dir, on_open)
+    require("util.worktree").open(pr.head, dir, { on_open = on_open })
   end
   -- git_async: a progress float, since a fetch in a big repo takes a while.
   require("util.worktree").git_async(
