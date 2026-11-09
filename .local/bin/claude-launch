@@ -6,10 +6,10 @@
 #
 # A session's name is derived from its id, so it is the same every time it is
 # resumed and an old unnamed session gets one too; terminal 1 of a checkout with
-# a standing role, or of a worktree, is named for the role or branch instead
-# (role_name). A new session (a fork too) is given its id here; -c resumes this
-# directory's newest conversation by id. Every launch is recoloured, since a
-# saved colour may now belong to a live session.
+# a standing role is named for the role instead (role_name). A new session (a
+# fork too) is given its id here; -c resumes this directory's newest
+# conversation by id. Every launch is recoloured, since a saved colour may now
+# belong to a live session.
 # Any other arguments pass straight through: Claude takes only one opening
 # prompt, and ours ("/color ...") would collide with the caller's.
 #
@@ -76,27 +76,14 @@ name_for() {
 }
 
 # Terminal 1 of these checkouts holds a standing role, under a fixed name other
-# sessions can always address it by; terminal 1 of a worktree is named for its
-# branch, so whoever opened the worktree knows who to hand work to
-# (worktree-tab). Fails for any other session.
+# sessions can always address it by. Fails for any other session.
 role_name() {
   [ "${WORKSPACE_TERMINAL-}" = 1 ] || return 1
   case $(pwd -P) in
   "$(realpath -m "$HOME/ionics")") echo big-cheese ;;
   "$(realpath -m "$HOME/.dotfiles")") echo dotty ;;
-  *) worktree_branch_name ;;
+  *) return 1 ;;
   esac
-}
-
-# This linked worktree's branch as one name component (feat/x -> feat-x), as
-# util/worktree.lua slugs it. Fails in a main checkout or on a detached HEAD.
-worktree_branch_name() {
-  local git_dir branch
-  git_dir=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 1
-  [ "$git_dir" != "$(git rev-parse --path-format=absolute --git-common-dir)" ] || return 1
-  branch=$(git branch --show-current)
-  [ -n "$branch" ] || return 1
-  printf '%s\n' "${branch//\//-}"
 }
 
 # Under a lock so sessions started together don't pick the same colour.

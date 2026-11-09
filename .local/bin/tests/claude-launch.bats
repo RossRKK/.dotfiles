@@ -178,23 +178,14 @@ repo() {
   git -C repo -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
 }
 
-@test "terminal 1 of a worktree is named for its branch" {
-  repo
-  git -C repo worktree add -q -b feat/thing .worktrees/feat-thing
-  cd repo/.worktrees/feat-thing
-
-  WORKSPACE_TERMINAL=1 run "$launch" "$claude"
-  [ "$(name_of)" = feat-thing ]
-}
-
-@test "other terminals of a worktree, its main checkout and a detached worktree keep the name from their id" {
+@test "a worktree's terminals, its main checkout and a detached worktree keep the name from their id" {
   repo
   git -C repo worktree add -q -b feat/thing .worktrees/feat-thing
   git -C repo worktree add -q --detach .worktrees/detached
   pet="pet-$((16#$(printf '%s' "$new_id" | sha256sum | cut -c1-15)))"
 
   cd repo/.worktrees/feat-thing
-  WORKSPACE_TERMINAL=2 run "$launch" "$claude"
+  WORKSPACE_TERMINAL=1 run "$launch" "$claude"
   [ "$(name_of)" = "$pet" ]
 
   cd ../detached

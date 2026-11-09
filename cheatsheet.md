@@ -247,11 +247,11 @@ Terminal 1's Claude runs with `WORKSPACE_TERMINAL=1`, and in two checkouts the
 launcher gives it a fixed name. In the main ionics checkout it is **big-cheese**
 (`claude-plugins/big-cheese`): it keeps the board of what every session is doing,
 the reviews you owe, your PRs and your tickets, and tells you which need you. In
-`~/.dotfiles` it is **dotty**. In a worktree it is named for the branch
-(`feat/x` -> `feat-x`), so the session that opened the worktree knows who to
-hand work to: agents run `worktree-tab <branch>` instead of making worktrees
-themselves, which opens the branch as a tab here (resolved as `Alt+B w` resolves
-it) and prints that name once its Claude can take messages.
+`~/.dotfiles` it is **dotty**. Everywhere else, worktrees included, it keeps
+its pet name. Agents run `worktree-tab <branch>` instead of making worktrees
+themselves: it opens the branch as a tab here (resolved as `Alt+B w` resolves
+it) and prints the name of the Claude that starts there once it can take
+messages, so the agent knows who to hand the work to.
 
 Buffers are global in Vim, but the bufferline shows only those under the current
 tab's project, and `Shift+L`/`Shift+H` cycle that filtered list.
