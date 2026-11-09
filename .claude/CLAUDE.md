@@ -38,6 +38,26 @@ My neovim config has a shortcut to jump to a line when in the form
 `path/to/file[:line]`. This path must be from the repo root. When referencing
 files include these paths so it is easy for me to jump where you're referencing.
 
+# big-cheese and dotty
+
+Two sessions have standing roles and fixed names, so any session can
+`SendMessage` them by name. `claude-launch` names terminal 1 of these checkouts.
+
+- **big-cheese**: terminal 1 of the main ionics checkout. It keeps a bird's-eye
+  view of every session, the reviews I owe, my PRs and my tickets, and tells me
+  what needs my input (`claude-plugins/big-cheese`). It already hears when you
+  go idle. Tell it in one line when you open, merge or abandon a PR, or finish a
+  ticket. Ask it when you need to know what another session is doing.
+- **dotty**: terminal 1 of `~/.dotfiles`, the session working on my dotfiles:
+  nvim, the Claude launcher and plugins, and this file.
+
+Only those two sessions take those roles. If you are any other session, carry
+on with your own task.
+
+Only big-cheese talks to other people's Claude sessions, for example through a
+shared artifact's comments. Any other session must not contact them, even when
+it has the link: ask big-cheese to pass the message on.
+
 # Attribution
 
 When opening a PR yourself title it "Claude's Blog" I will add my own

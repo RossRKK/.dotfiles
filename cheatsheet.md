@@ -243,6 +243,12 @@ agent-view row in the same colour as its prompt bar. Arguments other than a bare
 `-c` / `-r [id]` / `-r <id> --fork-session` pass through unnamed and uncoloured;
 the `-r` picker is coloured but not named.
 
+Terminal 1's Claude runs with `WORKSPACE_TERMINAL=1`, and in two checkouts the
+launcher gives it a fixed name. In the main ionics checkout it is **big-cheese**
+(`claude-plugins/big-cheese`): it keeps the board of what every session is doing,
+the reviews you owe, your PRs and your tickets, and tells you which need you. In
+`~/.dotfiles` it is **dotty**.
+
 Buffers are global in Vim, but the bufferline shows only those under the current
 tab's project, and `Shift+L`/`Shift+H` cycle that filtered list.
 
