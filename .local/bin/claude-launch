@@ -4,8 +4,8 @@
 #
 #   claude-launch <claude> [args...]
 #
-# A new session gets a petname; a resumed one keeps the name it was saved with
-# but is recoloured, since its saved colour may now belong to a live session.
+# A new session (a fork too) gets a petname; a resumed one keeps the name it was
+# saved with but is recoloured, since its saved colour may now be taken.
 # Any other arguments pass straight through: Claude takes only one opening
 # prompt, and ours ("/color ...") would collide with the caller's.
 #
@@ -27,22 +27,24 @@ main() {
     plugins+=("$1" "$2")
     shift 2
   done
-  if [ $# -eq 0 ]; then
-    name=(--name "$(petname --lists small)")
-  elif ! resuming "$@"; then
-    exec "$claude" "${plugins[@]}" "$@"
-  fi
+  case $(session_kind "$@") in
+  new) name=(--name "$(petname --lists small)") ;;
+  resumed) ;;
+  other) exec "$claude" "${plugins[@]}" "$@" ;;
+  esac
   mkdir -p "$dir"
   local colour
   colour=$(claim_colour)
   exec "$claude" "${plugins[@]}" "${name[@]}" "/color $colour" "$@"
 }
 
-resuming() {
-  case $1 in
-  -c | --continue) [ $# -eq 1 ] ;;
-  -r | --resume) [ $# -le 2 ] ;;
-  *) false ;;
+# new, resumed, or other: arguments this launcher leaves alone.
+session_kind() {
+  case "$#:${1-}:${3-}" in
+  0::) echo new ;;
+  1:-c: | 1:--continue: | [12]:-r: | [12]:--resume:) echo resumed ;;
+  3:-r:--fork-session | 3:--resume:--fork-session) echo new ;;
+  *) echo other ;;
   esac
 }
 

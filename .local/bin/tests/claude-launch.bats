@@ -78,6 +78,11 @@ live_claim() {
   [ "${lines[1]}" = -c ]
 }
 
+@test "a fork is a new session, so it gets its own name" {
+  run "$launch" "$claude" --resume abc --fork-session
+  [ "${lines[*]:0:6}" = "--name calm-otter /color red --resume abc --fork-session" ]
+}
+
 @test "plugin dirs ahead of the caller's arguments are kept and don't count as arguments" {
   run "$launch" "$claude" --plugin-dir /a --plugin-dir /b --resume abc
   [ "${lines[*]:0:6}" = "--plugin-dir /a --plugin-dir /b /color red --resume" ]
