@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Prints the colour claude-launch claimed for the claude process this runs
+# under ($XDG_RUNTIME_DIR/claude-agents/<pid>.colour), or fails when there is
+# no claude above it or no claim for it (a session started without the launcher).
+set -euo pipefail
+
+dir=${XDG_RUNTIME_DIR:-/tmp}/claude-agents
+
+main() {
+  local agent
+  agent=$(claude_pid)
+  jq -er .colour "$dir/$agent.colour" 2>/dev/null
+}
+
+# The nearest claude process above this script; fails when there is none.
+claude_pid() {
+  local pid=$PPID line
+  while [ "$pid" -gt 1 ] 2>/dev/null; do
+    # nix's binary is .claude-unwrapped, which comm truncates to 15 chars.
+    case $(cat "/proc/$pid/comm" 2>/dev/null) in
+    claude | .claude-unwrapp) echo "$pid" && return 0 ;;
+    esac
+    # ppid follows the state after the LAST ")", since comm may contain one.
+    line=$(cat "/proc/$pid/stat" 2>/dev/null) || return 1
+    pid=$(printf '%s' "${line##*) }" | cut -d' ' -f2)
+  done
+  return 1
+}
+
+main
