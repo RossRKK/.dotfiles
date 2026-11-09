@@ -233,3 +233,13 @@ describe("worktree.order", function()
     assert.are.same("x", out[1].name)
   end)
 end)
+
+describe("worktree.path", function()
+  it("uses wherever git already has the branch checked out", function()
+    assert.equals("/elsewhere/x", worktree.path("/repo", "feat/x", { ["feat/x"] = "/elsewhere/x" }))
+  end)
+
+  it("puts a new one under .worktrees, flattened", function()
+    assert.equals("/repo/.worktrees/feat-x", worktree.path("/repo", "feat/x", { main = "/repo" }))
+  end)
+end)

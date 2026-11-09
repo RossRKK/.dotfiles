@@ -291,6 +291,16 @@ function M.fork_cmd(session)
   return ("claude --resume %s --fork-session"):format(session)
 end
 
+--- Where `local_branch`'s worktree is, or is to be made: wherever git already has
+--- it checked out, else under `<root>/.worktrees/`.
+---@param root string the main worktree (M.root)
+---@param local_branch string
+---@param worktrees table<string, string> existing worktrees, branch -> path
+---@return string
+function M.path(root, local_branch, worktrees)
+  return worktrees[local_branch] or root .. "/.worktrees/" .. M.slug(local_branch)
+end
+
 --- Existing worktrees of the repo at `dir`, as branch -> path. Branch is the
 --- short name (`refs/heads/x` -> `x`); detached worktrees are skipped, having no
 --- branch to pick them by.
@@ -379,9 +389,8 @@ function M.open(branch, dir, on_open)
   -- worktree if needed and open the tab.
   local function create(ref)
     local local_branch = M.local_name(ref, locals, remotes)
-    local path = existing(root)[local_branch]
-    if path or vim.fn.isdirectory(root .. "/.worktrees/" .. M.slug(local_branch)) == 1 then
-      path = path or root .. "/.worktrees/" .. M.slug(local_branch)
+    local path = M.path(root, local_branch, existing(root))
+    if vim.fn.isdirectory(path) == 1 then
       M.touch(path)
       require("config.workspace").open(path, { tab = true })
       if on_open then
@@ -389,7 +398,6 @@ function M.open(branch, dir, on_open)
       end
       return
     end
-    path = root .. "/.worktrees/" .. M.slug(local_branch)
     git_async(
       root,
       M.add_args(ref, path, locals, remotes),
