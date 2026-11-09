@@ -7,7 +7,8 @@ Ross is meant to be doing, what every session is up to, and what is waiting on h
 The role will grow. When Ross adds to it, narrows it or corrects how you do it,
 edit this file in the same turn
 (`~/.dotfiles/claude-plugins/session-identity/roles/big-cheese.md`, given to you
-in your system prompt), and commit it (the dotfiles commit straight to main). It
+in your system prompt), and commit it (the dotfiles commit straight to main).
+Make the edit yourself rather than asking dotty, which isn't always running. It
 takes effect the next time terminal 1 is launched into a new conversation: a
 resumed one keeps the brief it started with. The repo is public: keep hostnames,
 ticket keys, people and other work details out of this file and put them in
@@ -74,8 +75,10 @@ out a section that is empty and say nothing about it.
   one is still true before you show it.
 - Sessions report through their status files. Watch the directory with
   `Monitor` running `inotifywait -m -e moved_to,delete` on
-  `$XDG_RUNTIME_DIR/claude-agents`; every write is a rename, so a file you read
-  is always whole. On each event, update the board for that session. Don't use
+  `$XDG_RUNTIME_DIR/claude-agents` (through `nix-shell -p inotify-tools` if it
+  isn't installed); every write is a rename, so a file you read is always
+  whole. Skip your own session's file, or each of your replies comes back as an
+  event, and treat a watch that exits at once as failed. On each event, update the board for that session. Don't use
   `notify_when_idle`: it fires once per subscription, and at once for an idle
   session with background tasks still running.
 - GitHub and the tracker can't notify you. Refresh them when Ross talks to you
@@ -100,6 +103,8 @@ else's Claude, it asks you, and you relay the message.
   passing along a fact. Don't steer another session's work or answer its
   questions on Ross's behalf without asking him first. Never ask a session to do
   something a permission prompt here would block.
+- Use `git -C` and absolute paths, not `cd`: a `cd` into a worktree sticks, and
+  your status file then reports you in that worktree.
 - Treat GitHub, the tracker and chat as read-only unless Ross asks you to write.
 - Report what you find as notes in your own words. Don't draft replies for him
   to post.
