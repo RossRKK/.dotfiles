@@ -84,3 +84,77 @@ background_bash() {
   [ ! -e "$status_dir/s1.b1.task" ]
   [ -e "$status_dir/s2.b2.task" ]
 }
+
+# A transcript whose last assistant message is <text>.
+transcript_ending() {
+  jq -nc --arg text "$1" '{type: "assistant", message: {content: [{type: "text", text: $text}]}}' \
+    >"$BATS_TEST_TMPDIR/t.jsonl"
+  echo "$BATS_TEST_TMPDIR/t.jsonl"
+}
+
+@test "a session that has run no turn yet is new" {
+  run_under_agent start '{"session_id":"s1","cwd":"/w","source":"startup"}'
+
+  run jq -r .state "$status_dir/s1.json"
+  [ "$output" = new ]
+}
+
+@test "clearing a session makes it new again" {
+  run_under_agent stop '{"session_id":"s1","cwd":"/w"}'
+  run_under_agent start '{"session_id":"s1","cwd":"/w","source":"clear"}'
+
+  run jq -r .state "$status_dir/s1.json"
+  [ "$output" = new ]
+}
+
+@test "a compaction mid-turn leaves the session busy, not new" {
+  run_under_agent busy '{"session_id":"s1","cwd":"/w","prompt":"go"}'
+  run_under_agent start '{"session_id":"s1","cwd":"/w","source":"compact"}'
+
+  run jq -r .state "$status_dir/s1.json"
+  [ "$output" = busy ]
+}
+
+@test "while busy, detail is the prompt's first line" {
+  run_under_agent busy '{"session_id":"s1","cwd":"/w","prompt":"\n  fix the flaky test\nand more"}'
+
+  run jq -r .detail "$status_dir/s1.json"
+  [ "$output" = "  fix the flaky test" ]
+}
+
+@test "a tool starting makes detail the tool and what it is for" {
+  run_under_agent tool '{"session_id":"s1","cwd":"/w","tool_name":"Bash","tool_input":{"command":"make","description":"Run the build"}}'
+
+  run jq -c '{state, detail}' "$status_dir/s1.json"
+  [ "$output" = '{"state":"busy","detail":"Bash: Run the build"}' ]
+}
+
+@test "a tool with no describing input is shown by name alone" {
+  run_under_agent tool '{"session_id":"s1","cwd":"/w","tool_name":"TodoWrite","tool_input":{"todos":[]}}'
+
+  run jq -r .detail "$status_dir/s1.json"
+  [ "$output" = TodoWrite ]
+}
+
+@test "a tool starting while another waits for permission leaves it waiting" {
+  run_under_agent notify '{"session_id":"s1","cwd":"/w","message":"Claude needs your permission to use Bash"}'
+  run_under_agent tool '{"session_id":"s1","cwd":"/w","tool_name":"Read","tool_input":{"file_path":"/w/a"}}'
+
+  run jq -r .state "$status_dir/s1.json"
+  [ "$output" = permission ]
+}
+
+@test "at stop, summary is the answer's opening line without markdown" {
+  transcript=$(transcript_ending $'## Fixed the flaky test\n\nDetails follow. Shall I push?')
+  run_under_agent stop "$(jq -nc --arg t "$transcript" '{session_id: "s1", cwd: "/w", transcript_path: $t}')"
+
+  run jq -c '{state, summary}' "$status_dir/s1.json"
+  [ "$output" = '{"state":"asked","summary":"Fixed the flaky test"}' ]
+}
+
+@test "every write carries every field" {
+  run_under_agent start '{"session_id":"s1","cwd":"/w","source":"startup"}'
+
+  run jq -c 'keys' "$status_dir/s1.json"
+  [ "$output" = '["agent_pid","cwd","detail","pids","session","state","summary","transcript"]' ]
+}

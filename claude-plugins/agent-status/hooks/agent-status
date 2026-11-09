@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Publish a Claude Code session's state to a file, for fishmonger's agent view
-# (lua/fishmonger/agent.lua) to read.
+# (lua/fishmonger/agent.lua) and the big-cheese session to read.
 #
 # WHY A FILE. The only status Claude Code emits by itself is the glyph it puts
 # at the front of its OSC title, which distinguishes "thinking" from "not
@@ -13,6 +13,7 @@
 # Wired to several hook events by hooks.json alongside this script,
 # each passing the event as $1; the hook's JSON payload arrives on stdin.
 #
+#   agent-status start        SessionStart          (.source decides)
 #   agent-status busy         UserPromptSubmit
 #   agent-status ran          PostToolUse           (a background task is recorded)
 #   agent-status tool         PreToolUse            (.tool_name decides)
@@ -22,7 +23,8 @@
 #
 # Output: $XDG_RUNTIME_DIR/claude-agents/<session_id>.json, plus one
 # <session_id>.<task_id>.task per background Bash task, all written atomically
-# (write to .tmp, rename) so a reader never sees half a file.
+# (write to .tmp, rename) so a reader never sees half a file. Every write
+# carries every field, so a reader never meets a missing key.
 set -euo pipefail
 
 event=${1:-busy}
@@ -52,6 +54,22 @@ last_assistant() {
     | map(select(.type == "text") | .text)
     | join("\n")
   ' 2>/dev/null || true
+}
+
+# What a tool call is doing, in one line: the tool and the first of its inputs
+# that says what it is for or what it touches.
+activity() {
+  printf '%s' "$payload" | jq -r '
+    .tool_name as $tool
+    | [.tool_input // {} | (.description, .file_path, .command, .pattern, .url, .query, .prompt)
+       | strings | select(. != "")] as $inputs
+    | if $inputs == [] then $tool else "\($tool): \($inputs[0] | split("\n")[0] | .[0:100])" end
+  ' 2>/dev/null || true
+}
+
+# The state last recorded for this session, or nothing.
+current_state() {
+  jq -r '.state // empty' "$dir/$session.json" 2>/dev/null || true
 }
 
 # Records a background Bash task. Its pid and output path come from the agent's
@@ -85,14 +103,25 @@ write_atomically() {
 
 state=$event
 detail=
+summary=
 task_id=
 
 case $event in
+start)
+  # A compaction can land mid-turn and starts nothing over, so it keeps the state.
+  if [ "$(get .source)" = compact ] && [ -n "$(current_state)" ]; then
+    exit 0
+  fi
+  # No turn yet since the session started, was resumed or was cleared.
+  state=new
+  ;;
 busy)
   state=busy
+  detail=$(get .prompt | sed -n '/[^[:space:]]/{p;q}' | cut -c1-120)
   ;;
 ran)
   state=busy
+  detail=$(activity)
   # Set both for run_in_background and for a foreground call Claude backgrounded.
   task_id=$(get .tool_response.backgroundTaskId)
   ;;
@@ -108,7 +137,14 @@ tool)
     state=plan
     detail="plan ready for review"
     ;;
-  *) exit 0 ;; # any other tool is just work in progress; leave the state alone
+  *)
+    # A tool starting alongside one that is blocked on you doesn't unblock it.
+    case $(current_state) in
+    permission | asking | plan) exit 0 ;;
+    esac
+    state=busy
+    detail=$(activity)
+    ;;
   esac
   ;;
 notify)
@@ -125,8 +161,7 @@ notify)
     # cleanly -- Stop has already said "done" (or "asked"), and the nudge knows
     # less than Stop did. It may only repair a session still marked busy, i.e.
     # a real block whose original notification we somehow missed.
-    current=$(jq -r '.state // empty' "$dir/$session.json" 2>/dev/null || true)
-    [ "$current" = busy ] || exit 0
+    [ "$(current_state)" = busy ] || exit 0
     state=idle
     ;;
   *) exit 0 ;;
@@ -143,8 +178,9 @@ stop)
   else
     state=done
   fi
-  # The first line of the answer is a usable summary of what it's waiting on.
+  # The answer's end says what it's waiting on; its opening line, what it did.
   detail=$(printf '%s' "$text" | tail -c 400 | tr '\n' ' ' | sed -e 's/  */ /g' -e 's/^ *//' | tail -c 120)
+  summary=$(printf '%s' "$text" | sed -n '/[^[:space:]]/{s/^[#>*_[:space:]-]*//;p;q}' | cut -c1-160)
   ;;
 end)
   rm -f "$dir/$session.json" "$dir/$session".*.task
@@ -183,10 +219,12 @@ jq -nc \
   --arg session "$session" \
   --arg state "$state" \
   --arg detail "$detail" \
+  --arg summary "$summary" \
   --arg cwd "$cwd" \
   --arg transcript "$transcript" \
   --arg pids "$pids" \
   --argjson agent "$agent" \
-  '{session: $session, state: $state, detail: $detail, cwd: $cwd, agent_pid: $agent,
-    transcript: $transcript, pids: ($pids | split(" ") | map(select(. != "") | tonumber))}' |
+  '{session: $session, state: $state, detail: $detail, summary: $summary, cwd: $cwd,
+    agent_pid: $agent, transcript: $transcript,
+    pids: ($pids | split(" ") | map(select(. != "") | tonumber))}' |
   write_atomically "$dir/$session.json"
