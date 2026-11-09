@@ -37,7 +37,7 @@ end
 --- both agree.
 ---
 --- "<repo> - <branch>", so a worktree reads as the repo and the
---- branch it holds (ionics/.worktrees/rkk-some-branch -> "ionics -
+--- branch it holds (myrepo/.worktrees/rkk-some-branch -> "myrepo -
 --- rkk/some-branch") rather than as its checkout directory. Drawn from the
 --- greeter's cached branch report (config.greeter fetches one per workspace
 --- and watches the git dirs, so it follows checkouts); before the report lands
