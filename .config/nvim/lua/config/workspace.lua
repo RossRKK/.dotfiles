@@ -460,10 +460,15 @@ end
 --- What a workspace's first terminal runs: Claude, back in this directory's last
 --- conversation (claude-launch starts a new one when there is none). fish -C
 --- runs it at the prompt, so a shell remains once Claude exits.
+--- WORKSPACE_TERMINAL tells that Claude which terminal it is in (see the
+--- big-cheese plugin).
 ---@param user_manager boolean see util/background.lua
 ---@return string|string[]
 function M.agent_shell(user_manager)
-  return require("util.background").command({ "fish", "-C", "claude --continue" }, user_manager)
+  return require("util.background").command(
+    { "env", "WORKSPACE_TERMINAL=1", "fish", "-C", "claude --continue" },
+    user_manager
+  )
 end
 
 --- Fast path: pick a known project. Type a couple of letters of somewhere you
