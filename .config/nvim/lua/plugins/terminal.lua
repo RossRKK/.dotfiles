@@ -11,12 +11,11 @@ return {
     config = function(_, opts)
       require("snacks").setup(opts)
 
-      -- Normal mode only: terminal programs need <C-g> (Claude Code's edit in
-      -- $EDITOR, fish's cancel), so from a terminal it's <C-n> first. A leader
-      -- map can't serve -- <space> in a terminal would stutter waiting for it.
+      -- Terminal mode too: lazygit is worth more than <C-g> inside terminal
+      -- programs. A leader map can't serve -- <space> would stutter there.
       -- <C-S-g> instead pops a project picker to drive a repo other than nvim's
       -- cwd (e.g. within a polyrepo tree).
-      vim.keymap.set("n", "<C-g>", function()
+      vim.keymap.set({ "n", "t" }, "<C-g>", function()
         require("util.lazygit").open()
       end, { desc = "Open git TUI (lazygit)" })
       vim.keymap.set("n", "<C-S-g>", function()
