@@ -3,9 +3,9 @@
 local assert = require("luassert")
 
 describe("workspace.agent_shell", function()
-  it("continues this directory's last Claude conversation, else starts one, at a fish prompt", function()
+  it("continues this directory's last Claude conversation at a fish prompt", function()
     assert.same(
-      { "fish", "-C", "claude --continue; or claude" },
+      { "fish", "-C", "claude --continue" },
       require("config.workspace").agent_shell(false)
     )
   end)

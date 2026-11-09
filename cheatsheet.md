@@ -235,12 +235,13 @@ OS window title still tracks the workspace you're _in_.)
 Opening a workspace starts **Claude in terminal 1**, continuing that directory's
 last conversation (`claude --continue`), or a new one if there is none; quitting
 it leaves a fish prompt. Every `claude` goes through `.local/bin/claude-launch`,
-which gives a new session a **name** (`--name`, e.g. `calm-otter`) and every
-session, resumed ones included, the `/color` fewest live sessions are using. The
-name is what other sessions address it by (`ListAgents` / `SendMessage`), and
-fishmonger draws that terminal's tab and agent-view row in the same colour as its
-prompt bar. Arguments other than a bare `-c` / `-r [id]` / `-r <id>
---fork-session` pass through unnamed and uncoloured.
+which gives each session a **name** derived from its id (`--name`, e.g.
+`calm-otter` -- the same every time it is resumed, old sessions included) and the
+`/color` fewest live sessions are using. The name is what other sessions address
+it by (`ListAgents` / `SendMessage`), and fishmonger draws that terminal's tab and
+agent-view row in the same colour as its prompt bar. Arguments other than a bare
+`-c` / `-r [id]` / `-r <id> --fork-session` pass through unnamed and uncoloured;
+the `-r` picker is coloured but not named.
 
 Buffers are global in Vim, but the bufferline shows only those under the current
 tab's project, and `Shift+L`/`Shift+H` cycle that filtered list.
