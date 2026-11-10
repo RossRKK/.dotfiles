@@ -63,6 +63,23 @@
         "type": "github"
       }
     },
+    "neovim": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794258397,
+        "narHash": "sha256-lMRojWCwqAN21GSWNZoh+POOcAUWXKbLT5PGzfLpHj8=",
+        "owner": "noib3",
+        "repo": "neovim",
+        "rev": "3be3b599b8723a47ed0160c90b2a42b9afd32d63",
+        "type": "github"
+      },
+      "original": {
+        "owner": "noib3",
+        "ref": "libvterm-to-libghostty",
+        "repo": "neovim",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1793706278,
@@ -139,6 +156,7 @@
         "claude-code": "claude-code",
         "home-manager": "home-manager",
         "kache": "kache",
+        "neovim": "neovim",
         "nixpkgs": "nixpkgs_2",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "plasma-manager": "plasma-manager"

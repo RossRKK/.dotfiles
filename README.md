@@ -243,6 +243,25 @@ hms
 
 Commit the updated `flake.lock` afterwards.
 
+### Neovim from any ref
+
+Neovim comes from the `neovim` input in `flake.nix` rather than nixpkgs, so
+it can be any branch, tag or commit of any fork:
+
+```nix
+neovim = {
+  url = "github:noib3/neovim/libvterm-to-libghostty"; # or github:neovim/neovim/v0.12.4
+  flake = false;
+};
+```
+
+Then run `nix flake update neovim --flake ~/.dotfiles && hms`. A ref whose
+source is identical to nixpkgs' (stable or unstable) neovim is that package,
+so it comes from the binary cache. Any other ref is built locally from
+nixpkgs' recipe, with the tree-sitter grammars and, where the source pins one,
+the libghostty-vt that its `cmake.deps/deps.txt` names (see `neovim.nix`). A
+branch moves only when you run `nix flake update neovim`.
+
 ## Usage
 
 Edit any config file directly in `~/.dotfiles` — changes are live immediately.

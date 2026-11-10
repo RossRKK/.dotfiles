@@ -25,6 +25,12 @@
       url = "github:kunobi-ninja/kache/stable";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
+    # The neovim source every host builds; see neovim.nix. Point it at any ref
+    # (a release tag comes from the binary cache) and `nix flake update neovim`.
+    neovim = {
+      url = "github:noib3/neovim/libvterm-to-libghostty";
+      flake = false;
+    };
     plasma-manager = {
       url = "github:nix-community/plasma-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -32,7 +38,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, plasma-manager, claude-code, kache, ... }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, plasma-manager, claude-code, kache, neovim, ... }:
     let
       # Linux hosts (personal, work) take atmos/poethepoet/opentofu from
       # unstable, see the nixpkgs-unstable input comment above.
@@ -54,7 +60,12 @@
             openspec = pkgs-unstable.openspec;
             claude-code = claude-code.packages.${system}.default;
             kache = kache.packages.${system}.default;
-          }) ];
+          })
+          (import ./neovim.nix {
+            src = neovim;
+            releases = [ pkgs-unstable.neovim-unwrapped ];
+          })
+        ];
         };
 
       pkgsDarwin = system: import nixpkgs {
@@ -63,7 +74,12 @@
         overlays = [ (final: prev: {
           claude-code = claude-code.packages.${system}.default;
           kache = kache.packages.${system}.default;
-        }) ];
+        })
+        (import ./neovim.nix {
+          src = neovim;
+          releases = [ ];
+        })
+      ];
       };
     in {
       homeConfigurations."rossrkk@personal" = home-manager.lib.homeManagerConfiguration {
