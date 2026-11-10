@@ -51,14 +51,13 @@ export const register: Register = (on) => {
   on('tool.call', { tool: UPDATE_TOOL }, async ($, e) => {
     const parsed = parseUpdate(e)
     if (parsed.kind === 'invalid') return { deny: `The board was not changed: ${parsed.problems.join('; ')}` }
-    let wasEmpty = false
-    const changed = await update($, items, (now) => {
-      wasEmpty = (now ?? []).length === 0
-      return applyUpdate(now ?? [], parsed.update)
-    })
+    // The stored board, not this session's copy: another session in the checkout may have written since.
+    const before = await load($)
+    const changed = applyUpdate(before, parsed.update)
     await save($, changed)
+    await update($, items, () => changed)
     // Only a board that was empty pops up, so one the user closed stays closed.
-    if (wasEmpty && changed.length > 0) void $.ui.open(PANE)
+    if (before.length === 0 && changed.length > 0) void $.ui.open(PANE)
     return { result: describe(changed) }
   })
 

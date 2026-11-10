@@ -104,6 +104,15 @@ test('an update to a board with items on it leaves a closed pane closed', async 
   expect(opened).toEqual(['todo-board'])
 })
 
+test('an update builds on the stored board, so a write from another session in the checkout survives', async ($, on) => {
+  const { store } = engine(on)
+  await $.session.start(START)
+  store['board:/work'] = [REVIEW]
+
+  await $.tool.call({ tool: 'mcp__todo-board__update', upsert: [{ ...REVIEW, id: 'ABC-2' }] })
+  expect((store['board:/work'] as Item[]).map((i) => i.id)).toEqual(['ABC-1', 'ABC-2'])
+})
+
 test('an invalid update is refused and changes nothing', async ($, on) => {
   const { store } = engine(on, { 'board:/work': [REVIEW] })
   await $.session.start(START)
