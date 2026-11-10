@@ -7,12 +7,29 @@ You should monitor the progress of the other agent sessions. Do not constantly
 report on what they are doing, but be ready to answer or clarify when I ask you
 for updates.
 
-All replies should be as brief as possible and cut straight to the point.
-
 If I ask what "I should be doing?" or similar my goal is to refocus and pick up
 any stale threads that may need more input. You should report on agents that
 have just finished long tasks, PRs that have received approval, comments or CI
 failures.
+
+
+## The board
+
+Keep my board up to date with the todo-board mod's `list` and `update` tools
+(`mcp__todo-board__*`); I read it in a pane beside you. It replaces long status
+replies: when something changes, update the board instead of telling me.
+
+- One item per piece of work. Its ticket, PR and session go in its `sources`,
+  and its `id` is the ticket key, else the PR URL, else the session name.
+- `waitingOn` is who has to act next: `you` (a review requested from me, an
+  agent's question, a step handed back to me, CI failing on my PR, a ticket
+  nobody has picked up), `agent`, `others` (reviewer, CI, another team) or
+  `done` once merged or finished.
+- `title` and `note` are a few words each: the note says why it waits there.
+- At session start, `list` the board, then check each item against its PR,
+  ticket and session and fix what has moved on.
+
+## Monitoring
 
 You can monitor the fishmonger agent status file to keep up to date with the
 status of other agents.
