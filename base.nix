@@ -13,6 +13,8 @@ let
   link = path: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/${path}";
 in
 {
+  imports = [ ./kache.nix ];
+
   # Home for repo-tracked scripts (clipboard-copy, git-worktree-clean — see home.file).
   home.sessionPath = [ "$HOME/.local/bin" ];
 
@@ -176,7 +178,6 @@ in
   home.sessionVariables = {
     EDITOR = "nvim";
     CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1";
-    RUSTC_WRAPPER = "${pkgs.kache}/bin/kache";
   } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     # bindgen dlopens libclang at build time; there's no FHS path to find it on NixOS.
     LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
