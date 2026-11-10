@@ -17,6 +17,7 @@ const REVIEW: Item = {
   title: 'Review the cache PR',
   waitingOn: 'you',
   note: 'review requested',
+  priority: 'normal',
   sources: [{ kind: 'pr', ref: 'https://github.com/acme/app/pull/7' }],
 }
 
@@ -69,7 +70,7 @@ test('a first item on an empty board is stored for the checkout, opens the pane 
   const ui = await $.ui.mount(PANE)
 
   const ran = await $.tool.call({ tool: 'mcp__todo-board__update', upsert: [REVIEW] })
-  expect(ran.text ?? ran.result).toBe('You:\n- [ABC-1] Review the cache PR: review requested (acme/app#7)')
+  expect(ran.text ?? ran.result).toBe('You:\n- [ABC-1, normal] Review the cache PR: review requested (acme/app#7)')
   expect(store['board:/work']).toEqual([REVIEW])
   expect(opened).toEqual(['todo-board'])
   expect((await ui.find({ type: 'Text', text: /Review the cache PR/ }))?.text).toContain('review requested')
@@ -104,6 +105,15 @@ test('an update to a board with items on it leaves a closed pane closed', async 
   expect(opened).toEqual(['todo-board'])
 })
 
+test('a board stored before priorities reads back as all normal', async ($, on) => {
+  const { priority: _, ...stored } = REVIEW
+  engine(on, { 'board:/work': [stored] })
+  await $.session.start(START)
+
+  const ran = await $.tool.call({ tool: 'mcp__todo-board__list' })
+  expect(ran.text ?? ran.result).toContain('[ABC-1, normal]')
+})
+
 test('an update builds on the stored board, so a write from another session in the checkout survives', async ($, on) => {
   const { store } = engine(on)
   await $.session.start(START)
@@ -127,7 +137,7 @@ test('list reads the board back', async ($, on) => {
   await $.session.start(START)
 
   const ran = await $.tool.call({ tool: 'mcp__todo-board__list' })
-  expect(ran.text ?? ran.result).toContain('[ABC-1]')
+  expect(ran.text ?? ran.result).toContain('[ABC-1, normal]')
 })
 
 test('a board stored in another shape starts over empty', async ($, on) => {

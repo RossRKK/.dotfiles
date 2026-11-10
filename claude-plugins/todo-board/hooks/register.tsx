@@ -8,7 +8,7 @@ const PANE = { id: 'todo-board', title: 'Board' } as const
 const LIST_TOOL = 'mcp__todo-board__list'
 const UPDATE_TOOL = 'mcp__todo-board__update'
 // Change the tag when Item changes: it declines what an earlier version stored.
-const items = atom({ plugin: 'todo-board', key: 'items' } as const, [], { shape: 'items-1' })
+const items = atom({ plugin: 'todo-board', key: 'items' } as const, [], { shape: 'items-2' })
 
 export const register: Register = (on) => {
   on('session.start', async ($, e, next) => {
@@ -24,7 +24,7 @@ export const register: Register = (on) => {
     await $.tool.register({
       name: 'update',
       description:
-        "Adds, replaces (by id) or removes items on this checkout's board, which the user sees in a pane. One item per piece of work: link its ticket, PR and session as sources.",
+        "Adds, replaces (by id) or removes items on this checkout's board, which the user sees in a short pane. One item per piece of work: link its ticket, PR and session as sources. Set priority high on what the user should see first; an upsert without priority keeps the item's priority and place.",
       inputSchema: UPDATE_SCHEMA,
     })
     const stored = await load($)
@@ -88,10 +88,10 @@ export const register: Register = (on) => {
 }
 
 // One board per checkout: big-cheese's survives /clear and restarts, a worktree's is its own.
-// A board an older version stored in another shape starts over empty.
+// A board stored before priorities reads as all normal; one in another shape starts over empty.
 async function load($: EngineInterface): Promise<Item[]> {
   const parsed = parseUpdate({ upsert: (await $.store.get(await storeKey($))) ?? [] })
-  return parsed.kind === 'valid' ? parsed.update.upsert : []
+  return parsed.kind === 'valid' ? applyUpdate([], parsed.update) : []
 }
 
 async function save($: EngineInterface, board: Item[]) {

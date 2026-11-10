@@ -1,6 +1,9 @@
 // Who has to act next for an item to move.
 export type WaitingOn = 'you' | 'agent' | 'others' | 'done'
 
+// Where an item sits in its section: high first, low last.
+export type Priority = 'high' | 'normal' | 'low'
+
 export type SourceKind = 'ticket' | 'pr' | 'session'
 
 // Where an item comes from: a ticket key, a PR URL or a session name.
@@ -13,6 +16,7 @@ export type Item = {
   waitingOn: WaitingOn
   // Why it waits there, in a few words.
   note: string
+  priority: Priority
   sources: Source[]
 }
 
