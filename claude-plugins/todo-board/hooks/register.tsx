@@ -13,7 +13,10 @@ const items = atom({ plugin: 'todo-board', key: 'items' } as const, [], { shape:
 export const register: Register = (on) => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
-    await $.command.register({ name: 'board', description: "Show this checkout's board of what is waiting on whom" })
+    await $.command.register({
+      name: 'board',
+      description: "Show this checkout's board of what is waiting on whom; `/board close` hides it",
+    })
     await $.tool.register({
       name: 'list',
       description: "Reads this checkout's board: what is waiting on the user, on agents, on others, and recently done, each with its id.",
@@ -30,9 +33,17 @@ export const register: Register = (on) => {
     return started
   })
 
-  on('command.run', { command: 'board' }, async ($) => {
-    await $.ui.open(PANE)
-    return { text: 'Board opened.' }
+  on('command.run', { command: 'board' }, async ($, e) => {
+    switch (e.args.trim()) {
+      case '':
+        await $.ui.open(PANE)
+        return { text: 'Board opened.' }
+      case 'close':
+        await $.ui.close({ id: PANE.id })
+        return { text: 'Board closed.' }
+      default:
+        return { text: 'Usage: /board [close]' }
+    }
   })
 
   on('tool.call', { tool: LIST_TOOL }, async ($) => ({ result: describe(await read($, items)) }))
@@ -40,9 +51,14 @@ export const register: Register = (on) => {
   on('tool.call', { tool: UPDATE_TOOL }, async ($, e) => {
     const parsed = parseUpdate(e)
     if (parsed.kind === 'invalid') return { deny: `The board was not changed: ${parsed.problems.join('; ')}` }
-    const changed = await update($, items, (now) => applyUpdate(now ?? [], parsed.update))
+    let wasEmpty = false
+    const changed = await update($, items, (now) => {
+      wasEmpty = (now ?? []).length === 0
+      return applyUpdate(now ?? [], parsed.update)
+    })
     await save($, changed)
-    void $.ui.open(PANE)
+    // Only a board that was empty pops up, so one the user closed stays closed.
+    if (wasEmpty && changed.length > 0) void $.ui.open(PANE)
     return { result: describe(changed) }
   })
 

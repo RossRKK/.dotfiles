@@ -249,7 +249,8 @@ every start and compaction) is the board of what every session is doing, the rev
 PRs and your tickets, and which need you; it starts the board on its own. It
 keeps that board with the `claude-plugins/todo-board` mod, which draws it in a
 pane grouped by who has to act next (You, Agents, Others, Done); `/board` opens
-the pane. Any session can keep one, one per checkout. In
+the pane and `/board close` closes it (updates only reopen it once the board
+has been empty). Any session can keep one, one per checkout. In
 `~/.dotfiles` it is **dotty**. Everywhere else,
 worktrees included, it keeps its pet name. Agents run `worktree-tab <branch>`
 instead of making worktrees themselves: it opens the branch as a tab here
