@@ -34,8 +34,8 @@ the fly. My editor is neovim, my neovim config is managed by home-manger in
 `~/.dotfiles`. If a tool is being used frequently suggest adding it to my
 environment.
 
-When I suggest invasive changes to how Claude Code behaves, prefer a mod
-(the plugin-authoring skill) over hooks or wrapper scripts.
+When I suggest invasive changes to how Claude Code behaves, prefer a mod (the
+plugin-authoring skill) over hooks or wrapper scripts.
 
 My neovim config has a shortcut to jump to a line when in the form
 `path/to/file[:line]`. This path must be from the repo root. When referencing
@@ -44,31 +44,23 @@ files include these paths so it is easy for me to jump where you're referencing.
 # big-cheese and dotty
 
 Two sessions have standing roles and fixed names, so any session can
-`SendMessage` them by name. The `session-identity` mod names terminal 1 of these
-checkouts.
+`SendMessage` them by name.
 
-- **big-cheese**: terminal 1 of the main work checkout. It keeps a bird's-eye
-  view of every session, the reviews I owe, my PRs and my tickets, and tells me
-  what needs my input (`claude-plugins/session-identity/roles/big-cheese.md`).
-  It already sees your status from agent-status. Tell it in one line when you
-  open, merge or abandon a PR, or finish a ticket, and when you hand me a step
-  you were blocked from doing (a force push, say), so it survives a restart. Ask
-  it when you need to know what another session is doing.
-- **dotty**: terminal 1 of `~/.dotfiles`, the session working on my dotfiles:
-  nvim, the Claude mods and plugins, and this file.
+- **big-cheese**: It keeps a bird's-eye view of every session, the reviews I
+  owe, my PRs and my tickets, and tells me what needs my input. Tell it in one
+  line when you open, merge or abandon a PR, or finish a ticket, and when you
+  hand me a step you were blocked from doing.
+- **dotty**: the session working on my dotfiles: nvim, the Claude mods and
+  plugins.
 
-Only those two sessions take those roles. If you are any other session, carry
-on with your own task.
-
-Only big-cheese talks to other people's Claude sessions, for example through a
-shared artifact's comments. Any other session must not contact them, even when
-it has the link: ask big-cheese to pass the message on.
+Only those two sessions take those roles. If you are any other session, carry on
+with your own task.
 
 # Worktrees
 
 Inside nvim (`$NVIM` set), don't make worktrees yourself: no `git worktree add`,
-`EnterWorktree` or `isolation: "worktree"`. Run `worktree-tab <branch>` from
-the repo (in the background if the checkout is big). It opens the worktree as an
+`EnterWorktree` or `isolation: "worktree"`. Run `worktree-tab <branch>` from the
+repo (in the background if the checkout is big). It opens the worktree as an
 nvim tab and prints the name of the Claude in it once that Claude is up.
 SendMessage it the task with everything it needs, since it has none of your
 context, and ask it to message you back when done. Outside nvim, use worktrees
