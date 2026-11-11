@@ -1,6 +1,0 @@
-{
-  "name": "todo-board",
-  "version": "0.1.0",
-  "description": "A board of what is waiting on whom, kept by Claude and drawn in a pane",
-  "types": "./types/index.d.ts"
-}

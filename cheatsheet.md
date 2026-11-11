@@ -246,15 +246,11 @@ listed in `~/.config/claude-roles` (`<checkout> <role>` per line, kept out of
 this repo) it gets a fixed name: in `~/.dotfiles` it is **dotty**. Everywhere
 else, worktrees included, it keeps its pet name.
 
-Any session can keep a board with the `claude-plugins/todo-board` mod, one per
-checkout, which draws it in a pane grouped by who has to act next (You, Agents,
-Others, Done), each sorted high, normal, low priority; `/board` opens the pane
-and `/board close` closes it (updates only reopen it once the board has been
-empty). Agents run `worktree-tab <branch>`
-instead of making worktrees themselves: it opens the branch as a tab here
-(resolved as `Alt+B w` resolves it) in the background, leaving you on your tab,
-and prints the name of the Claude that starts there once it can take messages,
-so the agent knows who to hand the work to.
+Agents run `worktree-tab <branch>` instead of making worktrees themselves: it
+opens the branch as a tab here (resolved as `Alt+B w` resolves it) in the
+background, leaving you on your tab, and prints the name of the Claude that
+starts there once it can take messages, so the agent knows who to hand the work
+to.
 
 Buffers are global in Vim, but the bufferline shows only those under the current
 tab's project, and `Shift+L`/`Shift+H` cycle that filtered list.
