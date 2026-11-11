@@ -3,8 +3,8 @@
 -- bufferline's own `diagnostics.get` calls `vim.diagnostic.get()` with no buffer
 -- filter on every tabline render. That deep-copies every diagnostic in the
 -- session -- and a workspace LSP such as marksman can publish thousands of them
--- for files that were never opened. With several renders a second (see the
--- fishmonger spinner tick) that copy was ~90% of nvim's idle CPU.
+-- for files that were never opened. At several renders a second that copy was
+-- ~90% of nvim's idle CPU.
 --
 -- `vim.diagnostic.count()` answers per buffer without copying, and the bar can
 -- only show loaded buffers anyway, so ask for exactly those.

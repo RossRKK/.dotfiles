@@ -284,8 +284,8 @@ local glyph_groups = {}
 --- (fishmonger's hl, e.g. DiagnosticWarn) over the tab tile's own background,
 --- which differs between the selected tile and the rest. Re-derived on every
 --- call rather than cached: it follows colorscheme changes and bufferline
---- setting its groups up late (VeryLazy) for free, and set_label only runs on
---- state changes.
+--- setting its groups up late (VeryLazy) for free, and set_label runs on events
+--- (an agent or title change, a tabpage switch), never on a timer.
 ---@param hl string highlight group carrying the state's fg
 ---@param selected boolean is this the current tabpage's tile
 ---@return string
@@ -359,9 +359,8 @@ function M.set_label(tab)
   -- The number first, where it lines up with the key that reaches it (<M-N>).
   local slot = M.slot(tab)
   vim.api.nvim_tabpage_set_var(tab, "name", slot and (slot .. " " .. label) or label)
-  -- Coalesced: the spinner tick relabels every tabpage per frame, and one
-  -- redraw shows all of them -- per-call redraws re-evaluated the whole
-  -- bufferline once per tab, several times a second.
+  -- Coalesced: an agent change relabels every tabpage, and one redraw shows
+  -- all of them -- per-call redraws re-evaluated the whole bufferline per tab.
   if not M._redraw_queued then
     M._redraw_queued = true
     vim.schedule(function()

@@ -80,10 +80,10 @@ return {
         vim.o.titlestring = table.concat(segments, " "):gsub("%%", "%%%%")
       end
 
-      -- Coalesced: the spinner tick raises FishmongerTabsChanged once per
-      -- tabpage per frame, and refresh_title reads every tabpage anyway, so
-      -- running it per event multiplied the work by the tab count several times
-      -- a second. One deferred run per burst repaints the same title.
+      -- Coalesced: an agent change raises FishmongerTabsChanged once per
+      -- tabpage, and refresh_title reads every tabpage anyway, so running it
+      -- per event multiplied the work by the tab count. One deferred run per
+      -- burst repaints the same title.
       local title_queued = false
       local function queue_title()
         if title_queued then
