@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Publish a Claude Code session's state to a file, for fishmonger's agent view
-# (lua/fishmonger/agent.lua) and the big-cheese session to read.
+# (lua/fishmonger/agent.lua) to read.
 #
 # WHY A FILE. The only status Claude Code emits by itself is the glyph it puts
 # at the front of its OSC title, which distinguishes "thinking" from "not

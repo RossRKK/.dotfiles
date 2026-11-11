@@ -87,7 +87,7 @@ export const register: Register = (on) => {
   })
 }
 
-// One board per checkout: big-cheese's survives /clear and restarts, a worktree's is its own.
+// One board per checkout: it survives /clear and restarts, and a worktree has its own.
 // A board stored before priorities reads as all normal; one in another shape starts over empty.
 async function load($: EngineInterface): Promise<Item[]> {
   const parsed = parseUpdate({ upsert: (await $.store.get(await storeKey($))) ?? [] })

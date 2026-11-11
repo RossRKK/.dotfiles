@@ -243,17 +243,14 @@ that terminal's tab and agent-view row in the same colour as its prompt bar.
 
 Terminal 1's Claude runs with `WORKSPACE_TERMINAL=1`, and in the checkouts
 listed in `~/.config/claude-roles` (`<checkout> <role>` per line, kept out of
-this repo) it gets a fixed name. In the main work checkout it is **big-cheese**:
-its role (`claude-plugins/session-identity/roles/big-cheese.md`, handed to it at
-every start and compaction) is the board of what every session is doing, the reviews you owe, your
-PRs and your tickets, and which need you; it starts the board on its own. It
-keeps that board with the `claude-plugins/todo-board` mod, which draws it in a
-pane grouped by who has to act next (You, Agents, Others, Done), each sorted
-high, normal, low priority; `/board` opens
-the pane and `/board close` closes it (updates only reopen it once the board
-has been empty). Any session can keep one, one per checkout. In
-`~/.dotfiles` it is **dotty**. Everywhere else,
-worktrees included, it keeps its pet name. Agents run `worktree-tab <branch>`
+this repo) it gets a fixed name: in `~/.dotfiles` it is **dotty**. Everywhere
+else, worktrees included, it keeps its pet name.
+
+Any session can keep a board with the `claude-plugins/todo-board` mod, one per
+checkout, which draws it in a pane grouped by who has to act next (You, Agents,
+Others, Done), each sorted high, normal, low priority; `/board` opens the pane
+and `/board close` closes it (updates only reopen it once the board has been
+empty). Agents run `worktree-tab <branch>`
 instead of making worktrees themselves: it opens the branch as a tab here
 (resolved as `Alt+B w` resolves it) in the background, leaving you on your tab,
 and prints the name of the Claude that starts there once it can take messages,

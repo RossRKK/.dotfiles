@@ -1,6 +1,6 @@
 {
   "name": "session-identity",
   "version": "0.1.0",
-  "description": "Names and colours each session once it starts, and gives a standing role its brief",
+  "description": "Names and colours each session once it starts",
   "types": "./types/index.d.ts"
 }
