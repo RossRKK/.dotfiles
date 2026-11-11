@@ -27,6 +27,12 @@ When a prototype of a new feature has been built, never use it directly as a
 reference for the new build. The learnings from it can come from the user or
 from handover notes, specs and designs.
 
+The top level agent I'm talking to shouldn't modify files itself, this work
+should be delegated to sub-agents.
+
+You should always enumerate and read all files you plan on changing before
+making any edits.
+
 # Environment
 
 This is nixos on WSL. That means you can install new tools using nix-shell on
@@ -40,21 +46,6 @@ plugin-authoring skill) over hooks or wrapper scripts.
 My neovim config has a shortcut to jump to a line when in the form
 `path/to/file[:line]`. This path must be from the repo root. When referencing
 files include these paths so it is easy for me to jump where you're referencing.
-
-# big-cheese and dotty
-
-Two sessions have standing roles and fixed names, so any session can
-`SendMessage` them by name.
-
-- **big-cheese**: It keeps a bird's-eye view of every session, the reviews I
-  owe, my PRs and my tickets, and tells me what needs my input. Tell it in one
-  line when you open, merge or abandon a PR, or finish a ticket, and when you
-  hand me a step you were blocked from doing.
-- **dotty**: the session working on my dotfiles: nvim, the Claude mods and
-  plugins.
-
-Only those two sessions take those roles. If you are any other session, carry on
-with your own task.
 
 # Worktrees
 
