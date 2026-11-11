@@ -363,13 +363,15 @@ local function remote_names(dir)
   return set
 end
 
+local checkout, abandon
+
 --- Open `branch`'s worktree as a new workspace tab, creating it if needed.
 --- Reuses whatever already exists: a worktree git already knows about, or a
 --- directory left behind at the expected path.
 ---@param branch string
 ---@param dir? string a directory inside the repo (default: the tab's cwd)
 ---@param opts? { on_open?: fun(path: string), background?: boolean }
----   on_open: runs once the tab is open (creation is async).
+---   on_open: runs once the worktree is checked out (the tab opens before that).
 ---   background: leave focus where it is (config.workspace's option of that name).
 function M.open(branch, dir, opts)
   opts = opts or {}
@@ -387,53 +389,78 @@ function M.open(branch, dir, opts)
 
   local locals = local_branches(root)
   local remotes = remote_names(root)
+  local resolved = M.resolve(branch, locals, remote_refs(root))
+  -- A fetch can only turn `x` into `origin/x`, whose local name is still `x`.
+  local local_branch = M.local_name(resolved or branch, locals, remotes)
+  local path = M.path(root, local_branch, existing(root))
 
-  -- Second half: the branch is now known (or known to be new); create the
-  -- worktree if needed and open the tab.
-  local function open_tab(path)
-    M.touch(path)
-    require("config.workspace").open(path, { tab = true, background = opts.background })
+  local function checked_out()
     if opts.on_open then
       opts.on_open(path)
     end
   end
 
-  local function create(ref)
-    local local_branch = M.local_name(ref, locals, remotes)
-    local path = M.path(root, local_branch, existing(root))
-    if vim.fn.isdirectory(path) == 1 then
-      open_tab(path)
-      return
-    end
-    git_async(
-      root,
-      M.add_args(ref, path, locals, remotes),
-      "checking out " .. local_branch,
-      function(_, add_err)
-        if add_err then
-          status("git worktree add: " .. add_err, vim.log.levels.ERROR)
-          return
+  M.touch(path)
+  if vim.fn.isdirectory(path) == 1 then
+    require("config.workspace").open(path, { tab = true, background = opts.background })
+    return checked_out()
+  end
+  -- git checks out into an empty directory, so the tab needn't wait for it.
+  vim.fn.mkdir(path, "p")
+  require("config.workspace").open(path, {
+    tab = true,
+    background = opts.background,
+    until_ready = function(ready)
+      checkout(root, branch, resolved, path, locals, remotes, function(err)
+        if err then
+          return abandon(path, err)
         end
-        open_tab(path)
-      end
-    )
-  end
+        ready()
+        checked_out()
+      end)
+    end,
+  })
+end
 
-  -- A name that matches nothing local or remote-tracking may simply not be
-  -- fetched yet -- the "paste a branch name straight from GitHub" case -- so try
-  -- a targeted fetch from origin before concluding it's a new branch off HEAD.
-  local resolved = M.resolve(branch, locals, remote_refs(root))
-  if resolved then
-    return create(resolved)
+--- Put `branch`'s worktree at `path`, then `cb(err)`. A name that matches
+--- nothing local or remote-tracking may simply not be fetched yet -- the "paste
+--- a branch name straight from GitHub" case -- so try a targeted fetch from
+--- origin before concluding it's a new branch off HEAD.
+---@param root string the main worktree
+---@param branch string as picked
+---@param resolved string? the branch as an existing ref (M.resolve)
+---@param path string an empty directory
+---@param locals table<string, true>
+---@param remotes table<string, true>
+---@param cb fun(err: string?)
+checkout = function(root, branch, resolved, path, locals, remotes, cb)
+  local function add(ref)
+    local label = "checking out " .. M.local_name(ref, locals, remotes)
+    git_async(root, M.add_args(ref, path, locals, remotes), label, function(_, err)
+      cb(err and ("git worktree add: " .. err))
+    end)
   end
-  if branch:find("%s") then
-    return create(branch)
+  if resolved or branch:find("%s") then
+    return add(resolved or branch)
   end
   local short = branch:gsub("^remotes/", "")
   git_async(root, { "fetch", "origin", short }, "fetching origin/" .. short, function(ok)
     -- A failed fetch just means the name is new: fall through to -b.
-    create(ok and M.resolve(branch, locals, remote_refs(root)) or branch)
+    add(ok and M.resolve(branch, locals, remote_refs(root)) or branch)
   end)
+end
+
+--- A checkout failed: report it and take down the tab opened for it, and the
+--- directory made for it (only if git left it empty).
+---@param path string
+---@param err string
+abandon = function(path, err)
+  status(err, vim.log.levels.ERROR)
+  local tab = require("config.workspace").find(path)
+  if tab and #vim.api.nvim_list_tabpages() > 1 then
+    vim.cmd.tabclose(vim.api.nvim_tabpage_get_number(tab))
+  end
+  vim.fn.delete(path, "d")
 end
 
 --- Prompt for a name and open a worktree tab for it: the picker's <CR> only
@@ -571,7 +598,7 @@ end
 --- M.open for another program (.local/bin/worktree-tab) over `nvim
 --- --remote-expr`. Answers at once with where the worktree is to be, so the
 --- caller can wait for the Claude that starts there and hand it work; the tab
---- itself opens once the (async) checkout is done.
+--- opens at once, its Claude once the (async) checkout is done.
 ---@param branch string
 ---@param cwd string a directory inside the repo
 ---@return string json: {"path": ...} or {"error": ...}

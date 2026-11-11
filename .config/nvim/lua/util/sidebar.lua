@@ -36,6 +36,12 @@ function M.open()
   vim.cmd("Neotree filesystem show left")
 end
 
+-- Re-read the tree from disk after files appeared under it outside nvim; a tree
+-- in another tabpage re-reads when that tab is next entered.
+function M.refresh()
+  require("neo-tree.sources.manager").refresh("filesystem")
+end
+
 -- Close the docked neo-tree window. The outline float is left alone -- it
 -- closes on its own.
 function M.close()

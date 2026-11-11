@@ -390,7 +390,7 @@ end
 
 --- Set the current (or a new) tabpage up as a workspace on `dir`.
 ---@param dir string project directory
----@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer, agent?: boolean, background?: boolean }
+---@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer, agent?: boolean, background?: boolean, until_ready?: fun(ready: fun()) }
 ---   tab: open a new tabpage first, and scope the cwd to it with :tcd -- or,
 ---     if a workspace on `dir` is already open, switch to that instead of
 ---     opening a second one (slot is then ignored: it keeps its number).
@@ -403,6 +403,9 @@ end
 ---   agent: false leaves terminal 1 a plain shell instead of M.agent_shell.
 ---   background: with tab, leave focus (and the mode) where it was once the tab
 ---     is built, for a tab an agent opened rather than you.
+---   until_ready: called once the tab is built with a `ready` callback; terminal
+---     1 starts only when it is called, since a Claude started in a directory
+---     still being checked out would miss its CLAUDE.md and git state.
 function M.open(dir, opts)
   opts = opts or {}
   dir = vim.fn.fnamemodify(dir, ":p"):gsub("/$", "")
@@ -429,8 +432,11 @@ function M.open(dir, opts)
 
   -- The editor window for files to open into. Not an empty buffer: the
   -- workspace greeter (config/greeter.lua) — branch status, recent files, and
-  -- pickers — which any opened file simply replaces.
-  require("config.greeter").open()
+  -- pickers — which any opened file simply replaces. Not before the directory
+  -- is ready: git there would describe the enclosing repo, and the greeter keeps watching it.
+  if not opts.until_ready then
+    require("config.greeter").open()
+  end
   if opts.drop_buf then
     pcall(vim.api.nvim_buf_delete, opts.drop_buf, { force = true })
   end
@@ -439,27 +445,45 @@ function M.open(dir, opts)
   -- with wincmd p: by the time the deferred half runs, another window may have
   -- stolen focus (Lazy's update UI popping up on startup).
   local editor = vim.api.nvim_get_current_win()
+  local tab = vim.api.nvim_get_current_tabpage()
   require("util.sidebar").open() -- `show`, so focus stays here
   vim.api.nvim_set_current_win(editor)
 
-  vim.schedule(function()
+  local function start_terminal()
+    if not vim.api.nvim_tabpage_is_valid(tab) then
+      return
+    end
     -- Go through fishmonger so slot 1 is registered as a tab of this workspace.
-    -- insert = false because we hand focus straight back to the editor.
     local background = require("util.background")
     require("fishmonger").show(1, {
+      tab = tab,
       insert = false,
       shell = opts.agent ~= false and M.agent_shell(background.user_manager()) or nil,
     })
-    if vim.api.nvim_win_is_valid(editor) then
+    if vim.api.nvim_get_current_tabpage() == tab and vim.api.nvim_win_is_valid(editor) then
       vim.api.nvim_set_current_win(editor)
+      vim.cmd("stopinsert")
     end
-    vim.cmd("stopinsert")
-    -- The greeter centred itself against a full-width window: it was drawn
-    -- before the explorer and terminal took their columns. Re-render now that
-    -- the editor window is its final size. (snacks re-renders on WinResized,
-    -- but edgy's sizing doesn't reliably produce one for this window.)
+    -- The greeter centred itself against a full-width window, and may have
+    -- described a directory that was still empty: re-render it now. (snacks
+    -- re-renders on WinResized, but edgy's sizing doesn't reliably produce one.)
     Snacks.dashboard.update()
-    -- Building the tab has to happen in it: fishmonger and the sidebar act on the current tabpage.
+  end
+
+  vim.schedule(function()
+    if opts.until_ready then
+      opts.until_ready(function()
+        if vim.api.nvim_win_is_valid(editor) then
+          vim.api.nvim_win_call(editor, function()
+            require("config.greeter").open(editor)
+          end)
+        end
+        require("util.sidebar").refresh()
+        start_terminal()
+      end)
+    else
+      start_terminal()
+    end
     if return_to then
       M.restore_focus(return_to)
     end

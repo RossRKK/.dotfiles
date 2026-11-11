@@ -366,6 +366,30 @@ describe("workspace.open in the background", function()
     assert.equals(ws.find(dir), vim.api.nvim_get_current_tabpage())
   end)
 
+  it("holds terminal 1 back until the directory is ready, then starts it in that tab", function()
+    local origin = vim.api.nvim_get_current_tabpage()
+    local ready, shown_in
+    package.loaded["util.sidebar"].refresh = function() end
+    package.loaded["fishmonger"].show = function(_, opts)
+      shown_in = opts.tab
+    end
+    ws.open(dir, {
+      tab = true,
+      background = true,
+      until_ready = function(cb)
+        ready = cb
+      end,
+    })
+    assert.is_true(vim.wait(1000, function()
+      return ready ~= nil
+    end))
+    assert.is_nil(shown_in)
+
+    ready()
+    assert.equals(ws.find(dir), shown_in)
+    assert.equals(origin, vim.api.nvim_get_current_tabpage())
+  end)
+
   it("does not switch to a tab already open on the directory", function()
     open({ tab = true })
     vim.cmd("tabprevious")
