@@ -13,6 +13,29 @@ describe("greeter.sections", function()
     assert.same({ padding = 1 }, sections[1])
   end)
 
+  it("gives each agent row's glyph the same width, so the rows line up", function()
+    local real = package.loaded["fishmonger.view"]
+    package.loaded["fishmonger.view"] = {
+      items = function()
+        return {
+          { key = "a", icon = "⏳", hl = "Comment", project = "one" },
+          { key = "s", icon = "✓", hl = "DiagnosticOk", project = "two" },
+        }
+      end,
+    }
+    local ok, section = pcall(greeter.sections("/nowhere", 0, 0, function()
+      return nil
+    end)[2])
+    package.loaded["fishmonger.view"] = real
+    assert(ok, section)
+
+    assert.equals("⏳", section[1].icon[1])
+    assert.equals(
+      vim.fn.strdisplaywidth(section[1].icon[1]),
+      vim.fn.strdisplaywidth(section[2].icon[1])
+    )
+  end)
+
   describe("the PR block", function()
     -- A real directory outside any repo: the queue line asks git about it.
     local root = vim.fn.tempname()

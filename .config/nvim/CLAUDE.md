@@ -43,7 +43,8 @@ with its own test suite (developed locally under `~/dev` via lazy's `dev` path):
 verdict rollup),
 and [nitpick.nvim](https://github.com/RossRKK/nitpick.nvim) (inline GitHub comments).
 
-`tests/minimal_init.lua` loads this config plus plenary, and deliberately does
+`tests/minimal_init.lua` loads this config plus plenary (and puts fishmonger's
+modules on the runtimepath, for its real glyph widths), and deliberately does
 **not** load lazy.nvim — no plugin `config()` runs. A spec that needs a plugin
 object fakes it (keeping the real arity of any stubbed `vim.*` function).
 

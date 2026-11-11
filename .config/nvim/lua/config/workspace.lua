@@ -339,12 +339,14 @@ function M.set_label(tab)
   local selected = tab == vim.api.nvim_get_current_tabpage()
   local icons, coloured = {}, false
   if fishmonger then
+    -- Each glyph's cell ends in its padding, which also parts the last from the name.
+    local glyph_cell = require("fishmonger.agent").glyph_cell
     for _, term in ipairs(fishmonger.tabs(tab)) do
       if term.icon and term.hl then
         coloured = true
-        icons[#icons + 1] = glyph_code(term.hl, selected) .. term.icon
-      else
-        icons[#icons + 1] = term.icon
+        icons[#icons + 1] = glyph_code(term.hl, selected) .. glyph_cell(term.icon)
+      elseif term.icon then
+        icons[#icons + 1] = glyph_cell(term.icon)
       end
     end
   end
@@ -352,7 +354,7 @@ function M.set_label(tab)
   -- literal % in its name must not become a statusline item.
   local name = M.display_name(tab):gsub("%%", "%%%%")
   local label = #icons > 0
-      and (table.concat(icons) .. (coloured and restore_code(selected) or "") .. " " .. name)
+      and (table.concat(icons) .. (coloured and restore_code(selected) or "") .. name)
     or name
   -- The number first, where it lines up with the key that reaches it (<M-N>).
   local slot = M.slot(tab)

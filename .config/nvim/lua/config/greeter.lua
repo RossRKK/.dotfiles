@@ -617,6 +617,7 @@ local function agents()
   if #rows == 0 then
     return nil
   end
+  local glyph_cell = require("fishmonger.agent").glyph_cell
   local section = { icon = " ", title = "Agents", indent = 2, padding = 1 }
   -- Column-align the titles: pad every project name to the widest one, so what
   -- each agent is doing lines up down the list instead of starting wherever
@@ -629,7 +630,7 @@ local function agents()
     section[#section + 1] = {
       -- A table icon is passed through verbatim by snacks' formatter, which is
       -- what keeps the glyph's own state colour (see the changed-files list).
-      icon = { row.icon, hl = row.hl, width = 1 },
+      icon = { glyph_cell(row.icon), hl = row.hl },
       -- A session fishmonger can't reach (an agent in a bare terminal) gets no
       -- key: it still belongs in the list -- it is still an agent waiting on you
       -- -- but there is nothing to jump to.

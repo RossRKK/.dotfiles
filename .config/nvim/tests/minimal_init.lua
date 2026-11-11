@@ -12,4 +12,11 @@ end
 
 vim.opt.runtimepath:prepend(config)
 vim.opt.runtimepath:prepend(plenary)
+-- fishmonger's modules too, as lazy's dev path resolves it, so specs use its real
+-- glyph widths; requiring a module runs no setup().
+local fishmonger = vim.fn.expand("~/dev/fishmonger.nvim")
+if vim.fn.isdirectory(fishmonger) == 0 then
+  fishmonger = vim.fn.stdpath("data") .. "/lazy/fishmonger.nvim"
+end
+vim.opt.runtimepath:prepend(fishmonger)
 vim.opt.swapfile = false

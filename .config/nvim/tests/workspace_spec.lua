@@ -2,6 +2,28 @@
 
 local assert = require("luassert")
 
+describe("workspace.set_label", function()
+  --- The tab label with one terminal showing `icon`, as it shows on screen.
+  local function label_with(icon)
+    local real = package.loaded["fishmonger"]
+    package.loaded["fishmonger"] = {
+      tabs = function()
+        return { { slot = 1, icon = icon, hl = "Comment" } }
+      end,
+    }
+    local ok, err = pcall(require("config.workspace").set_label)
+    package.loaded["fishmonger"] = real
+    assert(ok, err)
+    return (vim.t.name:gsub("%%#[^#]*#", ""))
+  end
+
+  it("draws a label with a wide status glyph as wide as one with a narrow glyph", function()
+    local narrow, wide = label_with("✓"), label_with("⏳")
+    assert.truthy(wide:find("⏳", 1, true))
+    assert.equals(vim.fn.strdisplaywidth(narrow), vim.fn.strdisplaywidth(wide))
+  end)
+end)
+
 describe("workspace.agent_shell", function()
   it("continues this directory's last Claude conversation, else starts one, at a fish prompt, marked as terminal 1", function()
     assert.same(
