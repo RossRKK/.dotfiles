@@ -230,7 +230,7 @@ in
 
       # Runtimes
       python3
-      nodejs
+      nodejs_26
       # rustup rather than nixpkgs rustc/cargo so per-project rust-toolchain.toml
       # pins (e.g. liboi's nightly + rust-src) are respected; it also proxies
       # rustfmt/clippy/rust-analyzer, which would collide if installed directly
