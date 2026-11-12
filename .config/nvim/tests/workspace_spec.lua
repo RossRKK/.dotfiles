@@ -443,3 +443,55 @@ describe("workspace.open in the background", function()
     assert.equals(origin, vim.api.nvim_get_current_tabpage())
   end)
 end)
+
+describe("workspace.display_name", function()
+  local ws, saved, dir
+
+  local function report(git_dir, common_dir, branch)
+    package.loaded["config.greeter"] = {
+      reports = {
+        [vim.fs.normalize(dir)] = {
+          repo = "dotfiles",
+          branch = branch,
+          git_dir = git_dir,
+          common_dir = common_dir,
+        },
+      },
+    }
+  end
+
+  before_each(function()
+    saved = package.loaded["config.greeter"]
+    ws = require("config.workspace")
+    dir = vim.fn.tempname() .. "/.worktrees/keen-heron"
+    vim.fn.mkdir(dir, "p")
+    vim.cmd("tabnew")
+    vim.cmd.tcd(vim.fn.fnameescape(dir))
+  end)
+
+  after_each(function()
+    package.loaded["config.greeter"] = saved
+    ws.setup({ agent_worktrees = false })
+    pcall(vim.cmd, "tabonly")
+    vim.fn.delete(vim.fs.dirname(vim.fs.dirname(dir)), "rf")
+  end)
+
+  it("names a worktree after its repo and branch", function()
+    report("/r/.git/worktrees/keen-heron", "/r/.git", "rkk/x")
+    assert.equals("dotfiles - rkk/x", ws.display_name())
+  end)
+
+  it("with agent worktrees, names a worktree after its agent and the branch it has out", function()
+    ws.setup({ agent_worktrees = true })
+    report("/r/.git/worktrees/keen-heron", "/r/.git", "rkk/x")
+    assert.equals("keen-heron · rkk/x", ws.display_name())
+    report("/r/.git/worktrees/keen-heron", "/r/.git", "rkk/y")
+    assert.equals("keen-heron · rkk/y", ws.display_name())
+  end)
+
+  it("with agent worktrees, still names the main checkout after the repo", function()
+    ws.setup({ agent_worktrees = true })
+    report("/r/.git", "/r/.git", "main")
+    assert.equals("dotfiles - main", ws.display_name())
+  end)
+end)

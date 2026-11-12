@@ -18,6 +18,16 @@
 
 local M = {}
 
+---@class workspace.Options
+---@field agent_worktrees boolean worktrees are named after their agent (util/worktree.lua)
+local options = { agent_worktrees = false }
+
+--- Set once at startup, from the environment (init.lua).
+---@param opts workspace.Options
+function M.setup(opts)
+  options = vim.tbl_extend("force", options, opts)
+end
+
 --- The name of a tabpage's workspace: the basename of its cwd. Set as a
 --- tab-local variable at open() so it survives a later :tcd and so the picker
 --- doesn't have to re-derive it.
@@ -54,6 +64,11 @@ function M.display_name(tab)
   local report = greeter and greeter.reports[cwd]
   if report and report.repo then
     local branch = report.branch or report.head
+    -- An agent worktree is named after its agent, and the branch is whatever it has out now.
+    if options.agent_worktrees and report.git_dir ~= report.common_dir then
+      local agent = vim.fs.basename(cwd)
+      return branch and (agent .. " · " .. branch) or agent
+    end
     return branch and (report.repo .. " - " .. branch) or report.repo
   end
   return M.name(tab)
