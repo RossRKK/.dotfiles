@@ -423,12 +423,15 @@ describe("workspace.open in the background", function()
     assert.equals(origin, vim.api.nvim_get_current_tabpage())
   end)
 
-  it("starts terminal 1's Claude under the agent name it was given", function()
+  it("starts terminal 1's Claude under the agent name its directory gives", function()
     local shell
     package.loaded["fishmonger"].show = function(_, opts)
       shell = opts.shell
     end
-    ws.open(dir, { tab = true, agent_name = "keen-heron" })
+    ws.agent_name = function(d)
+      return d == dir and "keen-heron" or nil
+    end
+    ws.open(dir, { tab = true })
     assert.is_true(vim.wait(1000, function()
       return shell ~= nil
     end))
@@ -499,5 +502,51 @@ describe("workspace.display_name", function()
     ws.setup({ agent_worktrees = true })
     report("/r/.git", "/r/.git", "main")
     assert.equals("dotfiles - main", ws.display_name())
+  end)
+end)
+
+-- M.agent_name against a real repo and one of its linked worktrees.
+describe("workspace.agent_name", function()
+  local ws, dir, repo
+
+  local function git(...)
+    local cmd = { "git", "-c", "user.name=t", "-c", "user.email=t@t", ... }
+    local res = vim.system(cmd, { cwd = repo, text = true }):wait()
+    assert(res.code == 0, table.concat(cmd, " ") .. ": " .. (res.stderr or ""))
+  end
+
+  before_each(function()
+    ws = require("config.workspace")
+    dir = vim.fn.tempname()
+    repo = dir .. "/repo"
+    vim.fn.mkdir(repo, "p")
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "init")
+    git("worktree", "add", "-q", repo .. "/.worktrees/keen-heron")
+    vim.fn.mkdir(repo .. "/.worktrees/keen-heron/sub", "p")
+    ws.setup({ agent_worktrees = true })
+  end)
+
+  after_each(function()
+    ws.setup({ agent_worktrees = false })
+    vim.fn.delete(dir, "rf")
+  end)
+
+  it("names a linked worktree's agent after its directory, from anywhere in it", function()
+    assert.equals("keen-heron", ws.agent_name(repo .. "/.worktrees/keen-heron"))
+    assert.equals("keen-heron", ws.agent_name(repo .. "/.worktrees/keen-heron/sub"))
+  end)
+
+  it("leaves the main checkout's agent to its own name", function()
+    assert.is_nil(ws.agent_name(repo))
+  end)
+
+  it("leaves a directory outside git to its own name", function()
+    assert.is_nil(ws.agent_name(dir))
+  end)
+
+  it("with agent worktrees off, names no agent", function()
+    ws.setup({ agent_worktrees = false })
+    assert.is_nil(ws.agent_name(repo .. "/.worktrees/keen-heron"))
   end)
 end)

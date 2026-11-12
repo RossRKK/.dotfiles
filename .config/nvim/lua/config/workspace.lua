@@ -405,7 +405,7 @@ end
 
 --- Set the current (or a new) tabpage up as a workspace on `dir`.
 ---@param dir string project directory
----@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer, agent?: boolean, agent_name?: string, background?: boolean, until_ready?: fun(ready: fun()) }
+---@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer, agent?: boolean, background?: boolean, until_ready?: fun(ready: fun()) }
 ---   tab: open a new tabpage first, and scope the cwd to it with :tcd -- or,
 ---     if a workspace on `dir` is already open, switch to that instead of
 ---     opening a second one (slot is then ignored: it keeps its number).
@@ -416,7 +416,6 @@ end
 ---     directory buffer, which nvim creates for `nvim <dir>`).
 ---   slot: the workspace number to take, if free (see M.assign_slot).
 ---   agent: false leaves terminal 1 a plain shell instead of M.agent_shell.
----   agent_name: the name terminal 1's Claude takes (see M.agent_shell).
 ---   background: with tab, leave focus (and the mode) where it was once the tab
 ---     is built, for a tab an agent opened rather than you.
 ---   until_ready: called once the tab is built with a `ready` callback; terminal
@@ -474,7 +473,7 @@ function M.open(dir, opts)
     require("fishmonger").show(1, {
       tab = tab,
       insert = false,
-      shell = opts.agent ~= false and M.agent_shell(background.user_manager(), opts.agent_name)
+      shell = opts.agent ~= false and M.agent_shell(background.user_manager(), M.agent_name(dir))
         or nil,
     })
     if vim.api.nvim_get_current_tabpage() == tab and vim.api.nvim_win_is_valid(editor) then
@@ -550,6 +549,28 @@ function M.agent_shell(user_manager, agent_name)
     vim.list_extend(env, { "fish", "-C", "claude --continue; or claude" }),
     user_manager
   )
+end
+
+--- The name terminal 1's Claude in `dir` takes, if not its own: with agent
+--- worktrees, a linked worktree's directory name, so every way of opening one
+--- -- not only creating it -- names its agent the same. Asked of git when the
+--- terminal starts, since a new worktree is only checked out by then.
+---@param dir string
+---@return string?
+function M.agent_name(dir)
+  if not options.agent_worktrees then
+    return nil
+  end
+  local res = vim
+    .system(
+      { "git", "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-dir", "--git-common-dir" },
+      { cwd = dir, text = true }
+    )
+    :wait()
+  local top, git_dir, common_dir = unpack(vim.split(vim.trim(res.stdout or ""), "\n"))
+  if res.code == 0 and git_dir ~= common_dir then
+    return vim.fs.basename(top)
+  end
 end
 
 --- Fast path: pick a known project. Type a couple of letters of somewhere you

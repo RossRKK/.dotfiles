@@ -463,7 +463,6 @@ function M.go(t, opts)
   require("config.workspace").open(t.path, {
     tab = true,
     background = opts.background,
-    agent_name = t.name,
     until_ready = function(ready)
       checkout(t.root, t.branch, t.resolved, t.path, t.locals, t.remotes, function(err)
         if err then

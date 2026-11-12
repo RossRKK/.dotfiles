@@ -305,8 +305,9 @@ opens it as a worktree project tab in the surrounding nvim.
 
 **`AGENT_WORKTREES=1 nvim`** (experimental) makes worktrees per agent instead
 of per branch: a branch checked out somewhere opens that worktree; any other
-gets a new `.worktrees/<pet-name>`, and its Claude takes that name
-(`CLAUDE_AGENT_NAME`); the agent switches branches there, so a PR stack is one
+gets a new `.worktrees/<pet-name>`, and terminal 1's Claude in any worktree,
+however opened, takes its directory's name (`CLAUDE_AGENT_NAME`) unless its
+conversation already has one; the agent switches branches there, so a PR stack is one
 checkout. Tabs read
 `<repo> · <pet> · <branch>`. Neovide runs in this mode: on Linux its package is wrapped
 with the flag (profiles/desktop.nix); on Windows (WSL) its
