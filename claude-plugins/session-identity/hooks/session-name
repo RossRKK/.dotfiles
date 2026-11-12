@@ -2,35 +2,13 @@
 # Prints the name of the session <id> that runs in the current directory: its
 # role (see role-name), or else a pet name derived from the id, so a session
 # keeps its name every time it is resumed and other sessions can address it
-# (SendMessage). A fork of <parent> keeps the parent's last word behind a new
-# adjective derived from its own id, so the two can be told apart.
+# (SendMessage).
 #
-#   session-name [--fork-of <parent>] <id>
+#   session-name <id>
 set -euo pipefail
-
-main() {
-  case $1 in
-  --fork-of) fork "$2" "$(seed "$3")" ;;
-  *) "$(dirname "$0")/role-name" || pet "$(seed "$1")" ;;
-  esac
-}
-
-# The next seed on is tried when the first would give back the parent's own name.
-fork() {
-  local parent=$1 seed=$2 name
-  while name="$(pet "$seed" | cut -d- -f1)-${parent##*-}" && [ "$name" = "$parent" ]; do
-    seed=$((seed + 1))
-  done
-  echo "$name"
-}
-
-# petname's two-word names are an adjective then a noun.
-pet() {
-  petname --lists small --seed "$1" --words 2
-}
 
 seed() {
   echo $((16#$(printf '%s' "$1" | sha256sum | cut -c1-15)))
 }
 
-main "$@"
+"$(dirname "$0")/role-name" || petname --lists small --seed "$(seed "$1")" --words 2

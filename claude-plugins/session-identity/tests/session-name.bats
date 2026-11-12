@@ -24,22 +24,6 @@ pet_for() {
   echo "adj$(seed_for "$1")-noun$(seed_for "$1")"
 }
 
-@test "a fork keeps its parent's noun behind an adjective from its own id" {
-  run "$name" --fork-of legal-quetzal abc
-  [ "$output" = "adj$(seed_for abc)-quetzal" ]
-}
-
-@test "a fork of a role takes an adjective in front of it" {
-  cd "$HOME/.dotfiles"
-  WORKSPACE_TERMINAL=1 run "$name" --fork-of dotty abc
-  [ "$output" = "adj$(seed_for abc)-dotty" ]
-}
-
-@test "a fork whose adjective matches its parent's takes the next seed's" {
-  run "$name" --fork-of "adj$(seed_for abc)-quetzal" abc
-  [ "$output" = "adj$(($(seed_for abc) + 1))-quetzal" ]
-}
-
 @test "a session is named from its id, the same every time" {
   run "$name" 11111111-0000-4000-8000-000000000000
   [ "$output" = "$(pet_for 11111111-0000-4000-8000-000000000000)" ]
