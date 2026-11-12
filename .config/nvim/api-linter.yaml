@@ -1,0 +1,6 @@
+# api-linter config for every proto opened in nvim (util/api_linter.lua).
+# We generate no Java, so its file options aren't required.
+- disabled_rules:
+    - core::0191::java-multiple-files
+    - core::0191::java-outer-classname
+    - core::0191::java-package

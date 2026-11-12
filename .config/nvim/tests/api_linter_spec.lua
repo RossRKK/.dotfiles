@@ -1,40 +1,41 @@
 local assert = require("luassert")
 local api_linter = require("util.api_linter")
 
--- A repo laid out like one whose hook runs api-linter from its proto root: the
--- config there, one package linted and one opted out through included_paths.
-local function make_repo()
+local book = {
+  'syntax = "proto3";',
+  "",
+  "package acme.library.v1;",
+  "",
+  'import "google/api/field_behavior.proto";',
+  "",
+  "message Book {",
+  "  string name = 1 [(google.api.field_behavior) = IDENTIFIER];",
+  "  string bookTitle = 2 [(google.api.field_behavior) = REQUIRED];",
+  "}",
+}
+
+-- Writes `files` (path relative to a new temp dir -> lines) and returns that dir.
+local function make_tree(files)
   local root = vim.fn.tempname()
-  local proto = table.concat({
-    'syntax = "proto3";',
-    "",
-    "package acme.library.v1;",
-    "",
-    "message Book {",
-    "  string name = 1;",
-    "  string bookTitle = 2;",
-    "}",
-  }, "\n") .. "\n"
-  for _, dir in ipairs({ "library/v1", "legacy/v1" }) do
-    vim.fn.mkdir(root .. "/protos/" .. dir, "p")
-    vim.fn.writefile(vim.split(proto, "\n"), root .. "/protos/" .. dir .. "/book.proto")
+  for path, lines in pairs(files) do
+    vim.fn.mkdir(vim.fs.dirname(root .. "/" .. path), "p")
+    vim.fn.writefile(lines, root .. "/" .. path)
   end
-  vim.fn.writefile({
-    "- included_paths:",
-    "    - legacy/**",
-    "  disabled_rules:",
-    "    - all",
-  }, root .. "/protos/api-linter.yaml")
   return root
 end
 
-local function run(file)
-  local linter = api_linter.linter(assert(api_linter.find_config(file)), file)
+-- Runs the real api-linter (on PATH, its common protos linked by home-manager) with the linter's own args.
+local function lint(file)
+  local linter = api_linter.linter(file, api_linter.paths)
   local result = vim
     .system({ linter.cmd, unpack(linter.args) }, { cwd = linter.cwd, text = true })
     :wait()
   assert.equals(0, result.code, result.stderr)
-  return api_linter.parse(result.stdout)
+  local by_rule = {}
+  for _, d in ipairs(api_linter.parse(result.stdout)) do
+    by_rule[d.code] = d
+  end
+  return by_rule
 end
 
 describe("api_linter.parse", function()
@@ -78,37 +79,52 @@ describe("api_linter.parse", function()
   end)
 end)
 
-describe("api_linter.find_config", function()
-  it("finds the nearest config above the file", function()
-    local root = make_repo()
-    assert.equals(
-      root .. "/protos/api-linter.yaml",
-      api_linter.find_config(root .. "/protos/library/v1/book.proto")
-    )
+describe("api_linter.proto_root", function()
+  it("is the buf module, even inside a git checkout", function()
+    local root = make_tree({ [".git/HEAD"] = {}, ["protos/buf.yaml"] = { "version: v2" } })
+    assert.equals(root .. "/protos", api_linter.proto_root(root .. "/protos/library/v1/book.proto"))
   end)
 
-  it("finds nothing outside a repo with a config", function()
-    local dir = vim.fn.tempname()
-    vim.fn.mkdir(dir, "p")
-    assert.is_nil(api_linter.find_config(dir .. "/book.proto"))
+  it("is the git checkout without a buf module", function()
+    local root = make_tree({ [".git/HEAD"] = {} })
+    assert.equals(root, api_linter.proto_root(root .. "/protos/library/v1/book.proto"))
+  end)
+
+  it("is the file's own directory outside both", function()
+    local root = make_tree({})
+    assert.equals(root .. "/library/v1", api_linter.proto_root(root .. "/library/v1/book.proto"))
   end)
 end)
 
--- Runs the real api-linter (on PATH via home-manager) with the linter's own args.
 describe("api_linter.linter", function()
-  it("reports a camelCase field on its line", function()
-    local root = make_repo()
-    local by_rule = {}
-    for _, d in ipairs(run(root .. "/protos/library/v1/book.proto")) do
-      by_rule[d.code] = d
+  it(
+    "reports a camelCase field on its line, resolving google/api from the common protos",
+    function()
+      local root = make_tree({ ["buf.yaml"] = { "version: v2" }, ["library/v1/book.proto"] = book })
+      local snake = lint(root .. "/library/v1/book.proto")["core::0140::lower-snake"]
+      assert.is_not_nil(snake)
+      assert.equals(8, snake.lnum)
     end
-    local snake = by_rule["core::0140::lower-snake"]
-    assert.is_not_nil(snake, vim.inspect(by_rule))
-    assert.equals(6, snake.lnum)
+  )
+
+  it("ignores the repo's api-linter config, so packages it opts out are still reported", function()
+    local root = make_tree({
+      ["buf.yaml"] = { "version: v2" },
+      ["api-linter.yaml"] = {
+        "- included_paths:",
+        "    - library/**",
+        "  disabled_rules:",
+        "    - all",
+      },
+      ["library/v1/book.proto"] = book,
+    })
+    assert.is_not_nil(lint(root .. "/library/v1/book.proto")["core::0140::lower-snake"])
   end)
 
-  it("names the file relative to the config, so its included_paths apply", function()
-    local root = make_repo()
-    assert.same({}, run(root .. "/protos/legacy/v1/book.proto"))
+  it("doesn't ask for Java file options", function()
+    local root = make_tree({ ["book.proto"] = book })
+    for rule in pairs(lint(root .. "/book.proto")) do
+      assert.is_nil(rule:match("^core::0191::java%-"), rule)
+    end
   end)
 end)
