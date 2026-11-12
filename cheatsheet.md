@@ -263,9 +263,8 @@ it leaves a fish prompt. Once a session starts, the `claude-plugins/session-iden
 mod gives it a **name** derived from its id (`/rename`, e.g. `calm-otter`) and
 the `/color` fewest live sessions are using. A session that already has a name
 (resumed, or after `/clear`) keeps it and only gets its colour back -- on resume
-the colour it last had, unless another live session holds it; a fork keeps
-its parent's noun behind a new adjective (`calm-otter` -> `brave-otter`, `dotty`
--> `brave-dotty`). The name is what
+the colour it last had, unless another live session holds it; a fork gets a
+fresh name of its own. The name is what
 other sessions address it by (`ListAgents` / `SendMessage`), and fishmonger draws
 that terminal's tab and agent-view row in the same colour as its prompt bar.
 

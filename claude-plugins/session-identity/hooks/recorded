@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Prints the title (/rename) or colour (/color) the transcript of session <id>
+# last recorded; fails when it recorded none or there is no transcript yet.
+#
+#   recorded <title|colour> <id>
+set -euo pipefail
+
+projects=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects
+
+case $1 in
+title) row=custom-title field=customTitle ;;
+colour) row=agent-color field=agentColor ;;
+*) echo "recorded: no such record '$1'" >&2 && exit 2 ;;
+esac
+
+# Session ids are unique, so any project's directory may hold it and its slug needn't be rebuilt.
+shopt -s nullglob
+transcripts=("$projects"/*/"$2.jsonl")
+[ ${#transcripts[@]} -gt 0 ] || exit 1
+grep -hF "\"type\":\"$row\"" "${transcripts[@]}" | tail -n1 | jq -er ".$field"

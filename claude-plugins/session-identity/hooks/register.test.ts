@@ -1,107 +1,92 @@
-import type { ClassicEventOf, On } from 'claude-code'
+import type { CommandRunInput, On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
-
-type Start = ClassicEventOf['classic.SessionStart']
-
-// SessionStart as Claude fires it, for a <source> and the title the session already has.
-function start(source: Start['source'], session_title?: string): Start {
-  return { hook_event_name: 'SessionStart', session_id: 'abc', transcript_path: '/t/abc.jsonl', cwd: '/w', source, session_title }
-}
 
 // Stands for the engine: records each command the mod runs and each script's
 // arguments, and answers its scripts with <printed> (a script left out fails).
-// The clock is mocked so the queued commands can be let run.
+// /clear moves the session from id abc to def, as Claude does. The clock is
+// mocked so the queued commands can be let run.
 function engine(on: On, printed: Record<string, string>) {
   const ran: string[] = []
   const scripts: string[][] = []
+  let id = 'abc'
+  on('session.id', () => ({ value: id }))
   on('command.run', (_, e) => {
     ran.push(`/${e.command} ${e.args}`.trim())
+    if (e.command === 'clear') id = 'def'
     return { text: '' }
   })
   on('process.run', (_, e) => {
-    const script = e.argv[0]?.split('/').pop() ?? ''
-    scripts.push([script, ...e.argv.slice(1)])
-    const stdout = printed[script]
+    const [script = '', ...args] = [e.argv[0]?.split('/').pop(), ...e.argv.slice(1)]
+    scripts.push([script, ...args])
+    const stdout = printed[[script, ...args.slice(0, 1)].join(' ')] ?? printed[script]
     return { value: { exitCode: stdout === undefined ? 1 : 0, stdout: stdout ?? '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
-  on('classic.SessionStart', () => ({}))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
   return { ran, scripts, clock: mock.clock(on) }
 }
 
 const PET = { 'session-name': 'loyal-fly\n', 'claim-colour': 'blue\n' }
+const NAMED = { ...PET, 'recorded title': 'calm-otter\n', 'recorded colour': 'cyan\n' }
+const START = { cwd: '/w', surface: null, isInteractive: false }
 
-test('a new session is named and coloured', async ($, on) => {
-  const { ran, clock } = engine(on, PET)
+// A command as the person types it at the prompt.
+function typed(command: string): CommandRunInput {
+  return { command, args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } }
+}
 
-  await $.classic.SessionStart(start('startup'))
-  await clock.settle()
-  expect(ran).toEqual(['/rename loyal-fly', '/color blue'])
-})
-
-test('a resumed session that has a name keeps it and gets only its colour', async ($, on) => {
+test('a session with no title is named and coloured', async ($, on) => {
   const { ran, scripts, clock } = engine(on, PET)
 
-  await $.classic.SessionStart(start('resume', 'calm-otter'))
+  await $.session.start(START)
   await clock.settle()
-  expect(ran).toEqual(['/color blue'])
-  expect(scripts.map(([script]) => script)).not.toContain('session-name')
-})
-
-test('a resumed session asks for the colour its transcript last had', async ($, on) => {
-  const { scripts, clock } = engine(on, { ...PET, 'last-colour': 'cyan\n' })
-
-  await $.classic.SessionStart(start('resume', 'calm-otter'))
-  await clock.settle()
-  expect(scripts).toContainEqual(['last-colour', '/t/abc.jsonl'])
-  expect(scripts).toContainEqual(['claim-colour', 'cyan'])
-})
-
-test('a session whose transcript has no colour claims one afresh', async ($, on) => {
-  const { scripts, clock } = engine(on, PET)
-
-  await $.classic.SessionStart(start('startup'))
-  await clock.settle()
+  expect(scripts).toContainEqual(['session-name', 'abc'])
   expect(scripts).toContainEqual(['claim-colour'])
-})
-
-test('a resumed session with no name is named', async ($, on) => {
-  const { ran, clock } = engine(on, PET)
-
-  await $.classic.SessionStart(start('resume'))
-  await clock.settle()
   expect(ran).toEqual(['/rename loyal-fly', '/color blue'])
 })
 
-test('a cleared session with no name is named', async ($, on) => {
-  const { ran, clock } = engine(on, PET)
+test("a session whose transcript has a title keeps it and asks back the colour it had", async ($, on) => {
+  const { ran, scripts, clock } = engine(on, NAMED)
 
-  await $.classic.SessionStart(start('clear'))
+  await $.session.start(START)
   await clock.settle()
-  expect(ran).toEqual(['/rename loyal-fly', '/color blue'])
+  expect(scripts).toContainEqual(['recorded', 'title', 'abc'])
+  expect(scripts).toContainEqual(['recorded', 'colour', 'abc'])
+  expect(scripts).toContainEqual(['claim-colour', 'cyan'])
+  expect(scripts.map(([script]) => script)).not.toContain('session-name')
+  expect(ran).toEqual(['/color blue'])
 })
 
-test('a compaction leaves the name and colour alone', async ($, on) => {
+test('a /clear gives the colour back from the transcript it leaves, keeping the title', async ($, on) => {
+  const { ran, scripts, clock } = engine(on, NAMED)
+
+  await $.command.run(typed('clear'))
+  await clock.settle()
+  expect(scripts).toContainEqual(['recorded', 'colour', 'abc'])
+  expect(scripts).toContainEqual(['claim-colour', 'cyan'])
+  expect(ran).toEqual(['/clear', '/color blue'])
+})
+
+test('a /clear of a session with no title names it', async ($, on) => {
+  const { ran, clock } = engine(on, PET)
+
+  await $.command.run(typed('clear'))
+  await clock.settle()
+  expect(ran).toEqual(['/clear', '/rename loyal-fly', '/color blue'])
+})
+
+test('other commands leave the name and colour alone', async ($, on) => {
   const { ran, scripts, clock } = engine(on, PET)
 
-  await $.classic.SessionStart(start('compact', 'calm-otter'))
+  await $.command.run(typed('compact'))
   await clock.settle()
-  expect(ran).toEqual([])
+  expect(ran).toEqual(['/compact'])
   expect(scripts).toEqual([])
-})
-
-test("a fork is named after its parent's title", async ($, on) => {
-  const { ran, scripts, clock } = engine(on, { ...PET, 'session-name': 'brave-otter\n' })
-
-  await $.classic.SessionStart(start('fork', 'calm-otter'))
-  await clock.settle()
-  expect(scripts).toContainEqual(['session-name', '--fork-of', 'calm-otter', 'abc'])
-  expect(ran).toEqual(['/rename brave-otter', '/color blue'])
 })
 
 test('a script that fails leaves that part as Claude has it', async ($, on) => {
   const { ran, clock } = engine(on, { 'session-name': 'loyal-fly\n' })
 
-  await $.classic.SessionStart(start('startup'))
+  await $.session.start(START)
   await clock.settle()
   expect(ran).toEqual(['/rename loyal-fly'])
 })
