@@ -91,6 +91,14 @@ proc_start() {
   [ "$status" -eq 0 ] && [ "$output" = swift-otter-2 ]
 }
 
+@test "for a new agent worktree it still waits for the session and prints the name it took" {
+  export ANSWER="{\"path\":\"$wt\",\"name\":\"keen-heron\"}"
+  SOURCE=collision session keen-heron-2 "$wt" $$ 100
+
+  run "$tab" --timeout 0 feat/x
+  [ "$status" -eq 0 ] && [ "$output" = keen-heron-2 ]
+}
+
 @test "nvim's error is passed on" {
   ANSWER='{"error":"not a git repository"}' run "$tab" feat/x
   [ "$status" -eq 1 ] && [ "$output" = "worktree-tab: not a git repository" ]

@@ -7,10 +7,13 @@
 #
 # The branch is resolved as the nvim picker resolves it (util/worktree.lua): an
 # existing worktree is reused, a remote branch gets a local one, and any other
-# name becomes a new branch off the main checkout's HEAD. Run it from inside the
+# name becomes a new branch off the main checkout's HEAD (in an nvim started with
+# AGENT_WORKTREES=1, see there for where it lands). Run it from inside the
 # repo. Waiting covers the checkout and Claude's start; the session is found in
 # Claude's registry of running sessions by directory, the earliest started there
-# being terminal 1's (its name comes from its id, so can't be known in advance).
+# being terminal 1's. nvim knows the name a new agent worktree's Claude is
+# launched under, but the registry's is printed: a rename onto a taken name is
+# suffixed.
 set -euo pipefail
 
 sessions=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions
