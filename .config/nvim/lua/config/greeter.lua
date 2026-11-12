@@ -1010,7 +1010,7 @@ function M.open(win)
     end
     M.fetch(root)
     M.update_dashboards()
-    M.show_todo(win, root, require("config.todo").FILE)
+    M.show_todo(win, require("config.todo").FILE)
     return
   end
 
@@ -1068,21 +1068,15 @@ function M.open(win)
   -- off the bar altogether.
   vim.bo[buf].bufhidden = "hide"
   vim.bo[buf].buflisted = true
-  M.show_todo(win, root, require("config.todo").FILE)
+  M.show_todo(win, require("config.todo").FILE)
 end
 
 --- Open the todo list in a split under the greeter, so checkmate edits the real
---- file. Main checkouts only (a `.git` directory; a worktree's is a file): a
---- worktree's greeter is about that one branch. Does nothing if the tab
---- already shows the list, so reopening the greeter never stacks a second one.
+--- file. Does nothing if the tab already shows the list, so reopening the
+--- greeter never stacks a second one.
 ---@param win integer the greeter's window
----@param root string normalized workspace root
 ---@param path string the todo file
-function M.show_todo(win, root, path)
-  local git = vim.uv.fs_stat(root .. "/.git")
-  if not (git and git.type == "directory") then
-    return
-  end
+function M.show_todo(win, path)
   local todo = require("config.todo")
   if not todo.window(vim.api.nvim_win_get_tabpage(win), path) then
     todo.open_below(win, path)

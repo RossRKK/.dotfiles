@@ -166,10 +166,10 @@ has a key next to it; press it to open. `Space+X` is the quick way back to the
 greeter. Outside a git repo there's no overview, so it falls back to the pickers
 (`f` find, `g` grep, `n` new file).
 
-In a main checkout (not a worktree) the greeter opens your todo list,
-`~/todo.md`, in a split below it: the real file, so edit it there (`Ctrl+W j`).
-Close the split with `:q`; it comes back the next time the greeter opens, and
-reopening the greeter never adds a second one.
+The greeter opens your todo list, `~/todo.md`, in a split below it (worktrees
+too): the real file, so edit it there (`Ctrl+W j`). Close the split with `:q`;
+it comes back the next time the greeter opens, and reopening the greeter never
+adds a second one.
 
 ### Todo list (checkmate)
 
