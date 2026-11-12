@@ -56,18 +56,16 @@ return {
         -- so a repo can opt in with a bare buf.yaml even without using buf
         -- for codegen. Formatting is `buf format`, via <leader>cf's LSP
         -- fallback (conform.lua).
-        -- Where a repo has an api-linter config, api-linter owns rule checks
-        -- (plugins/lint.lua), and buf's STANDARD rules contradict the AIPs.
-        -- A buf.yaml can't turn buf lint off (an empty `use` means STANDARD),
-        -- so its diagnostics are dropped here, keeping buf's compile errors.
+        -- api-linter owns rule checks (plugins/lint.lua), and buf's STANDARD
+        -- rules contradict the AIPs. A buf.yaml can't turn buf lint off (an
+        -- empty `use` means STANDARD), so its diagnostics are dropped here,
+        -- keeping buf's compile errors.
         buf_ls = {
           handlers = {
             ["textDocument/publishDiagnostics"] = function(err, params, ctx)
-              if require("util.api_linter").find_config(vim.uri_to_fname(params.uri)) then
-                params.diagnostics = vim.tbl_filter(function(d)
-                  return d.source ~= "buf lint"
-                end, params.diagnostics)
-              end
+              params.diagnostics = vim.tbl_filter(function(d)
+                return d.source ~= "buf lint"
+              end, params.diagnostics)
               vim.lsp.diagnostic.on_publish_diagnostics(err, params, ctx)
             end,
           },
