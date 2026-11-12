@@ -13,7 +13,13 @@
 
   home.packages = with pkgs; [
     ghostty
-    neovide
+    # Neovide's nvim gives each agent its own worktree (util/worktree.lua); terminal nvim stays per branch.
+    (symlinkJoin {
+      name = "neovide";
+      paths = [ neovide ];
+      nativeBuildInputs = [ makeWrapper ];
+      postBuild = "wrapProgram $out/bin/neovide --set AGENT_WORKTREES 1";
+    })
     nerd-fonts._0xproto
   ];
 }

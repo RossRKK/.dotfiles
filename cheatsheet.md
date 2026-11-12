@@ -310,7 +310,9 @@ there, so a PR stack is one checkout. Opening a branch an agent last had
 checked out goes back to that worktree: with its Claude running, a request to
 `git checkout` it is typed into the prompt (unsent: edit, `Enter` or drop it);
 without one, it's checked out there and Claude started. Tabs read
-`<pet> · <branch>`.
+`<pet> · <branch>`. Neovide runs in this mode: on Linux its package is wrapped
+with the flag (profiles/desktop.nix); on Windows (WSL) its
+`%APPDATA%\neovide\config.toml` has `neovim-bin = "env AGENT_WORKTREES=1 nvim"`.
 
 `Space+tf` **forks the tab you're in**: it asks for a new branch name (pre-filled
 with `rkk/<current-branch>-fork`, numbered if that's taken), branches
