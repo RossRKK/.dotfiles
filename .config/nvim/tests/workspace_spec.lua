@@ -31,6 +31,17 @@ describe("workspace.agent_shell", function()
       require("config.workspace").agent_shell(false)
     )
   end)
+
+  it("tells that Claude the name to take when it has one", function()
+    assert.same({
+      "env",
+      "WORKSPACE_TERMINAL=1",
+      "CLAUDE_AGENT_NAME=keen-heron",
+      "fish",
+      "-C",
+      "claude --continue; or claude",
+    }, require("config.workspace").agent_shell(false, "keen-heron"))
+  end)
 end)
 
 -- <M-b>e: a browser for a project that is NOT open yet, so it must start at
@@ -410,6 +421,18 @@ describe("workspace.open in the background", function()
     ready()
     assert.equals(ws.find(dir), shown_in)
     assert.equals(origin, vim.api.nvim_get_current_tabpage())
+  end)
+
+  it("starts terminal 1's Claude under the agent name it was given", function()
+    local shell
+    package.loaded["fishmonger"].show = function(_, opts)
+      shell = opts.shell
+    end
+    ws.open(dir, { tab = true, agent_name = "keen-heron" })
+    assert.is_true(vim.wait(1000, function()
+      return shell ~= nil
+    end))
+    assert.truthy(vim.tbl_contains(shell, "CLAUDE_AGENT_NAME=keen-heron"))
   end)
 
   it("does not switch to a tab already open on the directory", function()
