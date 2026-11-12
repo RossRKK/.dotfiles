@@ -54,8 +54,7 @@ return {
         -- buf's own LSP (`buf lsp serve`, lspconfig's buf_ls), not protols:
         -- it resolves imports and lints from the buf.yaml at the module root,
         -- so a repo can opt in with a bare buf.yaml even without using buf
-        -- for codegen. Formatting is `buf format`, via <leader>cf's LSP
-        -- fallback (conform.lua).
+        -- for codegen. Formatting is `buf format` through conform.lua.
         -- api-linter owns rule checks (plugins/lint.lua), and buf's STANDARD
         -- rules contradict the AIPs. A buf.yaml can't turn buf lint off (an
         -- empty `use` means STANDARD), so its diagnostics are dropped here,

@@ -40,6 +40,7 @@ return {
         bash = { "shfmt" },
         gdscript = { "gdformat" },
         nix = { "nixfmt" },
+        proto = { "buf" },
         -- prettierd handles the web stack and Markdown. `gq`/`gw` in Markdown
         -- route through conform (see autocmds.lua) so reflow uses prettier, which
         -- reflows prose and keeps tables aligned instead of the built-in reflow.
