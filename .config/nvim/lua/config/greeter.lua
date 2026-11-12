@@ -151,7 +151,7 @@ local fetching = {}
 local PANE_WIDTH = 90
 
 -- The personal todo list (plugins/checkmate.lua). Outside the dotfiles: the repo is public.
-local TODO_FILE = vim.fs.normalize("~/notes/todo.md")
+local TODO_FILE = vim.fs.normalize("~/todo.md")
 
 --- Is review mode on for `root`? False when triage isn't loaded.
 ---@param root string
@@ -456,13 +456,18 @@ function M.watch(root, report)
   watchers[root] = handles
 end
 
--- The one watcher on the todo list's directory (watch_todos).
+-- The one poller on the todo list (watch_todos).
 local todo_watcher
 
+-- How often to stat the todo list; a second's lag is fine for a list.
+local TODO_POLL_MS = 1000
+
 --- Repaint the greeters when the todo list changes, so an item an agent adds
---- shows up without touching nvim. Watches the directory, not the file: an
---- atomic save replaces the file, which ends a watch on the file itself. One
---- watcher for the session; a second call (setup() re-run) replaces it.
+--- shows up without touching nvim. Polled with stat rather than watched with
+--- fs_event: a watch on the file dies when a save renames a new file over it
+--- (or renames the old one away before writing, as nvim's writebackup does),
+--- and the list sits in ~, a directory too busy to watch. One poller for the
+--- session; a second call (setup() re-run) replaces it.
 ---@param path string the todo file
 function M.watch_todos(path)
   if todo_watcher and not todo_watcher:is_closing() then
@@ -470,22 +475,12 @@ function M.watch_todos(path)
     todo_watcher:close()
   end
   local uv = vim.uv or vim.loop
-  local name = vim.fs.basename(path)
-  local handle = uv.new_fs_event()
+  local handle = uv.new_fs_poll()
   todo_watcher = handle
   if not handle then
     return
   end
-  local ok = handle:start(
-    vim.fs.dirname(path),
-    {},
-    vim.schedule_wrap(function(_, filename)
-      if filename == nil or filename == name then
-        M.update_dashboards()
-      end
-    end)
-  )
-  -- No directory yet: the section is hidden until there's a list, so nothing to follow.
+  local ok = handle:start(path, TODO_POLL_MS, vim.schedule_wrap(M.update_dashboards))
   if ok ~= 0 then
     handle:close()
   end
