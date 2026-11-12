@@ -150,9 +150,6 @@ local fetching = {}
 -- pane and shift everything else.
 local PANE_WIDTH = 90
 
--- The personal todo list (plugins/checkmate.lua). Outside the dotfiles: the repo is public.
-local TODO_FILE = vim.fs.normalize("~/todo.md")
-
 --- Is review mode on for `root`? False when triage isn't loaded.
 ---@param root string
 ---@return boolean
@@ -1013,7 +1010,7 @@ function M.open(win)
     end
     M.fetch(root)
     M.update_dashboards()
-    M.show_todo(win, root, TODO_FILE)
+    M.show_todo(win, root, require("config.todo").FILE)
     return
   end
 
@@ -1071,14 +1068,13 @@ function M.open(win)
   -- off the bar altogether.
   vim.bo[buf].bufhidden = "hide"
   vim.bo[buf].buflisted = true
-  M.show_todo(win, root, TODO_FILE)
+  M.show_todo(win, root, require("config.todo").FILE)
 end
 
 --- Open the todo list in a split under the greeter, so checkmate edits the real
 --- file. Main checkouts only (a `.git` directory; a worktree's is a file): a
---- worktree's greeter is about that one branch. Below rather than beside, as
---- the dashboard needs its full width. Does nothing if the tab already shows
---- the list, so reopening the greeter never stacks a second one.
+--- worktree's greeter is about that one branch. Does nothing if the tab
+--- already shows the list, so reopening the greeter never stacks a second one.
 ---@param win integer the greeter's window
 ---@param root string normalized workspace root
 ---@param path string the todo file
@@ -1087,19 +1083,10 @@ function M.show_todo(win, root, path)
   if not (git and git.type == "directory") then
     return
   end
-  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(vim.api.nvim_win_get_tabpage(win))) do
-    if vim.fs.normalize(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(w))) == path then
-      return
-    end
+  local todo = require("config.todo")
+  if not todo.window(vim.api.nvim_win_get_tabpage(win), path) then
+    todo.open_below(win, path)
   end
-  -- Unlisted (bufadd's default), so config.windows never routes a file into
-  -- this split. A missing file is a new buffer that the first save creates.
-  local todo_win = vim.api.nvim_open_win(vim.fn.bufadd(path), false, {
-    split = "below",
-    win = win,
-    height = math.max(6, math.floor(vim.api.nvim_win_get_height(win) / 3)),
-  })
-  vim.wo[todo_win].winfixheight = true
 end
 
 --- Put the cursor on this workspace's greeter, building it if the workspace
