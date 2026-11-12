@@ -17,12 +17,12 @@ setup() {
 }
 
 # Registers a session <name> in <dir> run by <pid>, started at <ms>, reachable
-# unless "nosocket".
+# unless "nosocket"; $SOURCE is how it got its name (the mod's /rename by default).
 session() {
   local socket='"/run/s.sock"'
   [ "${5-}" != nosocket ] || socket=null
-  printf '{"pid":%s,"name":"%s","cwd":"%s","startedAt":%s,"messagingSocketPath":%s}\n' \
-    "$3" "$1" "$2" "$4" "$socket" >"$sessions/$3.json"
+  printf '{"pid":%s,"name":"%s","nameSource":"%s","cwd":"%s","startedAt":%s,"messagingSocketPath":%s}\n' \
+    "$3" "$1" "${SOURCE:-user}" "$2" "$4" "$socket" >"$sessions/$3.json"
 }
 
 @test "prints the name of the Claude in the worktree once it can be messaged" {
@@ -59,6 +59,20 @@ session() {
   kill $!
   [ "$status" -eq 1 ]
   [[ "$output" == *"no Claude started in $wt"* ]]
+}
+
+@test "a session still on the name Claude derived isn't printed before the rename lands" {
+  SOURCE=derived session feat-x-3f "$wt" $$ 100
+
+  run "$tab" --timeout 0 feat/x
+  [ "$status" -eq 1 ]
+}
+
+@test "a name the rename suffixed because it was taken still counts" {
+  SOURCE=collision session swift-otter-2 "$wt" $$ 100
+
+  run "$tab" --timeout 0 feat/x
+  [ "$status" -eq 0 ] && [ "$output" = swift-otter-2 ]
 }
 
 @test "nvim's error is passed on" {

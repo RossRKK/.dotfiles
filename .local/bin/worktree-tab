@@ -39,14 +39,17 @@ main() {
 }
 
 # The name of the earliest started running session in <dir> that has a
-# messaging socket; fails when there is none.
+# messaging socket and its final name; fails when there is none. Claude
+# registers a "derived" name at once and the session-identity mod's /rename
+# lands after, so only a name the rename set ("collision" when it was taken) counts.
 first_live_session() {
   local file dir
   dir=$(realpath -m "$1")
   for file in "$sessions"/*.json; do
     [ -e "$file" ] || continue
     jq -c --arg dir "$dir" \
-      'select(.cwd == $dir and .messagingSocketPath != null and .name != null)
+      'select(.cwd == $dir and .messagingSocketPath != null and .name != null
+              and (.nameSource == "user" or .nameSource == "collision"))
        | {pid, name, startedAt: (.startedAt // 0)}' "$file" 2>/dev/null || true
   done | while read -r entry; do
     if kill -0 "$(jq -r .pid <<<"$entry")" 2>/dev/null; then printf '%s\n' "$entry"; fi
