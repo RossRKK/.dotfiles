@@ -150,9 +150,6 @@ local fetching = {}
 -- pane and shift everything else.
 local PANE_WIDTH = 90
 
--- The personal todo list (plugins/checkmate.lua). Outside the dotfiles: the repo is public.
-local TODO_FILE = vim.fs.normalize("~/todo.md")
-
 --- Is review mode on for `root`? False when triage isn't loaded.
 ---@param root string
 ---@return boolean
@@ -456,40 +453,6 @@ function M.watch(root, report)
   watchers[root] = handles
 end
 
--- The one poller on the todo list (watch_todos).
-local todo_watcher
-
--- How often to stat the todo list; a second's lag is fine for a list.
-local TODO_POLL_MS = 1000
-
---- Repaint the greeters when the todo list changes, so an item an agent adds
---- shows up without touching nvim. Polled with stat rather than watched with
---- fs_event: a watch on the file dies when a save renames a new file over it
---- (or renames the old one away before writing, as nvim's writebackup does),
---- and the list sits in ~, a directory too busy to watch. One poller for the
---- session; a second call (setup() re-run) replaces it.
----@param path string the todo file
-function M.watch_todos(path)
-  if todo_watcher and not todo_watcher:is_closing() then
-    todo_watcher:stop()
-    todo_watcher:close()
-  end
-  local uv = vim.uv or vim.loop
-  local handle = uv.new_fs_poll()
-  todo_watcher = handle
-  if not handle then
-    return
-  end
-  local ok = handle:start(path, TODO_POLL_MS, vim.schedule_wrap(M.update_dashboards))
-  if ok ~= 0 then
-    handle:close()
-  end
-end
--- Exposed for tests only.
-function M._todo_watcher()
-  return todo_watcher
-end
-
 --- Drop the watchers for roots no tabpage is rooted at anymore. Watchers live
 --- as long as the workspace does, not just while its greeter is on screen: the
 --- report cache they refresh also names the workspace's tab and the OS title,
@@ -515,14 +478,9 @@ end
 --- Open a file from the overview in the main editor window (the greeter's own
 --- window is the main one, but the list is also reachable from a split).
 ---@param path string
----@param lnum? integer line to put the cursor on
-local function edit(path, lnum)
+local function edit(path)
   require("config.windows").goto_main_window()
   vim.cmd.edit(vim.fn.fnameescape(path))
-  if lnum then
-    -- The file may have shrunk since the greeter last painted.
-    pcall(vim.api.nvim_win_set_cursor, 0, { lnum, 0 })
-  end
 end
 
 --- A dim text line, indented to sit under the header.
@@ -689,69 +647,6 @@ local function agents()
     }
   end
   return section
-end
-
---- The todo section: the open items of the personal todo list, under the
---- heading that says who has to act on them. Main checkouts only: a
---- worktree's greeter is about that one branch. Nil while the report is in
---- flight, outside a repo, or when nothing is open.
----@param report table? TriageReport
----@param path string the todo file
----@return table?
-local function todos(report, path)
-  if not (report and report.git_dir and report.git_dir == report.common_dir) then
-    return nil
-  end
-  local groups = M.open_todos(vim.fn.filereadable(path) == 1 and vim.fn.readfile(path) or {})
-  if #groups == 0 then
-    return nil
-  end
-  local section = { icon = "\u{f45e} ", title = "Todo", indent = 2, padding = 1 }
-  for _, group in ipairs(groups) do
-    if group.heading then
-      section[#section + 1] =
-        { text = { { group.heading, hl = "SnacksDashboardDesc" } }, indent = 2 }
-    end
-    for _, item in ipairs(group.items) do
-      section[#section + 1] = {
-        -- No key: an autokey here would renumber the changed-file keys below
-        -- whenever the list changes. The cursor and <CR> reach it.
-        icon = { "\u{25a1}", hl = "SnacksDashboardIcon", width = 1 },
-        desc = item.text,
-        indent = 4,
-        action = function()
-          edit(path, item.lnum)
-        end,
-      }
-    end
-  end
-  return section
-end
-
----@class greeter.TodoGroup
----@field heading string? the nearest heading above the items, nil before any
----@field items { text: string, lnum: integer }[]
-
---- The open (`- [ ]`) items of a markdown todo list, grouped by the heading
---- they sit under, in file order. Groups with nothing open are left out.
----@param lines string[]
----@return greeter.TodoGroup[]
-function M.open_todos(lines)
-  local groups, heading, current = {}, nil, nil
-  for lnum, text in ipairs(lines) do
-    local title = text:match("^#+%s+(.-)%s*$")
-    local item = text:match("^%s*[-*+]%s+%[ %]%s+(%S.-)%s*$")
-    if title then
-      heading, current = title, nil
-    elseif item then
-      if not current then
-        current = { heading = heading, items = {} }
-        groups[#groups + 1] = current
-      end
-      current.items[#current.items + 1] = { text = item, lnum = lnum }
-    end
-  end
-  return groups
 end
 
 --- Word-wrap `text` to `width` display columns. Words longer than a line are
@@ -988,9 +883,8 @@ end
 ---@param buf integer the greeter's buffer
 ---@param tab integer the workspace tabpage
 ---@param report fun(): table? the cached TriageReport, or nil while in flight
----@param todo_file string the personal todo list
 ---@return table[]
-function M.sections(root, buf, tab, report, todo_file)
+function M.sections(root, buf, tab, report)
   return {
     -- A blank line first. Snacks centres the content vertically, but only while
     -- it fits: once the overview and file list overrun the window it starts at row
@@ -1001,10 +895,6 @@ function M.sections(root, buf, tab, report, todo_file)
     -- agents. Sitting under a "<repo> - <branch>" heading would read as a
     -- claim that these belong to this repo.
     agents,
-    -- Also cross-project, so also above the header.
-    function()
-      return todos(report(), todo_file)
-    end,
     -- "<repo> - <branch>", the tab label, read from the report cache this
     -- greeter fills, with the plain workspace name as the fallback for a
     -- directory git can't tell us anything about. See workspace.display_name.
@@ -1166,7 +1056,7 @@ function M.open(win)
     win = win,
     buf = buf,
     width = PANE_WIDTH,
-    sections = M.sections(root, buf, tab, report, TODO_FILE),
+    sections = M.sections(root, buf, tab, report),
   })
 
   -- Undo the two pieces of snacks' styling that assume a throwaway dashboard.
@@ -1308,7 +1198,6 @@ function M.setup()
     pattern = "FishmongerAgentsChanged",
     callback = M.update_dashboards,
   })
-  M.watch_todos(TODO_FILE)
 
   -- A closed workspace tab leaves its greeter behind in the (global) buffer
   -- list. The bufferline filters it off every other project's bar, so it is
