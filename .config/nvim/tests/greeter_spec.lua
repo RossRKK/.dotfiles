@@ -207,6 +207,53 @@ describe("greeter.patch_snacks_dashboard", function()
   end)
 end)
 
+describe("greeter.show_todo", function()
+  local todo_file = vim.fs.normalize(vim.fn.tempname() .. "-todo.md")
+
+  -- A workspace root whose `.git` is a directory (main checkout) or a file
+  -- (linked worktree), as git lays them out.
+  local function checkout(git_is_dir)
+    local root = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(root, "p")
+    if git_is_dir then
+      vim.fn.mkdir(root .. "/.git", "p")
+    else
+      vim.fn.writefile({ "gitdir: /elsewhere/.git/worktrees/feat" }, root .. "/.git")
+    end
+    return root
+  end
+
+  local function todo_windows()
+    return #vim.tbl_filter(function(w)
+      return vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(w)) == todo_file
+    end, vim.api.nvim_tabpage_list_wins(0))
+  end
+
+  after_each(function()
+    vim.cmd("only!")
+  end)
+
+  it("opens the list below the greeter in a main checkout, keeping focus", function()
+    local greeter_win = vim.api.nvim_get_current_win()
+    greeter.show_todo(greeter_win, checkout(true), todo_file)
+    assert.equals(1, todo_windows())
+    assert.equals(greeter_win, vim.api.nvim_get_current_win())
+    assert.is_false(vim.bo[vim.fn.bufnr(todo_file)].buflisted)
+  end)
+
+  it("opens no list in a linked worktree", function()
+    greeter.show_todo(vim.api.nvim_get_current_win(), checkout(false), todo_file)
+    assert.equals(0, todo_windows())
+  end)
+
+  it("does not stack a second list when the greeter is reopened", function()
+    local root = checkout(true)
+    greeter.show_todo(vim.api.nvim_get_current_win(), root, todo_file)
+    greeter.show_todo(vim.api.nvim_get_current_win(), root, todo_file)
+    assert.equals(1, todo_windows())
+  end)
+end)
+
 describe("greeter.wrap", function()
   it("wraps on word boundaries within the width", function()
     assert.same({ "aaa bbb", "ccc" }, greeter.wrap("aaa bbb ccc", 7))
