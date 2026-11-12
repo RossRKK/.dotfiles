@@ -47,6 +47,23 @@ test('a resumed session that has a name keeps it and gets only its colour', asyn
   expect(scripts.map(([script]) => script)).not.toContain('session-name')
 })
 
+test('a resumed session asks for the colour its transcript last had', async ($, on) => {
+  const { scripts, clock } = engine(on, { ...PET, 'last-colour': 'cyan\n' })
+
+  await $.classic.SessionStart(start('resume', 'calm-otter'))
+  await clock.settle()
+  expect(scripts).toContainEqual(['last-colour', '/t/abc.jsonl'])
+  expect(scripts).toContainEqual(['claim-colour', 'cyan'])
+})
+
+test('a session whose transcript has no colour claims one afresh', async ($, on) => {
+  const { scripts, clock } = engine(on, PET)
+
+  await $.classic.SessionStart(start('startup'))
+  await clock.settle()
+  expect(scripts).toContainEqual(['claim-colour'])
+})
+
 test('a resumed session with no name is named', async ($, on) => {
   const { ran, clock } = engine(on, PET)
 

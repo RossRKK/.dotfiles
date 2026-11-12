@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Prints the prompt-bar colour of the claude process this runs under: the one it
-# already claimed, or else the colour fewest live sessions hold, claimed for it.
-# Fails when there is no claude above it.
+# Prints the prompt-bar colour of the claude process this runs under: <preferred>
+# when no other live session holds it, or else the one it already claimed, or
+# else the colour fewest live sessions hold, claimed for it. Fails when there is
+# no claude above it.
+#
+#   claim-colour [<preferred>]
 #
 # Each claim is $XDG_RUNTIME_DIR/claude-agents/<pid>.colour (fishmonger colours
 # the session's tab from it too); its recorded start time tells a live claim
@@ -13,13 +16,21 @@ dir=${XDG_RUNTIME_DIR:-/tmp}/claude-agents
 palette='["red","blue","green","yellow","purple","cyan","pink","orange"]'
 
 main() {
-  local agent
+  local agent preferred=${1-}
   agent=$(claude_pid)
   mkdir -p "$dir"
   # Under a lock so sessions started together don't pick the same colour.
   exec 9>"$dir/colours.lock"
   flock 9
-  claimed "$agent" || claim "$agent"
+  { free "$preferred" && record "$agent" "$preferred"; } || claimed "$agent" || claim "$agent"
+}
+
+# Whether <colour> is in the palette and held by no live session.
+free() {
+  local live
+  jq -en --arg colour "$1" --argjson palette "$palette" '$palette | index($colour)' >/dev/null || return 1
+  live=$(live_colours)
+  ! grep -qxF "$1" <<<"$live"
 }
 
 # The colour <pid> holds a live claim to; fails when it holds none.
@@ -29,16 +40,19 @@ claimed() {
 }
 
 claim() {
-  local colour
-  colour=$(live_colours | jq -rRn --argjson palette "$palette" '
+  record "$1" "$(live_colours | jq -rRn --argjson palette "$palette" '
     [inputs] as $live
     | $palette | to_entries
     | min_by([(.value as $c | $live | map(select(. == $c)) | length), .key])
-    | .value')
-  jq -nc --arg colour "$colour" --argjson pid_start "$(start_time "$1")" \
+    | .value')"
+}
+
+# Claims <colour> for <pid> and prints it.
+record() {
+  jq -nc --arg colour "$2" --argjson pid_start "$(start_time "$1")" \
     '{colour: $colour, pid_start: $pid_start}' >"$dir/$1.colour.tmp"
   mv -f "$dir/$1.colour.tmp" "$dir/$1.colour"
-  printf '%s\n' "$colour"
+  printf '%s\n' "$2"
 }
 
 # Prints each live claim's colour, deleting the dead claims it passes.
@@ -77,4 +91,4 @@ start_time() {
   printf '%s' "${line##*) }" | cut -d' ' -f20
 }
 
-main
+main "$@"

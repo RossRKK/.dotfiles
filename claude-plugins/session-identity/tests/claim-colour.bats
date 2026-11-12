@@ -66,3 +66,40 @@ claim_in_claude() {
   [ "${lines[1]}" = red ]
   [ ! -e "$claims/$$.colour" ]
 }
+
+# Runs the claim for <preferred> under the stand-in claude; prints as claim_in_claude.
+prefer_in_claude() {
+  "$agent" -c 'echo "$$"; sh -c "\"\$0\" \"\$1\"" "$0" "$1" </dev/null' "$claim" "$1"
+}
+
+@test "a preferred colour no live session holds is taken" {
+  live_claim $$ red
+
+  run prefer_in_claude purple
+  [ "${lines[1]}" = purple ]
+  [ "$(jq -r .colour "$claims/${lines[0]}.colour")" = purple ]
+}
+
+@test "a preferred colour a live session holds gives way to the usual claim" {
+  live_claim $$ purple
+
+  run prefer_in_claude purple
+  [ "${lines[1]}" = red ]
+}
+
+@test "a preferred colour outside the palette gives way to the usual claim" {
+  run prefer_in_claude default
+  [ "${lines[1]}" = red ]
+}
+
+@test "a preferred colour replaces the session's own claim" {
+  run "$agent" -c 'printf "{\"colour\":\"pink\",\"pid_start\":%s}\n" "$(cut -d" " -f22 /proc/$$/stat)" >"$1/$$.colour"
+    sh -c "\"\$0\" green" "$0" </dev/null' "$claim" "$claims"
+  [ "$output" = green ]
+}
+
+@test "a session that already holds its preferred colour keeps it" {
+  run "$agent" -c 'printf "{\"colour\":\"green\",\"pid_start\":%s}\n" "$(cut -d" " -f22 /proc/$$/stat)" >"$1/$$.colour"
+    sh -c "\"\$0\" green" "$0" </dev/null' "$claim" "$claims"
+  [ "$output" = green ]
+}

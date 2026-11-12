@@ -16,9 +16,10 @@ async function discover($: EngineInterface, e: ClassicEventOf['classic.SessionSt
   // A fork arrives with its parent's title, so it needs a name of its own.
   const named = e.session_title && e.source !== 'fork'
   const forkOf = e.session_title ? ['--fork-of', e.session_title] : []
+  const previous = await output($, ['last-colour', e.transcript_path])
   return {
     name: named ? undefined : await output($, ['session-name', ...forkOf, e.session_id]),
-    colour: await output($, ['claim-colour']),
+    colour: await output($, ['claim-colour', ...(previous ? [previous] : [])]),
   }
 }
 

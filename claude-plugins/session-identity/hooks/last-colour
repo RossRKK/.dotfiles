@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Prints the colour /color last gave the session whose transcript is
+# <transcript>; fails when it was never given one.
+#
+#   last-colour <transcript>
+set -euo pipefail
+
+grep '"type":"agent-color"' "$1" | tail -n1 | jq -er .agentColor
