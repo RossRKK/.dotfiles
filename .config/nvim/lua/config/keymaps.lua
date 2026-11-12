@@ -160,13 +160,6 @@ end, { desc = "Workspace prefix (N switch / c new / & close / .N renumber / w wo
 map("n", "<leader>tn", function()
   require("config.workspace").pick_new()
 end, { desc = "New project tab (recent/dev)" })
--- Fork the current worktree tab: new branch off this tab's current state,
--- dirty changes carried over, opened as its own tab, with every Claude session
--- in this tab's side terminals forked (--fork-session) into its same slot. See
--- util/worktree.lua.
-map("n", "<leader>tf", function()
-  require("util.worktree").fork()
-end, { desc = "Fork project tab (worktree + claude forks)" })
 -- The other way into a worktree tab: from the PRs that actually need my review
 -- in this repo, opened in review mode. <leader>r because it's where a review
 -- starts; triage/nitpick own the rest of that namespace. See util/reviewqueue.lua.

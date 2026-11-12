@@ -230,7 +230,6 @@ renumbering the rest.
 | Key         | Action                                                     |
 | ----------- | ---------------------------------------------------------- |
 | `Space+tn`  | New project tab — names one from zoxide's list             |
-| `Space+tf`  | Fork this tab — new branch + checkout, Claudes forked along |
 | `Alt+1-9`   | Switch to workspace N (works in terminal mode too); an unused number opens the project picker, and the pick becomes workspace N |
 | `Space+tt`  | Switch to an open project (picker; matches number or name) |
 | `Space+tx`  | Close this project tab (its terminals shut down with it; asks first if an agent there is live) |
@@ -312,16 +311,6 @@ checkout. Tabs read
 `<repo> · <pet> · <branch>`. Neovide runs in this mode: on Linux its package is wrapped
 with the flag (profiles/desktop.nix); on Windows (WSL) its
 `%APPDATA%\neovide\config.toml` has `neovim-bin = "env AGENT_WORKTREES=1 nvim"`.
-
-`Space+tf` **forks the tab you're in**: it asks for a new branch name (pre-filled
-with `rkk/<current-branch>-fork`, numbered if that's taken), branches
-it off _this worktree's_ `HEAD` (uncommitted changes come along; the original
-tab keeps them too), opens the new worktree as its own tab — and re-creates
-every Claude Code session from this tab's side terminals in the new tab, each
-forked with its full conversation history (`claude --resume … --fork-session`)
-into the **same terminal slot**, so "claude 2" is still claude 2 after the
-fork. Plain shells and open editor buffers do not travel; staged hunks arrive
-unstaged.
 
 So a branch becomes a project tab: its own checkout, terminals and buffer list,
 with your main checkout untouched in the tab next door — no stash, no

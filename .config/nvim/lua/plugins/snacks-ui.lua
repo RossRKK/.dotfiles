@@ -16,7 +16,7 @@ return {
   ---@type snacks.Config
   opts = {
     -- Replaces the native cmdline vim.ui.input with a floating input (used by
-    -- e.g. <leader>tf's branch-name prompt, LSP rename).
+    -- e.g. <M-b>b's branch-name prompt, LSP rename).
     input = { enabled = true },
     notifier = { enabled = true },
     quickfile = { enabled = true },
