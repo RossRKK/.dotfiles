@@ -262,6 +262,7 @@ in
       helm-ls
       nixd
       buf # provides buf_ls (`buf lsp serve`) for .proto
+      api-linter # Google's AIP linter on .proto, run by nvim-lint (plugins/lint.lua)
 
       # Debug adapters (nvim-dap; debugpy is not here because the python adapter
       # runs debugpy out of each project's venv, see dap.lua)

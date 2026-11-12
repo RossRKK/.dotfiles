@@ -10,7 +10,8 @@
     # understands Svelte 5.5x runes and TypeScript 6 (false errors on runes
     # and <script> blocks otherwise); take them from unstable until stable
     # catches up. Same for openspec: 26.05 ships 1.4.1, ten minor
-    # releases behind upstream.
+    # releases behind upstream. And api-linter: 26.05 ships 2.3.1, behind
+    # the 2.4 line a work repo's pre-commit hook pins.
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
@@ -58,6 +59,7 @@
             opentofu = pkgs-unstable.opentofu;
             svelte-language-server = pkgs-unstable.svelte-language-server;
             openspec = pkgs-unstable.openspec;
+            api-linter = pkgs-unstable.api-linter;
             claude-code = claude-code.packages.${system}.default;
             kache = kache.packages.${system}.default;
           })
