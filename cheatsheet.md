@@ -303,6 +303,15 @@ already has a worktree just opens it.
 The same thing is reachable from **lazygit**: `w` on a branch (local or remote)
 opens it as a worktree project tab in the surrounding nvim.
 
+**`AGENT_WORKTREES=1 nvim`** (experimental) makes worktrees per agent instead
+of per branch: a branch no worktree has gets `.worktrees/<pet-name>`, and its
+Claude takes that name (`CLAUDE_AGENT_NAME`); the agent switches branches
+there, so a PR stack is one checkout. Opening a branch an agent last had
+checked out goes back to that worktree: with its Claude running, a request to
+`git checkout` it is typed into the prompt (unsent: edit, `Enter` or drop it);
+without one, it's checked out there and Claude started. Tabs read
+`<pet> · <branch>`.
+
 `Space+tf` **forks the tab you're in**: it asks for a new branch name (pre-filled
 with `rkk/<current-branch>-fork`, numbered if that's taken), branches
 it off _this worktree's_ `HEAD` (uncommitted changes come along; the original
