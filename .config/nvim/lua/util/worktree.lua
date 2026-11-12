@@ -391,7 +391,7 @@ local function remote_names(dir)
   return set
 end
 
-local checkout, abandon, agent_name_for, head_reflog, linked_worktrees, agent_in, ask_agent
+local checkout, abandon, agent_name_for
 
 --- Open `branch`'s worktree as a new workspace tab, creating it if needed.
 --- Reuses whatever already exists: a worktree git already knows about, or a
@@ -418,11 +418,9 @@ end
 
 --- Where opening a branch lands, and what has to happen there first.
 ---@class worktree.Target
----@field kind "open"|"create"|"ask"|"switch" open an existing directory; make the worktree first; ask the agent there to check the branch out; check it out there first
+---@field kind "open"|"create" open an existing directory, or make the worktree first
 ---@field path string
 ---@field name? string the agent a new agent worktree is named after
----@field local_branch? string the branch to check out ("ask", "switch")
----@field agent? { tab: integer, slot: integer } where the Claude to ask is ("ask")
 ---@field root string the main worktree
 ---@field branch string as picked
 ---@field resolved? string the branch as an existing ref (M.resolve)
@@ -450,12 +448,6 @@ function M.target(branch, dir)
     t.kind = vim.fn.isdirectory(t.path) == 1 and "open" or "create"
     return t
   end
-  local owner = M.owner(local_branch, linked_worktrees(root))
-  if owner then
-    t.path, t.local_branch, t.agent = owner, local_branch, agent_in(owner)
-    t.kind = t.agent and "ask" or "switch"
-    return t
-  end
   local name, name_err = agent_name_for(root)
   if not name then
     return nil, name_err
@@ -478,22 +470,6 @@ function M.go(t, opts)
   if t.kind == "open" then
     require("config.workspace").open(t.path, { tab = true, background = opts.background })
     return checked_out()
-  elseif t.kind == "ask" then
-    -- Not checked out yet, so no on_open: the agent does it, once it has dealt with its own work.
-    return ask_agent(t.agent, t.local_branch, opts.background)
-  elseif t.kind == "switch" then
-    local label = "checking out " .. t.local_branch
-    return git_async(t.path, { "checkout", t.local_branch }, label, function(_, err)
-      if err then
-        return status("git checkout: " .. err, vim.log.levels.ERROR)
-      end
-      require("config.workspace").open(t.path, {
-        tab = true,
-        background = opts.background,
-        agent_name = vim.fs.basename(t.path),
-      })
-      checked_out()
-    end)
   end
   -- git checks out into an empty directory, so the tab needn't wait for it.
   vim.fn.mkdir(t.path, "p")
@@ -568,130 +544,6 @@ agent_name_for = function(root)
     return nil, ("no free agent name in %d tries"):format(NAME_CANDIDATES)
   end
   return name
-end
-
---- The worktree that owns `branch`: of `worktrees`, the one whose HEAD most
---- recently had it checked out. Read from each worktree's own HEAD reflog; the
---- one place to change if ownership is ever recorded explicitly instead.
----@param branch string local branch name
----@param worktrees string[] worktree paths
----@return string?
-function M.owner(branch, worktrees)
-  local owner, latest = nil, -1
-  for _, path in ipairs(worktrees) do
-    local at = M.checkouts(head_reflog(path))[branch]
-    if at and at > latest then
-      owner, latest = path, at
-    end
-  end
-  return owner
-end
-
---- When each branch was last checked out, per a HEAD reflog's text (as
---- `.git/worktrees/<name>/logs/HEAD` holds it). A checkout counts for the
---- branch moved to and the one moved from (which was checked out until then),
---- and a rebase's finish for the branch it returns to. `git worktree add` logs
---- no branch at all, so a worktree's first branch only shows once it moves on.
----@param reflog string
----@return table<string, integer> branch -> unix time
-function M.checkouts(reflog)
-  local at = {}
-  local function saw(branch, time)
-    at[branch] = math.max(at[branch] or time, time)
-  end
-  for line in vim.gsplit(reflog, "\n") do
-    local time, msg = line:match("^%x+ %x+ .- (%d+) [+-]%d+\t(.*)$")
-    if time then
-      time = tonumber(time)
-      local from, to = msg:match("^checkout: moving from (%S+) to (%S+)$")
-      if from then
-        saw(from, time)
-        saw(to, time)
-      end
-      local returned = msg:match("^rebase.-%(finish%): returning to refs/heads/(.+)$")
-      if returned then
-        saw(returned, time)
-      end
-    end
-  end
-  return at
-end
-
---- A worktree's HEAD reflog, read straight from its git dir (`.git` itself, or
---- the one a linked worktree's `.git` file names); empty when there is none.
----@param path string
----@return string
-head_reflog = function(path)
-  local function read(file)
-    local f = io.open(file, "r")
-    if not f then
-      return nil
-    end
-    local text = f:read("*a")
-    f:close()
-    return text
-  end
-  local dotgit = path .. "/.git"
-  local gitdir = vim.fn.isdirectory(dotgit) == 1 and dotgit
-    or (read(dotgit) or ""):match("^gitdir: ([^\n]+)")
-  return gitdir and read(gitdir .. "/logs/HEAD") or ""
-end
-
---- Every worktree of `root`'s repo but the main checkout, which is yours rather
---- than an agent's.
----@param root string the main worktree
----@return string[]
-linked_worktrees = function(root)
-  local paths = {}
-  for i, wt in ipairs(worktree_list(root)) do
-    if i > 1 then
-      paths[#paths + 1] = wt.path
-    end
-  end
-  return paths
-end
-
---- The side terminal a Claude is running in in `path`'s open workspace, if any.
----@param path string
----@return { tab: integer, slot: integer }?
-agent_in = function(path)
-  local tab = require("config.workspace").find(path)
-  local fishmonger = package.loaded["fishmonger"]
-  if not (tab and fishmonger) then
-    return nil
-  end
-  for _, term in ipairs(fishmonger.tabs(tab)) do
-    if term.agent then
-      return { tab = tab, slot = term.slot }
-    end
-  end
-end
-
---- What an agent is asked when you open a branch it last had checked out.
----@param branch string
----@return string
-function M.ask_text(branch)
-  return ("[nvim] I opened %s, which you last had checked out here: check it out (git checkout %s), sorting out any work in progress first."):format(
-    branch,
-    branch
-  )
-end
-
---- Type the request into the agent's prompt WITHOUT submitting it, so you see
---- it there and can edit or drop it; typing is fine while Claude is mid-turn.
----@param agent { tab: integer, slot: integer }
----@param branch string
----@param background? boolean leave focus where it was
-ask_agent = function(agent, branch, background)
-  local workspace = require("config.workspace")
-  local back = background and workspace.focus()
-  vim.api.nvim_set_current_tabpage(agent.tab)
-  local fishmonger = require("fishmonger")
-  fishmonger.show(agent.slot, { insert = not background })
-  vim.api.nvim_chan_send(vim.bo.channel, M.ask_text(branch))
-  if back then
-    workspace.restore_focus(back)
-  end
 end
 
 --- Put `branch`'s worktree at `path`, then `cb(err)`. A name that matches

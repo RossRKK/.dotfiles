@@ -312,6 +312,14 @@ describe("worktree.target", function()
     assert.equals(repo .. "/.worktrees/keen-heron", t.path)
   end)
 
+  it("makes a new agent worktree even for a branch another agent's worktree had before", function()
+    git("worktree", "add", "-q", repo .. "/.worktrees/old-agent", "feat/x")
+    git("-C", repo .. "/.worktrees/old-agent", "checkout", "-q", "--detach")
+    local t = assert(worktree.target("feat/x", repo))
+    assert.equals("create", t.kind)
+    assert.equals(repo .. "/.worktrees/keen-heron", t.path)
+  end)
+
   it("skips a name a worktree directory or Claude's history already has", function()
     vim.fn.mkdir(repo .. "/.worktrees/keen-heron", "p")
     vim.fn.mkdir(worktree.claude_project(projects, repo .. "/.worktrees/calm-otter"), "p")
@@ -331,164 +339,5 @@ describe("worktree.target", function()
     assert.equals("create", t.kind)
     assert.equals(repo .. "/.worktrees/feat-x", t.path)
     assert.is_nil(t.name)
-  end)
-end)
-
--- Which worktree a branch belongs to: the one whose HEAD reflog last had it,
--- from real reflogs (git's own formats) written at fixed times.
-describe("worktree ownership", function()
-  local repo
-
-  --- git in `cwd`, its reflog entries stamped `time`.
-  local function git(cwd, time, ...)
-    local cmd = { "git", "-c", "user.name=t", "-c", "user.email=t@t", ... }
-    local env = { GIT_COMMITTER_DATE = ("@%d +0000"):format(time) }
-    local res = vim.system(cmd, { cwd = cwd, env = env, text = true }):wait()
-    assert(res.code == 0, table.concat(cmd, " ") .. ": " .. (res.stderr or ""))
-  end
-
-  local function wt(name)
-    return repo .. "/.worktrees/" .. name
-  end
-
-  local function reflog(name)
-    local gitdir = vim.fn.readfile(wt(name) .. "/.git")[1]:match("^gitdir: (.+)$")
-    return table.concat(vim.fn.readfile(gitdir .. "/logs/HEAD"), "\n")
-  end
-
-  before_each(function()
-    local dir = vim.fn.tempname()
-    vim.fn.mkdir(dir .. "/repo", "p")
-    repo = vim.uv.fs_realpath(dir .. "/repo")
-    git(repo, 1, "init", "-q", "-b", "main")
-    git(repo, 1, "commit", "-q", "--allow-empty", "-m", "init")
-    git(repo, 1, "branch", "a")
-    git(repo, 1, "branch", "x")
-    git(repo, 2, "commit", "-q", "--allow-empty", "-m", "on main")
-    git(repo, 100, "worktree", "add", "-q", wt("one"), "a")
-    git(wt("one"), 200, "checkout", "-q", "x")
-    worktree.setup({ agent_worktrees = true })
-  end)
-
-  after_each(function()
-    worktree.setup({ agent_worktrees = false })
-    vim.fn.delete(vim.fs.dirname(repo), "rf")
-  end)
-
-  it("counts a checkout for the branch left and the branch moved to", function()
-    local at = worktree.checkouts(reflog("one"))
-    assert.equals(200, at.a)
-    assert.equals(200, at.x)
-  end)
-
-  it("counts a rebase for the branch it returns to", function()
-    git(wt("one"), 300, "checkout", "-q", "a")
-    git(wt("one"), 350, "commit", "-q", "--allow-empty", "-m", "on a")
-    git(wt("one"), 400, "rebase", "-q", "main")
-    assert.truthy(reflog("one"):find("rebase (finish): returning to refs/heads/a", 1, true))
-    assert.equals(400, worktree.checkouts(reflog("one")).a)
-  end)
-
-  it("reads an interactive rebase's finish too", function()
-    local log = "0000000 1111111 t <t@t> 400 +0000\trebase -i (finish): returning to refs/heads/a"
-    assert.equals(400, worktree.checkouts(log).a)
-  end)
-
-  it("knows no branch from a worktree add alone", function()
-    git(repo, 300, "worktree", "add", "-q", wt("two"), "main~1")
-    assert.same({}, worktree.checkouts(reflog("two")))
-  end)
-
-  it("gives the branch to the worktree that had it most recently", function()
-    git(repo, 300, "worktree", "add", "-q", "--detach", wt("two"))
-    git(wt("two"), 400, "checkout", "-q", "a")
-    git(wt("two"), 500, "checkout", "-q", "--detach")
-    assert.equals(wt("two"), worktree.owner("a", { wt("one"), wt("two") }))
-
-    git(wt("one"), 600, "checkout", "-q", "a")
-    git(wt("one"), 700, "checkout", "-q", "x")
-    assert.equals(wt("one"), worktree.owner("a", { wt("one"), wt("two") }))
-    assert.is_nil(worktree.owner("main", { wt("one"), wt("two") }))
-  end)
-
-  it("checks the branch out again where it was last, when no Claude runs there", function()
-    local t = assert(worktree.target("a", repo))
-    assert.equals("switch", t.kind)
-    assert.equals(wt("one"), t.path)
-    assert.equals("a", t.local_branch)
-  end)
-
-  it("never gives a branch to the main checkout, which is yours", function()
-    git(repo, 300, "checkout", "-q", "a")
-    git(repo, 400, "checkout", "-q", "main")
-    assert.equals(wt("one"), assert(worktree.target("a", repo)).path)
-  end)
-
-  it("opens the branch where it is checked out now, whoever had it before", function()
-    git(repo, 300, "worktree", "add", "-q", wt("two"), "a")
-    assert.same({ "open", wt("two") }, {
-      assert(worktree.target("a", repo)).kind,
-      assert(worktree.target("a", repo)).path,
-    })
-  end)
-
-  describe("with a Claude running in the owner's workspace", function()
-    local saved, sent
-
-    before_each(function()
-      local workspace = require("config.workspace")
-      saved = {
-        fishmonger = package.loaded["fishmonger"],
-        find = workspace.find,
-        chan_send = vim.api.nvim_chan_send,
-      }
-      vim.cmd("tabnew")
-      local tab = vim.api.nvim_get_current_tabpage()
-      vim.cmd("tabprevious")
-      workspace.find = function(path)
-        return path == wt("one") and tab or nil
-      end
-      package.loaded["fishmonger"] = {
-        tabs = function(t)
-          return t == tab and { { slot = 1 }, { slot = 2, agent = { state = "working" } } } or {}
-        end,
-        show = function(_, _) end,
-      }
-      sent = {}
-      vim.api.nvim_chan_send = function(chan, data)
-        sent[#sent + 1] = { chan = chan, data = data }
-      end
-    end)
-
-    after_each(function()
-      package.loaded["fishmonger"] = saved.fishmonger
-      require("config.workspace").find = saved.find
-      vim.api.nvim_chan_send = saved.chan_send
-      pcall(vim.cmd, "tabonly")
-    end)
-
-    it("asks that Claude to check it out, typed into its prompt but not submitted", function()
-      local t = assert(worktree.target("a", repo))
-      assert.equals("ask", t.kind)
-      assert.equals(2, t.agent.slot)
-
-      local shown
-      package.loaded["fishmonger"].show = function(slot, _)
-        shown = slot
-      end
-      worktree.go(t, {})
-      assert.equals(t.agent.tab, vim.api.nvim_get_current_tabpage())
-      assert.equals(2, shown)
-      assert.equals(1, #sent)
-      assert.truthy(sent[1].data:find("git checkout a", 1, true))
-      assert.is_nil(sent[1].data:find("[\r\n]"))
-    end)
-
-    it("in the background, types it and leaves you where you were", function()
-      local origin = vim.api.nvim_get_current_tabpage()
-      worktree.go(assert(worktree.target("a", repo)), { background = true })
-      assert.equals(1, #sent)
-      assert.equals(origin, vim.api.nvim_get_current_tabpage())
-    end)
   end)
 end)

@@ -24,7 +24,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | Spec             | Covers                                    |
 | ---------------- | ----------------------------------------- |
 | `ide_spec.lua`      | side-terminal width, explorer geometry |
-| `worktree_spec.lua` | worktree dir naming, `git worktree add` flags, git progress-line parsing; agent worktrees: naming, and branch ownership from reflogs a temp repo writes |
+| `worktree_spec.lua` | worktree dir naming, `git worktree add` flags, git progress-line parsing; agent worktrees: naming, and a new one for any branch not checked out, on a temp repo |
 | `term_caps_spec.lua` | inline-image capability (Ghostty yes, Neovide/other no) |
 | `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
 | `reviewqueue_spec.lua` | CODEOWNERS glob matching / last-match-wins, "does this PR need my review" tiers, "what's my PR waiting on" tiers |
