@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Prints the name of the session <id> that runs in the current directory: its
-# role (see role-name), or else a pet name derived from the id, so a session
-# keeps its name every time it is resumed and other sessions can address it
-# (SendMessage).
+# role (see role-name), else the name it was launched under ($CLAUDE_AGENT_NAME,
+# set by nvim for an agent's own worktree), else a pet name derived from the id,
+# so a session keeps its name every time it is resumed and other sessions can
+# address it (SendMessage).
 #
 #   session-name <id>
 set -euo pipefail
@@ -11,4 +12,6 @@ seed() {
   echo $((16#$(printf '%s' "$1" | sha256sum | cut -c1-15)))
 }
 
-"$(dirname "$0")/role-name" || petname --lists small --seed "$(seed "$1")" --words 2
+"$(dirname "$0")/role-name" && exit
+[ -n "${CLAUDE_AGENT_NAME-}" ] && echo "$CLAUDE_AGENT_NAME" && exit
+petname --lists small --seed "$(seed "$1")" --words 2

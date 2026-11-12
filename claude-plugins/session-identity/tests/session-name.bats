@@ -12,7 +12,7 @@ setup() {
   export XDG_CONFIG_HOME="$BATS_TEST_TMPDIR/config"
   mkdir -p "$HOME/main" "$HOME/.dotfiles"
   printf '%s\n' '~/main overseer' '' "$HOME/.dotfiles dotty" >"$XDG_CONFIG_HOME/claude-roles"
-  unset WORKSPACE_TERMINAL
+  unset WORKSPACE_TERMINAL CLAUDE_AGENT_NAME
   cd "$BATS_TEST_TMPDIR/work"
 }
 
@@ -64,5 +64,21 @@ pet_for() {
   rm "$XDG_CONFIG_HOME/claude-roles"
   cd "$HOME/main"
   WORKSPACE_TERMINAL=1 run "$name" abc
+  [ "$output" = "$(pet_for abc)" ]
+}
+
+@test "a session launched under a name takes it" {
+  CLAUDE_AGENT_NAME=keen-heron run "$name" abc
+  [ "$output" = keen-heron ]
+}
+
+@test "a role still wins over the name it was launched under" {
+  cd "$HOME/main"
+  WORKSPACE_TERMINAL=1 CLAUDE_AGENT_NAME=keen-heron run "$name" abc
+  [ "$output" = overseer ]
+}
+
+@test "an empty launch name is no name" {
+  CLAUDE_AGENT_NAME= run "$name" abc
   [ "$output" = "$(pet_for abc)" ]
 }
