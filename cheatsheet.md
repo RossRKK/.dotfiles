@@ -166,6 +166,31 @@ has a key next to it; press it to open. `Space+X` is the quick way back to the
 greeter. Outside a git repo there's no overview, so it falls back to the pickers
 (`f` find, `g` grep, `n` new file).
 
+In a main checkout (not a worktree) the greeter opens your todo list,
+`~/todo.md`, in a split below it: the real file, so edit it there (`Ctrl+W j`).
+Close the split with `:q`; it comes back the next time the greeter opens, and
+reopening the greeter never adds a second one.
+
+### Todo list (checkmate)
+
+`~/todo.md` opens with [checkmate](https://github.com/bngarren/checkmate.nvim):
+checkboxes render as `□` / `✔` and stay plain `- [ ]` / `- [x]` on disk. These
+keys exist only in todo files, where they take over neotest's `Space+T`.
+
+| Key                     | Action                                       |
+| ----------------------- | -------------------------------------------- |
+| `Space+Tt`              | Toggle the item (or a visual selection)      |
+| `Space+Tc` / `Space+Tu` | Check / uncheck                              |
+| `Space+Tn`              | New item                                     |
+| `Space+Tr`              | Turn the item back into plain text           |
+| `Space+Ta`              | Archive done items to a section at the end   |
+| `Space+TF`              | Pick an item from this file                  |
+| `Space+T=` / `Space+T-` | Cycle to the next / previous state           |
+| `Space+Tp` `Ts` `Td`    | Add a @priority / @started / @done tag       |
+| `Space+Tv`              | Change the value of the tag under the cursor |
+| `Space+T]` / `Space+T[` | Next / previous tag                          |
+| `Enter` / `Shift+Enter` | (insert) Next item / indented next item      |
+
 ### Layout (edgy)
 
 The IDE layout is pinned by [edgy](https://github.com/folke/edgy.nvim): explorer +
