@@ -235,9 +235,11 @@ OS window title still tracks the workspace you're _in_.)
 Opening a workspace starts **Claude in terminal 1**, continuing that directory's
 last conversation (`claude --continue`), or a new one if there is none; quitting
 it leaves a fish prompt. Once a session starts, the `claude-plugins/session-identity`
-mod gives it a **name** derived from its id (`/rename`, e.g. `calm-otter` -- the
-same every time it is resumed, old sessions included) and the `/color` fewest
-live sessions are using, and gives both back after `/clear`. The name is what
+mod gives it a **name** derived from its id (`/rename`, e.g. `calm-otter`) and
+the `/color` fewest live sessions are using. A session that already has a name
+(resumed, or after `/clear`) keeps it and only gets its colour back; a fork keeps
+its parent's noun behind a new adjective (`calm-otter` -> `brave-otter`, `dotty`
+-> `brave-dotty`). The name is what
 other sessions address it by (`ListAgents` / `SendMessage`), and fishmonger draws
 that terminal's tab and agent-view row in the same colour as its prompt bar.
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env bats
-# petname is stubbed to print its seed, so a name shows which id it came from.
+# petname is stubbed to print its seed in both words, so a name shows which id
+# it came from.
 
 setup() {
   name="$BATS_TEST_DIRNAME/../hooks/session-name"
   mkdir -p "$BATS_TEST_TMPDIR/bin" "$BATS_TEST_TMPDIR/work" "$BATS_TEST_TMPDIR/config"
-  printf '#!/bin/sh\necho "pet-$4"\n' >"$BATS_TEST_TMPDIR/bin/petname"
+  printf '#!/bin/sh\necho "adj$4-noun$4"\n' >"$BATS_TEST_TMPDIR/bin/petname"
   chmod +x "$BATS_TEST_TMPDIR/bin/petname"
   PATH="$BATS_TEST_TMPDIR/bin:$PATH"
   export HOME="$BATS_TEST_TMPDIR/home"
@@ -15,8 +16,28 @@ setup() {
   cd "$BATS_TEST_TMPDIR/work"
 }
 
+seed_for() {
+  echo $((16#$(printf '%s' "$1" | sha256sum | cut -c1-15)))
+}
+
 pet_for() {
-  echo "pet-$((16#$(printf '%s' "$1" | sha256sum | cut -c1-15)))"
+  echo "adj$(seed_for "$1")-noun$(seed_for "$1")"
+}
+
+@test "a fork keeps its parent's noun behind an adjective from its own id" {
+  run "$name" --fork-of legal-quetzal abc
+  [ "$output" = "adj$(seed_for abc)-quetzal" ]
+}
+
+@test "a fork of a role takes an adjective in front of it" {
+  cd "$HOME/.dotfiles"
+  WORKSPACE_TERMINAL=1 run "$name" --fork-of dotty abc
+  [ "$output" = "adj$(seed_for abc)-dotty" ]
+}
+
+@test "a fork whose adjective matches its parent's takes the next seed's" {
+  run "$name" --fork-of "adj$(seed_for abc)-quetzal" abc
+  [ "$output" = "adj$(($(seed_for abc) + 1))-quetzal" ]
 }
 
 @test "a session is named from its id, the same every time" {
