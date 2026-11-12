@@ -216,6 +216,12 @@ in
         source = link path;
       });
 
+  # googleapis' common protos (google/api, google/rpc, google/type, ...) that
+  # nvim's api-linter falls back to for repos that don't vendor them. The
+  # python package is the only nixpkgs one that ships the .proto files.
+  xdg.dataFile."nvim/googleapis-protos".source =
+    "${pkgs.python3Packages.googleapis-common-protos}/${pkgs.python3.sitePackages}";
+
   home.packages =
     with pkgs;
     [
