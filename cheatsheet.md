@@ -304,12 +304,10 @@ The same thing is reachable from **lazygit**: `w` on a branch (local or remote)
 opens it as a worktree project tab in the surrounding nvim.
 
 **`AGENT_WORKTREES=1 nvim`** (experimental) makes worktrees per agent instead
-of per branch: a branch no worktree has gets `.worktrees/<pet-name>`, and its
-Claude takes that name (`CLAUDE_AGENT_NAME`); the agent switches branches
-there, so a PR stack is one checkout. Opening a branch an agent last had
-checked out goes back to that worktree: with its Claude running, a request to
-`git checkout` it is typed into the prompt (unsent: edit, `Enter` or drop it);
-without one, it's checked out there and Claude started. Tabs read
+of per branch: a branch checked out somewhere opens that worktree; any other
+gets a new `.worktrees/<pet-name>`, and its Claude takes that name
+(`CLAUDE_AGENT_NAME`); the agent switches branches there, so a PR stack is one
+checkout. Tabs read
 `<pet> · <branch>`. Neovide runs in this mode: on Linux its package is wrapped
 with the flag (profiles/desktop.nix); on Windows (WSL) its
 `%APPDATA%\neovide\config.toml` has `neovim-bin = "env AGENT_WORKTREES=1 nvim"`.
