@@ -316,35 +316,22 @@ function M.path(root, local_branch, worktrees)
   return worktrees[local_branch] or root .. "/.worktrees/" .. M.slug(local_branch)
 end
 
---- Every worktree of the repo at `dir`, the main one first, each with the short
---- name of the branch it has checked out (`refs/heads/x` -> `x`; nil when detached).
----@param dir string
----@return { path: string, branch: string? }[]
-local function worktree_list(dir)
-  local out = git(dir, { "worktree", "list", "--porcelain" }) or ""
-  local list = {}
-  for line in vim.gsplit(out, "\n") do
-    local p = line:match("^worktree (.+)$")
-    if p then
-      list[#list + 1] = { path = p }
-    end
-    local ref = line:match("^branch refs/heads/(.+)$")
-    if ref and #list > 0 then
-      list[#list].branch = ref
-    end
-  end
-  return list
-end
-
---- Existing worktrees of the repo at `dir`, as branch -> path. Detached
---- worktrees are skipped, having no branch to pick them by.
+--- Existing worktrees of the repo at `dir`, as branch -> path. Branch is the
+--- short name (`refs/heads/x` -> `x`); detached worktrees are skipped, having no
+--- branch to pick them by.
 ---@param dir string
 ---@return table<string, string>
 local function existing(dir)
-  local map = {}
-  for _, wt in ipairs(worktree_list(dir)) do
-    if wt.branch then
-      map[wt.branch] = wt.path
+  local out = git(dir, { "worktree", "list", "--porcelain" }) or ""
+  local map, path = {}, nil
+  for line in vim.gsplit(out, "\n") do
+    local p = line:match("^worktree (.+)$")
+    if p then
+      path = p
+    end
+    local ref = line:match("^branch refs/heads/(.+)$")
+    if ref and path then
+      map[ref] = path
     end
   end
   return map
