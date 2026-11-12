@@ -50,6 +50,8 @@ My neovim config has a shortcut to jump to a line when in the form
 `path/to/file[:line]`. This path must be from the repo root. When referencing
 files include these paths so it is easy for me to jump where you're referencing.
 
+My to do list is in `~/todo.md`.
+
 # Worktrees
 
 Inside nvim (`$NVIM` set), don't make worktrees yourself: no `git worktree add`,
