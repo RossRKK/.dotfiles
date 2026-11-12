@@ -306,8 +306,6 @@ local function local_branches(dir)
   return set
 end
 
----@param dir string
----@return table<string, true>
 --- Remote-tracking refs as a set of short names ("origin/x"). `HEAD` symrefs
 --- (origin/HEAD) are skipped: they alias another branch and would only add a
 --- confusing duplicate for resolve() to hit.
