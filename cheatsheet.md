@@ -466,10 +466,13 @@ server to rewrite the imports pointing at the old path.
 | --------- | --------------------- |
 | `Space+d` | Show diagnostic popup |
 
-**Protos:** in a repo with an `api-linter.yaml` (or `.api-linter.yaml`), Google's
-AIP linter runs on open and save, from that config's directory as the proto path,
-and buf's own lint rules are hidden; buf_ls keeps navigation, completion,
-compile errors and `buf format`. Elsewhere buf_ls lints as usual.
+**Protos:** Google's AIP linter (api-linter) checks every `.proto` on open and
+save, with our config (`.config/nvim/api-linter.yaml`, Java-option rules off),
+never the repo's, so packages a repo opts out still show their problems. Imports
+resolve from the nearest `buf.yaml` (else the git root, else the file's
+directory), then googleapis' common protos. buf's own lint is hidden; buf_ls
+keeps navigation, completion and compile errors, and `Space+cf` runs
+`buf format`.
 
 ### Space+u — UI toggles
 
