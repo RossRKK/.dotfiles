@@ -50,10 +50,23 @@ first_live_session() {
     jq -c --arg dir "$dir" \
       'select(.cwd == $dir and .messagingSocketPath != null and .name != null
               and (.nameSource == "user" or .nameSource == "collision"))
-       | {pid, name, startedAt: (.startedAt // 0)}' "$file" 2>/dev/null || true
+       | {pid, procStart, name, startedAt: (.startedAt // 0)}' "$file" 2>/dev/null || true
   done | while read -r entry; do
-    if kill -0 "$(jq -r .pid <<<"$entry")" 2>/dev/null; then printf '%s\n' "$entry"; fi
+    if running "$(jq -r .pid <<<"$entry")" "$(jq -r .procStart <<<"$entry")"; then
+      printf '%s\n' "$entry"
+    fi
   done | jq -enr '[inputs] | min_by(.startedAt) | .name'
+}
+
+# Whether process <pid> is still the one that started at <start> (clock ticks
+# since boot, /proc/<pid>/stat's 22nd field): a crashed session's file outlives
+# it, and after a reboot its pid can belong to anything.
+running() {
+  local stat fields
+  stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+  # Fields count from after the command name, which may hold spaces and parens.
+  read -ra fields <<<"${stat##*) }"
+  [ "${fields[19]}" = "$2" ]
 }
 
 # <text> as a vimscript string literal (JSON's string syntax is a subset).

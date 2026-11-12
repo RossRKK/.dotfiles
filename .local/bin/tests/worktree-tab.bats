@@ -17,12 +17,21 @@ setup() {
 }
 
 # Registers a session <name> in <dir> run by <pid>, started at <ms>, reachable
-# unless "nosocket"; $SOURCE is how it got its name (the mod's /rename by default).
+# unless "nosocket"; $SOURCE is how it got its name (the mod's /rename by default)
+# and $PROC_START when <pid> started (by default, when it really did).
 session() {
-  local socket='"/run/s.sock"'
+  local socket='"/run/s.sock"' start
   [ "${5-}" != nosocket ] || socket=null
-  printf '{"pid":%s,"name":"%s","nameSource":"%s","cwd":"%s","startedAt":%s,"messagingSocketPath":%s}\n' \
-    "$3" "$1" "${SOURCE:-user}" "$2" "$4" "$socket" >"$sessions/$3.json"
+  start=${PROC_START:-$(proc_start "$3")}
+  printf '{"pid":%s,"procStart":"%s","name":"%s","nameSource":"%s","cwd":"%s","startedAt":%s,"messagingSocketPath":%s}\n' \
+    "$3" "$start" "$1" "${SOURCE:-user}" "$2" "$4" "$socket" >"$sessions/$3.json"
+}
+
+proc_start() {
+  local stat
+  stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 0
+  stat=${stat##*) }
+  cut -d' ' -f20 <<<"$stat"
 }
 
 @test "prints the name of the Claude in the worktree once it can be messaged" {
@@ -59,6 +68,13 @@ session() {
   kill $!
   [ "$status" -eq 1 ]
   [[ "$output" == *"no Claude started in $wt"* ]]
+}
+
+@test "a crashed session whose pid now belongs to another process doesn't count" {
+  PROC_START=1 session ghost "$wt" $$ 100
+
+  run "$tab" --timeout 0 feat/x
+  [ "$status" -eq 1 ]
 }
 
 @test "a session still on the name Claude derived isn't printed before the rename lands" {
