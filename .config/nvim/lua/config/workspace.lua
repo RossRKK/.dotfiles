@@ -66,8 +66,7 @@ function M.display_name(tab)
     local branch = report.branch or report.head
     -- An agent worktree is named after its agent, and the branch is whatever it has out now.
     if options.agent_worktrees and report.git_dir ~= report.common_dir then
-      local agent = vim.fs.basename(cwd)
-      return branch and (agent .. " · " .. branch) or agent
+      return table.concat({ report.repo, vim.fs.basename(cwd), branch }, " · ")
     end
     return branch and (report.repo .. " - " .. branch) or report.repo
   end

@@ -308,7 +308,7 @@ of per branch: a branch checked out somewhere opens that worktree; any other
 gets a new `.worktrees/<pet-name>`, and its Claude takes that name
 (`CLAUDE_AGENT_NAME`); the agent switches branches there, so a PR stack is one
 checkout. Tabs read
-`<pet> · <branch>`. Neovide runs in this mode: on Linux its package is wrapped
+`<repo> · <pet> · <branch>`. Neovide runs in this mode: on Linux its package is wrapped
 with the flag (profiles/desktop.nix); on Windows (WSL) its
 `%APPDATA%\neovide\config.toml` has `neovim-bin = "env AGENT_WORKTREES=1 nvim"`.
 
