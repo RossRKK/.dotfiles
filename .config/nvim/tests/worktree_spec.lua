@@ -243,3 +243,93 @@ describe("worktree.path", function()
     assert.equals("/repo/.worktrees/feat-x", worktree.path("/repo", "feat/x", { main = "/repo" }))
   end)
 end)
+
+-- Agent worktrees: named after the agent, never reusing a name that a worktree
+-- or Claude's history already has.
+describe("worktree.claude_project", function()
+  it("names a directory's Claude state the way Claude does", function()
+    assert.equals(
+      "/c/projects/-home-me--dotfiles--worktrees-keen-heron",
+      worktree.claude_project("/c/projects", "/home/me/.dotfiles/.worktrees/keen-heron")
+    )
+  end)
+end)
+
+describe("worktree.free_name", function()
+  it("takes the first candidate that isn't taken", function()
+    local taken = { ["keen-heron"] = true }
+    assert.equals(
+      "calm-otter",
+      worktree.free_name({ "keen-heron", "calm-otter", "bold-yak" }, function(n)
+        return taken[n] == true
+      end)
+    )
+  end)
+
+  it("gives nothing when every candidate is taken", function()
+    assert.is_nil(worktree.free_name({ "keen-heron" }, function()
+      return true
+    end))
+  end)
+end)
+
+-- M.target against a real repo, with petname stubbed to a fixed list.
+describe("worktree.target", function()
+  local dir, repo, projects, saved_path
+
+  local function git(...)
+    local cmd = { "git", "-c", "user.name=t", "-c", "user.email=t@t", ... }
+    local res = vim.system(cmd, { cwd = repo, text = true }):wait()
+    assert(res.code == 0, table.concat(cmd, " ") .. ": " .. (res.stderr or ""))
+  end
+
+  before_each(function()
+    dir = vim.fn.tempname()
+    repo, projects = dir .. "/repo", dir .. "/projects"
+    vim.fn.mkdir(repo, "p")
+    vim.fn.mkdir(dir .. "/bin", "p")
+    local names = "printf 'keen-heron\\ncalm-otter\\nbold-yak\\n'"
+    vim.fn.writefile({ "#!/bin/sh", names }, dir .. "/bin/petname")
+    vim.fn.setfperm(dir .. "/bin/petname", "rwxr-xr-x")
+    saved_path = vim.env.PATH
+    vim.env.PATH = dir .. "/bin:" .. vim.env.PATH
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "init")
+    git("branch", "feat/x")
+    worktree.setup({ agent_worktrees = true, claude_projects = projects })
+  end)
+
+  after_each(function()
+    vim.env.PATH = saved_path
+    worktree.setup({ agent_worktrees = false })
+    vim.fn.delete(dir, "rf")
+  end)
+
+  it("puts a branch no worktree has into a new worktree named after its agent", function()
+    local t = assert(worktree.target("feat/x", repo))
+    assert.equals("create", t.kind)
+    assert.equals("keen-heron", t.name)
+    assert.equals(repo .. "/.worktrees/keen-heron", t.path)
+  end)
+
+  it("skips a name a worktree directory or Claude's history already has", function()
+    vim.fn.mkdir(repo .. "/.worktrees/keen-heron", "p")
+    vim.fn.mkdir(worktree.claude_project(projects, repo .. "/.worktrees/calm-otter"), "p")
+    assert.equals("bold-yak", assert(worktree.target("feat/x", repo)).name)
+  end)
+
+  it("opens the worktree that has the branch checked out", function()
+    local t = assert(worktree.target("main", repo))
+    assert.equals("open", t.kind)
+    assert.equals(vim.uv.fs_realpath(repo), vim.uv.fs_realpath(t.path))
+    assert.is_nil(t.name)
+  end)
+
+  it("with agent worktrees off, names the worktree after the branch", function()
+    worktree.setup({ agent_worktrees = false })
+    local t = assert(worktree.target("feat/x", repo))
+    assert.equals("create", t.kind)
+    assert.equals(repo .. "/.worktrees/feat-x", t.path)
+    assert.is_nil(t.name)
+  end)
+end)

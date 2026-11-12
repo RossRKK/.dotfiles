@@ -11,8 +11,23 @@
 -- global gitignore entry (base.nix, programs.git.ignores). Deliberately NOT a
 -- sibling directory: that scatters half-finished checkouts through the parent of
 -- every repo and pollutes zoxide's list with them.
+--
+-- With agent_worktrees on (M.setup) a worktree belongs to an agent instead of a
+-- branch: `.worktrees/<agent's pet name>`, where the agent checks out whatever
+-- branches it needs, so a stack of PRs is branch switches in one checkout.
 
 local M = {}
+
+---@class worktree.Options
+---@field agent_worktrees boolean one worktree per agent, named after it
+---@field claude_projects string Claude's per-directory state (~/.claude/projects)
+local options = { agent_worktrees = false, claude_projects = vim.fn.expand("~/.claude/projects") }
+
+--- Set once at startup, from the environment (init.lua).
+---@param opts worktree.Options
+function M.setup(opts)
+  options = vim.tbl_extend("force", options, opts)
+end
 
 --- Directory name for a branch's worktree. Branch names are paths (`feat/x`),
 --- which would nest -- and leave empty `feat/` directories behind on removal --
@@ -363,63 +378,159 @@ local function remote_names(dir)
   return set
 end
 
-local checkout, abandon
+local checkout, abandon, agent_name_for
 
 --- Open `branch`'s worktree as a new workspace tab, creating it if needed.
 --- Reuses whatever already exists: a worktree git already knows about, or a
 --- directory left behind at the expected path.
 ---@param branch string
 ---@param dir? string a directory inside the repo (default: the tab's cwd)
----@param opts? { on_open?: fun(path: string), background?: boolean }
----   on_open: runs once the worktree is checked out (the tab opens before that).
----   background: leave focus where it is (config.workspace's option of that name).
+---@param opts? worktree.OpenOpts
 function M.open(branch, dir, opts)
-  opts = opts or {}
   branch = vim.trim(branch)
   if branch == "" then
     return
   end
-  dir = dir or vim.fn.getcwd()
-
-  local root, err = M.root(dir)
-  if not root then
-    vim.notify(err or "not a git repository", vim.log.levels.ERROR)
+  local target, err = M.target(branch, dir or vim.fn.getcwd())
+  if not target then
+    vim.notify(err, vim.log.levels.ERROR)
     return
   end
+  M.go(target, opts or {})
+end
 
-  local locals = local_branches(root)
-  local remotes = remote_names(root)
-  local resolved = M.resolve(branch, locals, remote_refs(root))
+---@class worktree.OpenOpts
+---@field on_open? fun(path: string) runs once the worktree is checked out (the tab opens before that)
+---@field background? boolean leave focus where it is (config.workspace's option of that name)
+
+--- Where opening a branch lands, and what has to happen there first.
+---@class worktree.Target
+---@field kind "open"|"create" open an existing directory, or make the worktree first
+---@field path string
+---@field name? string the agent a new agent worktree is named after
+---@field root string the main worktree
+---@field branch string as picked
+---@field resolved? string the branch as an existing ref (M.resolve)
+---@field locals table<string, true>
+---@field remotes table<string, true>
+
+--- Decide where `branch` opens, without touching anything yet: open_for_agent
+--- has to answer with the path (and agent name) before the work happens.
+---@param branch string as picked
+---@param dir string a directory inside the repo
+---@return worktree.Target? target, string? err
+function M.target(branch, dir)
+  local root, err = M.root(dir)
+  if not root then
+    return nil, err or "not a git repository"
+  end
+  local t =
+    { root = root, branch = branch, locals = local_branches(root), remotes = remote_names(root) }
+  t.resolved = M.resolve(branch, t.locals, remote_refs(root))
   -- A fetch can only turn `x` into `origin/x`, whose local name is still `x`.
-  local local_branch = M.local_name(resolved or branch, locals, remotes)
-  local path = M.path(root, local_branch, existing(root))
+  local local_branch = M.local_name(t.resolved or branch, t.locals, t.remotes)
+  local worktrees = existing(root)
+  if not options.agent_worktrees or worktrees[local_branch] then
+    t.path = M.path(root, local_branch, worktrees)
+    t.kind = vim.fn.isdirectory(t.path) == 1 and "open" or "create"
+    return t
+  end
+  local name, name_err = agent_name_for(root)
+  if not name then
+    return nil, name_err
+  end
+  t.kind, t.path, t.name = "create", M.agent_path(root, name), name
+  return t
+end
 
+--- Carry out a target (M.target) as a workspace tab.
+---@param t worktree.Target
+---@param opts worktree.OpenOpts
+function M.go(t, opts)
   local function checked_out()
     if opts.on_open then
-      opts.on_open(path)
+      opts.on_open(t.path)
     end
   end
 
-  M.touch(path)
-  if vim.fn.isdirectory(path) == 1 then
-    require("config.workspace").open(path, { tab = true, background = opts.background })
+  M.touch(t.path)
+  if t.kind == "open" then
+    require("config.workspace").open(t.path, { tab = true, background = opts.background })
     return checked_out()
   end
   -- git checks out into an empty directory, so the tab needn't wait for it.
-  vim.fn.mkdir(path, "p")
-  require("config.workspace").open(path, {
+  vim.fn.mkdir(t.path, "p")
+  require("config.workspace").open(t.path, {
     tab = true,
     background = opts.background,
+    agent_name = t.name,
     until_ready = function(ready)
-      checkout(root, branch, resolved, path, locals, remotes, function(err)
+      checkout(t.root, t.branch, t.resolved, t.path, t.locals, t.remotes, function(err)
         if err then
-          return abandon(path, err)
+          return abandon(t.path, err)
         end
         ready()
         checked_out()
       end)
     end,
   })
+end
+
+--- An agent's worktree directory.
+---@param root string the main worktree
+---@param name string the agent's name
+---@return string
+function M.agent_path(root, name)
+  return root .. "/.worktrees/" .. name
+end
+
+--- Where Claude keeps its state for sessions started in `path`: the absolute
+--- path with every character but letters and digits made `-`.
+---@param projects string Claude's projects directory
+---@param path string
+---@return string
+function M.claude_project(projects, path)
+  return projects .. "/" .. path:gsub("[^%w]", "-")
+end
+
+--- The first of `candidates` that isn't taken, or nil when all are.
+---@param candidates string[]
+---@param taken fun(name: string): boolean
+---@return string?
+function M.free_name(candidates, taken)
+  for _, name in ipairs(candidates) do
+    if name ~= "" and not taken(name) then
+      return name
+    end
+  end
+end
+
+-- Candidates drawn per new agent: pet names collide rarely, so one batch is plenty.
+local NAME_CANDIDATES = 20
+
+--- A pet name (as session-identity names sessions) for a new agent in `root`'s
+--- repo, unused as a worktree and by any Claude history, so the agent can't
+--- pick up a stranger's conversation through `claude --continue`.
+---@param root string
+---@return string? name, string? err
+agent_name_for = function(root)
+  local cmd =
+    { "petname", "--lists", "small", "--words", "2", "--count", tostring(NAME_CANDIDATES) }
+  local ok, res = pcall(function()
+    return vim.system(cmd, { text = true }):wait()
+  end)
+  if not ok or res.code ~= 0 then
+    return nil, "petname: " .. (ok and vim.trim(res.stderr or "") or tostring(res))
+  end
+  local name = M.free_name(vim.split(vim.trim(res.stdout), "\n"), function(n)
+    local path = M.agent_path(root, n)
+    return vim.uv.fs_stat(path) ~= nil
+      or vim.uv.fs_stat(M.claude_project(options.claude_projects, path)) ~= nil
+  end)
+  if not name then
+    return nil, ("no free agent name in %d tries"):format(NAME_CANDIDATES)
+  end
+  return name
 end
 
 --- Put `branch`'s worktree at `path`, then `cb(err)`. A name that matches
@@ -598,20 +709,20 @@ end
 --- M.open for another program (.local/bin/worktree-tab) over `nvim
 --- --remote-expr`. Answers at once with where the worktree is to be, so the
 --- caller can wait for the Claude that starts there and hand it work; the tab
---- opens at once, its Claude once the (async) checkout is done.
+--- opens at once, its Claude once the (async) checkout is done. A new agent
+--- worktree's answer carries the name its Claude will take.
 ---@param branch string
 ---@param cwd string a directory inside the repo
----@return string json: {"path": ...} or {"error": ...}
+---@return string json: {"path": ..., "name"?: ...} or {"error": ...}
 function M.open_for_agent(branch, cwd)
-  local root, err = M.root(cwd)
-  if not root then
-    return vim.json.encode({ error = err or "not a git repository" })
+  local target, err = M.target(vim.trim(branch), cwd)
+  if not target then
+    return vim.json.encode({ error = err })
   end
-  local local_branch = M.local_name(vim.trim(branch), local_branches(root), remote_names(root))
   vim.schedule(function()
-    M.open(branch, cwd, { background = true })
+    M.go(target, { background = true })
   end)
-  return vim.json.encode({ path = M.path(root, local_branch, existing(root)) })
+  return vim.json.encode({ path = target.path, name = target.name })
 end
 
 --- Pick a branch to open as a worktree tab.
