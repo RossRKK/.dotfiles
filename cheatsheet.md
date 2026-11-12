@@ -466,6 +466,11 @@ server to rewrite the imports pointing at the old path.
 | --------- | --------------------- |
 | `Space+d` | Show diagnostic popup |
 
+**Protos:** in a repo with an `api-linter.yaml` (or `.api-linter.yaml`), Google's
+AIP linter runs on open and save, from that config's directory as the proto path,
+and buf's own lint rules are hidden; buf_ls keeps navigation, completion,
+compile errors and `buf format`. Elsewhere buf_ls lints as usual.
+
 ### Space+u — UI toggles
 
 | Key        | Action                                              |
