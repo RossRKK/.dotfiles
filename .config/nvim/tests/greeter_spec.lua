@@ -44,7 +44,7 @@ describe("greeter.sections", function()
     local function first_line(branch)
       local pr_section = greeter.sections(root, 0, 0, function()
         return { branch = branch }
-      end)[4]
+      end)[5]
       local items = pr_section()
       return items
         and table.concat(vim.tbl_map(function(c)
@@ -69,6 +69,111 @@ describe("greeter.sections", function()
       greeter.prs[root] = { branch = "old", at = 0, pr = pr }
       assert.is_nil(first_line("feat"))
     end)
+  end)
+
+  describe("the todo section", function()
+    local todo_file = vim.fn.tempname() .. "-todo.md"
+    vim.fn.writefile(
+      { "## You", "- [ ] Renew passport", "## Agents", "- [ ] Follow up on CI" },
+      todo_file
+    )
+    local main = { git_dir = "/repo/.git", common_dir = "/repo/.git" }
+
+    local function todo_section(report)
+      return greeter
+        .sections("/repo", 0, 0, function()
+          return report
+        end, todo_file)
+        [3]()
+    end
+
+    local function rows(section)
+      local out = {}
+      for _, item in ipairs(section) do
+        out[#out + 1] = item.desc or item.text[1][1]
+      end
+      return out
+    end
+
+    it("lists the open items under their headings in the main checkout", function()
+      local section = todo_section(main)
+      assert.equals("Todo", section.title)
+      assert.same({ "You", "Renew passport", "Agents", "Follow up on CI" }, rows(section))
+      assert.is_function(section[2].action)
+    end)
+
+    it("is hidden in a linked worktree", function()
+      assert.is_nil(
+        todo_section({ git_dir = "/repo/.git/worktrees/feat", common_dir = "/repo/.git" })
+      )
+    end)
+
+    it("is hidden while the report is in flight", function()
+      assert.is_nil(todo_section(nil))
+    end)
+  end)
+end)
+
+describe("greeter.open_todos", function()
+  it("groups open items by the heading above them, with their line numbers", function()
+    assert.same(
+      {
+        { heading = "You", items = { { text = "Renew passport", lnum = 3 } } },
+        {
+          heading = "Others",
+          items = { { text = "Hear back from Sam", lnum = 8 }, { text = "Invoice", lnum = 9 } },
+        },
+      },
+      greeter.open_todos({
+        "# Todo",
+        "## You",
+        "- [ ] Renew passport",
+        "",
+        "## Agents",
+        "- [x] Done already",
+        "## Others",
+        "- [ ] Hear back from Sam",
+        "  * [ ] Invoice",
+      })
+    )
+  end)
+
+  it("leaves out ticked items", function()
+    assert.same({}, greeter.open_todos({ "## You", "- [x] one", "- [X] two" }))
+  end)
+
+  it("is empty when nothing is open", function()
+    assert.same(
+      {},
+      greeter.open_todos({ "# Todo", "", "## You", "## Agents", "- [ ]", "some prose" })
+    )
+  end)
+
+  it("keeps items above the first heading in a group of their own", function()
+    assert.same(
+      { { items = { { text = "loose", lnum = 1 } } } },
+      greeter.open_todos({ "- [ ] loose" })
+    )
+  end)
+end)
+
+describe("greeter.watch_todos", function()
+  it("replaces its watcher rather than adding a second", function()
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    greeter.watch_todos(dir .. "/todo.md")
+    local first = greeter._todo_watcher()
+    greeter.watch_todos(dir .. "/todo.md")
+    local second = greeter._todo_watcher()
+    assert.is_true(first:is_closing())
+    assert.is_true(second:is_active())
+    second:stop()
+    second:close()
+  end)
+
+  it("closes the handle when the directory does not exist", function()
+    greeter.watch_todos(vim.fn.tempname() .. "/todo.md")
+    assert.is_true(greeter._todo_watcher():is_closing())
   end)
 end)
 
