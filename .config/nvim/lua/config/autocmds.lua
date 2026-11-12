@@ -91,6 +91,8 @@ vim.api.nvim_create_autocmd("FileChangedShellPost", {
 -- Workspace greeter fallback: a workspace tab whose main window empties out
 -- shows the greeter instead of a blank buffer. See config/greeter.lua.
 require("config.greeter").setup()
+-- The greeter's todo split goes when a file opens over it (config/todo.lua).
+require("config.todo").setup(require("config.todo").FILE)
 -- The review queue refreshes in the background, so <leader>rq opens at once
 -- and the greeter can show what's waiting (util/reviewqueue.lua).
 require("util.reviewqueue").setup()

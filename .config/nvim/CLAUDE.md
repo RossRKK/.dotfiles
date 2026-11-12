@@ -34,6 +34,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `edgy_spec.lua` | edgy views sized by another plugin's windows: fishmonger's task list takes the height fishmonger asks for |
 | `api_linter_spec.lua` | api-linter JSON to diagnostics; proto root (buf module, else git checkout, else the file's dir); the real api-linter (on PATH, common protos linked by home-manager) flags a camelCase field, resolves `google/api` imports, ignores a repo's opt-outs, skips the Java-option rules |
 | `options_spec.lua` | the mouse starts off (`<leader>um` turns it on) |
+| `todo_spec.lua` | the todo split closes when a file opens in the main window, not for a terminal, an unlisted buffer, or a float |
 | `windows_spec.lua` | main-window routing: a file window first, else a terminal in the main area (never the side panel or a float) |
 | `neotree_leak_spec.lua` | the pinned neo-tree doesn't leak timers/process handles across renders. Loads the real plugin (and its git status): it guards the lazy pin, not our code. `NEOTREE_PATH=<checkout>` tests another build |
 
