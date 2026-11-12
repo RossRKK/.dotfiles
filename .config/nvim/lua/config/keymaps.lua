@@ -134,6 +134,10 @@ end, { desc = "Close buffer" })
 map("n", "<leader>X", function()
   require("config.greeter").close_all()
 end, { desc = "Close all buffers (this workspace)" })
+-- The greeter's todo split on demand, in any tab (config/todo.lua); next to checkmate's <leader>T keys.
+map("n", "<leader>TT", function()
+  require("config.todo").toggle(require("config.todo").FILE)
+end, { desc = "Toggle todo list" })
 
 -- Workspaces: one project per tabpage (see config/workspace.lua). <leader>t is
 -- "tab"; the test namespace moved to <leader>T (neotest.lua) since these are

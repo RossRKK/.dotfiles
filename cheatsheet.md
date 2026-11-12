@@ -179,6 +179,7 @@ keys exist only in todo files, where they take over neotest's `Space+T`.
 
 | Key                     | Action                                       |
 | ----------------------- | -------------------------------------------- |
+| `Space+TT`              | Toggle the todo split below the main window (any buffer, any tab) |
 | `Space+Tt`              | Toggle the item (or a visual selection)      |
 | `Space+Tc` / `Space+Tu` | Check / uncheck                              |
 | `Space+Tn`              | New item                                     |
