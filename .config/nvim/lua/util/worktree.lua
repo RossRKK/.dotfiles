@@ -877,17 +877,7 @@ function M.pick()
     title = "Worktrees",
     items = items,
     format = function(item, picker)
-      -- detached = false: show the sha, not git_branch's "(detached HEAD)".
-      local ret = Snacks.picker.format.git_branch(
-        vim.tbl_extend("force", item, { branch = item.name or item.branch, detached = false }),
-        picker
-      )
-      -- Mark rows that already have a worktree: picking one is a plain tab open.
-      table.insert(ret, 2, { item.worktree and "\u{f0e8e} " or "   ", "SnacksPickerGitBranch" })
-      if item.agent then
-        table.insert(ret, 4, M.agent_chunk(item, hls))
-      end
-      return ret
+      return M.format_row(item, picker, hls)
     end,
     preview = "git_log",
     confirm = function(picker, item)
@@ -901,6 +891,25 @@ function M.pick()
       end
     end,
   })
+end
+
+--- A picker row drawn as snacks draws a branch, marked when it has a worktree.
+---@param item worktree.Candidate a row (M.rows)
+---@param picker snacks.Picker
+---@param hls table<string, string> worktree -> highlight group (M.agent_hls)
+---@return snacks.picker.Highlight[]
+function M.format_row(item, picker, hls)
+  -- detached = false: show the sha, not git_branch's "(detached HEAD)".
+  local ret = Snacks.picker.format.git_branch(
+    vim.tbl_extend("force", item, { branch = item.name or item.branch, detached = false }),
+    picker
+  )
+  -- Mark rows that already have a worktree: picking one is a plain tab open.
+  table.insert(ret, 2, { item.worktree and "\u{f0e8e} " or "   ", "SnacksPickerGitBranch" })
+  if item.agent then
+    table.insert(ret, 4, M.agent_chunk(item, hls))
+  end
+  return ret
 end
 
 --- Where a detached worktree's row opens: that worktree as it is. Its sha
