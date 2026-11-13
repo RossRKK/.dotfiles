@@ -76,18 +76,20 @@ describe("worktree.add_args", function()
   end)
 
   it("creates a tracking branch for a remote ref", function()
-    assert.same(
-      {
-        "worktree",
-        "add",
-        "--track",
-        "-b",
-        "feat/x",
-        "/r/.worktrees/origin-feat-x",
-        "origin/feat/x",
-      },
-      worktree.add_args("remotes/origin/feat/x", "/r/.worktrees/origin-feat-x", locals, remotes)
-    )
+    assert.same({
+      "worktree",
+      "add",
+      "--track",
+      "-b",
+      "feat/x",
+      "/r/.worktrees/origin-feat-x",
+      "origin/feat/x",
+    }, worktree.add_args(
+      "remotes/origin/feat/x",
+      "/r/.worktrees/origin-feat-x",
+      locals,
+      remotes
+    ))
   end)
 
   it("creates a new branch off HEAD for an unknown name", function()

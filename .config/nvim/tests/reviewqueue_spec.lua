@@ -323,7 +323,10 @@ describe("reviewqueue.depends_on", function()
     {
       "any case, padding and CRLF",
       "intro\r\n  depends-on:   #4  \r\nDEPENDS-ON: #5\r\n",
-      { { owner = "Acme", name = "app", number = 4 }, { owner = "Acme", name = "app", number = 5 } },
+      {
+        { owner = "Acme", name = "app", number = 4 },
+        { owner = "Acme", name = "app", number = 5 },
+      },
     },
     { "nothing but the reference on the line", "Depends-On: #4 (the proto)", {} },
     { "the header at the start of the line", "This depends-on: #4", {} },
@@ -462,10 +465,28 @@ describe("reviewqueue.classify_mine", function()
   local dep = { owner = "Acme", name = "app", number = 50 }
   local other_repo = { owner = "acme", name = "lib", number = 7 }
   for _, case in ipairs({
-    { "an open dependency stacks it", { dep }, { "acme/app#50" }, "main", "approved, stacked on #50" },
+    {
+      "an open dependency stacks it",
+      { dep },
+      { "acme/app#50" },
+      "main",
+      "approved, stacked on #50",
+    },
     { "a merged or closed dependency doesn't", { dep }, {}, "main", "approved" },
-    { "another repo's dependency is named in full", { other_repo }, { "acme/lib#7" }, "main", "approved, stacked on acme/lib#7" },
-    { "the branch below comes first", { dep }, { "acme/app#50" }, "feat-1", "approved, stacked on #41, #50" },
+    {
+      "another repo's dependency is named in full",
+      { other_repo },
+      { "acme/lib#7" },
+      "main",
+      "approved, stacked on acme/lib#7",
+    },
+    {
+      "the branch below comes first",
+      { dep },
+      { "acme/app#50" },
+      "feat-1",
+      "approved, stacked on #41, #50",
+    },
     {
       "a dependency on the branch below is said once",
       { { owner = "acme", name = "APP", number = 41 } },
@@ -648,7 +669,12 @@ describe("reviewqueue.from_node (my PRs)", function()
   -- Mergify's queue leaves mergeQueueEntry null; its "queued" label marks it.
   for _, case in ipairs({
     { "Mergify's queued label", nil, { "queued" }, {} },
-    { "GitHub's entry over the label", { state = "QUEUED", position = 2 }, { "queued" }, { state = "QUEUED", position = 2 } },
+    {
+      "GitHub's entry over the label",
+      { state = "QUEUED", position = 2 },
+      { "queued" },
+      { state = "QUEUED", position = 2 },
+    },
     { "Mergify's dequeued label isn't queued", nil, { "dequeued" }, nil },
     { "another label isn't queued", nil, { "queue" }, nil },
   }) do
@@ -656,7 +682,8 @@ describe("reviewqueue.from_node (my PRs)", function()
       local labels = vim.tbl_map(function(name)
         return { name = name }
       end, case[3])
-      local p = rq.from_node({ number = 1, mergeQueueEntry = case[2], labels = { nodes = labels } }, false)
+      local p =
+        rq.from_node({ number = 1, mergeQueueEntry = case[2], labels = { nodes = labels } }, false)
       assert.same(case[4], p.queue)
     end)
   end
@@ -708,11 +735,19 @@ describe("reviewqueue.from_node (my PRs)", function()
       "FAILURE",
       { "Mergify Merge Queue" },
     },
-    { "the gate's name from another app fails", { impostor }, "FAILURE", { "Mergify Merge Protections" } },
+    {
+      "the gate's name from another app fails",
+      { impostor },
+      "FAILURE",
+      { "Mergify Merge Protections" },
+    },
   }) do
     it(case[1], function()
       local rollup = { state = "FAILURE", contexts = { nodes = case[2] } }
-      local p = rq.from_node({ number = 1, commits = { nodes = { { commit = { statusCheckRollup = rollup } } } } }, false)
+      local p = rq.from_node(
+        { number = 1, commits = { nodes = { { commit = { statusCheckRollup = rollup } } } } },
+        false
+      )
       assert.same({ case[3], case[4] }, { p.checks, p.failing })
     end)
   end
@@ -737,9 +772,11 @@ describe("reviewqueue.pick", function()
   before_each(function()
     saved_snacks, saved_open, saved_key = _G.Snacks, vim.ui.open, rq.key
     opts, opened = nil, nil
-    _G.Snacks = { picker = { pick = function(o)
-      opts = o
-    end } }
+    _G.Snacks = { picker = {
+      pick = function(o)
+        opts = o
+      end,
+    } }
     ---@diagnostic disable-next-line: duplicate-set-field
     vim.ui.open = function(path, _)
       opened = path
@@ -748,7 +785,8 @@ describe("reviewqueue.pick", function()
     rq.key = function(_)
       return "repo"
     end
-    local pr = { number = 7, title = "t", author = "me", head = "h", base = "main", url = "https://pr/7" }
+    local pr =
+      { number = 7, title = "t", author = "me", head = "h", base = "main", url = "https://pr/7" }
     rq.cache.repo = {
       at = vim.uv.now(),
       repo = { owner = "o", name = "n" },
@@ -763,16 +801,19 @@ describe("reviewqueue.pick", function()
   end)
 
   for _, list in ipairs({ "items", "mine" }) do
-    it(("opens the PR in the browser on normal-mode G in either window (%s)"):format(list), function()
-      rq.pick(list)
-      for _, win in ipairs({ "input", "list" }) do
-        local key = opts.win[win].keys.G
-        assert.equals("n", key.mode)
-        opened = nil
-        opts.actions[key[1]](nil, { pr = { url = "https://pr/7" } })
-        assert.equals("https://pr/7", opened)
+    it(
+      ("opens the PR in the browser on normal-mode G in either window (%s)"):format(list),
+      function()
+        rq.pick(list)
+        for _, win in ipairs({ "input", "list" }) do
+          local key = opts.win[win].keys.G
+          assert.equals("n", key.mode)
+          opened = nil
+          opts.actions[key[1]](nil, { pr = { url = "https://pr/7" } })
+          assert.equals("https://pr/7", opened)
+        end
       end
-    end)
+    )
   end
 end)
 
@@ -787,7 +828,9 @@ describe("reviewqueue.refresh", function()
     rq.fetch = function(_)
       return vim.tbl_map(function(tier)
         return { verdict = { tier = tier } }
-      end, tiers), nil, {}
+      end, tiers),
+        nil,
+        {}
     end
     changes = 0
     listener = vim.api.nvim_create_autocmd("User", {

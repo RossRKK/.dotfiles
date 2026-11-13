@@ -162,7 +162,9 @@ end
 map({ "n", "i", "x", "t" }, "<M-b>", function()
   local worktree = require("util.worktree")
   require("config.workspace").prefix({ w = worktree.pick, b = worktree.new })
-end, { desc = "Workspace prefix (N switch / c new / & close / .N renumber / w worktree / b new branch / e browse)" })
+end, {
+  desc = "Workspace prefix (N switch / c new / & close / .N renumber / w worktree / b new branch / e browse)",
+})
 map("n", "<leader>tn", function()
   require("config.workspace").pick_new()
 end, { desc = "New project tab (recent/dev)" })

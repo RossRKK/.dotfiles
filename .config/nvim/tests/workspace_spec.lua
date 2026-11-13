@@ -212,12 +212,15 @@ describe("workspace.prefix", function()
 end)
 
 describe("workspace.agent_shell", function()
-  it("continues this directory's last Claude conversation, else starts one, at a fish prompt, marked as terminal 1", function()
-    assert.same(
-      { "env", "WORKSPACE_TERMINAL=1", "fish", "-C", "claude --continue; or claude" },
-      require("config.workspace").agent_shell(false)
-    )
-  end)
+  it(
+    "continues this directory's last Claude conversation, else starts one, at a fish prompt, marked as terminal 1",
+    function()
+      assert.same(
+        { "env", "WORKSPACE_TERMINAL=1", "fish", "-C", "claude --continue; or claude" },
+        require("config.workspace").agent_shell(false)
+      )
+    end
+  )
 
   it("tells that Claude the name to take when it has one", function()
     assert.same({
@@ -253,9 +256,11 @@ describe("workspace.explore", function()
   before_each(function()
     saved_snacks = _G.Snacks
     got = nil
-    _G.Snacks = { picker = { explorer = function(opts)
-      got = opts
-    end } }
+    _G.Snacks = { picker = {
+      explorer = function(opts)
+        got = opts
+      end,
+    } }
   end)
 
   after_each(function()
@@ -411,31 +416,34 @@ describe("workspace numbers", function()
     assert.equals(one, vim.api.nvim_get_current_tabpage())
   end)
 
-  it("opens the worktree picker on <M-b> w, a new branch on <M-b> b and the browser on <M-b> e without waiting for a number", function()
-    require("config.keymaps")
-    local picked, branched, explored = 0, 0, 0
-    package.loaded["util.worktree"] = {
-      pick = function()
-        picked = picked + 1
-      end,
-      new = function()
-        branched = branched + 1
-      end,
-    }
-    ws.explore = function()
-      explored = explored + 1
+  it(
+    "opens the worktree picker on <M-b> w, a new branch on <M-b> b and the browser on <M-b> e without waiting for a number",
+    function()
+      require("config.keymaps")
+      local picked, branched, explored = 0, 0, 0
+      package.loaded["util.worktree"] = {
+        pick = function()
+          picked = picked + 1
+        end,
+        new = function()
+          branched = branched + 1
+        end,
+      }
+      ws.explore = function()
+        explored = explored + 1
+      end
+      local keys = function(k)
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(k, true, false, true), "x", false)
+      end
+      keys("<M-b>w")
+      keys("<M-b>b")
+      keys("<M-b>e")
+      package.loaded["util.worktree"] = nil
+      assert.equals(1, picked)
+      assert.equals(1, branched)
+      assert.equals(1, explored)
     end
-    local keys = function(k)
-      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(k, true, false, true), "x", false)
-    end
-    keys("<M-b>w")
-    keys("<M-b>b")
-    keys("<M-b>e")
-    package.loaded["util.worktree"] = nil
-    assert.equals(1, picked)
-    assert.equals(1, branched)
-    assert.equals(1, explored)
-  end)
+  )
 
   it("closes a workspace without asking when no agent is live", function()
     package.loaded["fishmonger"] = {
@@ -716,13 +724,16 @@ describe("workspace.display_name", function()
     assert.equals("dotfiles - rkk/x", ws.display_name())
   end)
 
-  it("with agent worktrees, names a worktree after its repo, its agent and the branch it has out", function()
-    ws.setup({ agent_worktrees = true })
-    report("/r/.git/worktrees/keen-heron", "/r/.git", "rkk/x")
-    assert.equals("dotfiles · keen-heron · rkk/x", ws.display_name())
-    report("/r/.git/worktrees/keen-heron", "/r/.git", "rkk/y")
-    assert.equals("dotfiles · keen-heron · rkk/y", ws.display_name())
-  end)
+  it(
+    "with agent worktrees, names a worktree after its repo, its agent and the branch it has out",
+    function()
+      ws.setup({ agent_worktrees = true })
+      report("/r/.git/worktrees/keen-heron", "/r/.git", "rkk/x")
+      assert.equals("dotfiles · keen-heron · rkk/x", ws.display_name())
+      report("/r/.git/worktrees/keen-heron", "/r/.git", "rkk/y")
+      assert.equals("dotfiles · keen-heron · rkk/y", ws.display_name())
+    end
+  )
 
   it("with agent worktrees, names a worktree with nothing out after its repo and agent", function()
     ws.setup({ agent_worktrees = true })

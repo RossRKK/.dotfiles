@@ -150,7 +150,10 @@ describe("greeter.patch_snacks_dashboard", function()
     D = {}
     D.__index = D
     function D:size()
-      return { width = vim.api.nvim_win_get_width(self.win), height = vim.api.nvim_win_get_height(self.win) }
+      return {
+        width = vim.api.nvim_win_get_width(self.win),
+        height = vim.api.nvim_win_get_height(self.win),
+      }
     end
     function D:find(pos)
       return { row = pos[1], text = self.lines[pos[1]]:sub(1, 1) }
@@ -158,7 +161,10 @@ describe("greeter.patch_snacks_dashboard", function()
     greeter.patch_snacks_dashboard(D)
 
     dash_buf = show_new_buffer({ "greeter" })
-    dash = setmetatable({ buf = dash_buf, win = vim.api.nvim_get_current_win(), lines = { "a", "b" } }, D)
+    dash = setmetatable(
+      { buf = dash_buf, win = vim.api.nvim_get_current_win(), lines = { "a", "b" } },
+      D
+    )
     dash._size = dash:size()
   end)
 
@@ -179,11 +185,14 @@ describe("greeter.patch_snacks_dashboard", function()
     assert.equals(vim.api.nvim_win_get_height(dash.win), dash:size().height)
   end)
 
-  it("reports the last size, unchanged, once a file is shown in its old window and it is resized", function()
-    show_new_buffer({ "one" })
-    vim.cmd("split") -- shrinks the old window: snacks would see a new size and update()
-    assert.same(dash._size, dash:size())
-  end)
+  it(
+    "reports the last size, unchanged, once a file is shown in its old window and it is resized",
+    function()
+      show_new_buffer({ "one" })
+      vim.cmd("split") -- shrinks the old window: snacks would see a new size and update()
+      assert.same(dash._size, dash:size())
+    end
+  )
 
   it("reports the last size when its window is gone", function()
     vim.cmd("split")
@@ -344,11 +353,21 @@ describe("greeter.pr_status", function()
     checkSuite = { app = { slug = "mergify" } },
   }
   for _, case in ipairs({
-    { "passes when nothing failed or is running", "SUCCESS", { done, skipped }, "\u{2713} checks pass" },
+    {
+      "passes when nothing failed or is running",
+      "SUCCESS",
+      { done, skipped },
+      "\u{2713} checks pass",
+    },
     { "counts what's pending", "PENDING", { done, running, legacy_pending }, "\u{25cf} 2 pending" },
     { "lets any failure win", "FAILURE", { running, failed }, "\u{2717} 1 failing" },
     { "leaves Mergify's review gate out", "FAILURE", { done, gate }, "\u{2713} checks pass" },
-    { "still counts CI failing beside the gate", "FAILURE", { gate, failed }, "\u{2717} 1 failing" },
+    {
+      "still counts CI failing beside the gate",
+      "FAILURE",
+      { gate, failed },
+      "\u{2717} 1 failing",
+    },
   }) do
     it("summarises checks: " .. case[1], function()
       local rollup = { state = case[2], contexts = { nodes = case[3] } }
@@ -449,7 +468,8 @@ describe("greeter.pr_base", function()
   end)
 
   it("falls back to the queue's lists before the greeter has fetched the branch", function()
-    greeter.prs[root] = { branch = "other", at = 0, pr = { number = 1, state = "OPEN", baseRefName = "x" } }
+    greeter.prs[root] =
+      { branch = "other", at = 0, pr = { number = 1, state = "OPEN", baseRefName = "x" } }
     queued("items", { number = 9, head = "theirs", base = "main" })
     queued("mine", { number = 8, head = "feat/b", base = "feat/a" })
     local base, label = greeter.pr_base(root, "feat/b")
@@ -511,7 +531,11 @@ describe("greeter.fetch", function()
   end
 
   for _, case in ipairs({
-    { "acts on a report for a live tab's checkout", open_tab, { "watch", "fetch_pr", "cache_report" } },
+    {
+      "acts on a report for a live tab's checkout",
+      open_tab,
+      { "watch", "fetch_pr", "cache_report" },
+    },
     { "drops a report whose tab has closed", function() end, {} },
     {
       "drops a report whose checkout was deleted under its tab",

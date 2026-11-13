@@ -3,14 +3,20 @@
 
 local assert = require("luassert")
 
-local probe = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h") .. "/helpers/workspace_probe.lua"
+local probe = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h")
+  .. "/helpers/workspace_probe.lua"
 
 local root, job, ch
 
 --- Run `code` in the child with `...`, returning its result.
 ---@param code string a Lua chunk; `P` is the probe module
 local function child(code, ...)
-  return vim.fn.rpcrequest(ch, "nvim_exec_lua", "local P = dofile(" .. vim.inspect(probe) .. ")\n" .. code, { ... })
+  return vim.fn.rpcrequest(
+    ch,
+    "nvim_exec_lua",
+    "local P = dofile(" .. vim.inspect(probe) .. ")\n" .. code,
+    { ... }
+  )
 end
 
 --- A git repo at `root/<name>`.
@@ -136,15 +142,18 @@ describe("a workspace tab", function()
     assert.same({ want.statusline.bottom }, want.statusline.rows)
   end)
 
-  it("restored with the start screen's s, its tab and the background ones, is laid out as by hand", function()
-    save({ repo("one"), repo("two"), repo("three") })
-    start()
-    child("vim.api.nvim_input('s')")
-    assert.is_true(vim.wait(5000, function()
-      return #child("return P.workspaces()") == 3
-    end, 50))
-    assert_like_by_hand(visit_all(), 3)
-  end)
+  it(
+    "restored with the start screen's s, its tab and the background ones, is laid out as by hand",
+    function()
+      save({ repo("one"), repo("two"), repo("three") })
+      start()
+      child("vim.api.nvim_input('s')")
+      assert.is_true(vim.wait(5000, function()
+        return #child("return P.workspaces()") == 3
+      end, 50))
+      assert_like_by_hand(visit_all(), 3)
+    end
+  )
 
   it("restored with :WorkspaceRestore from a workspace tab is laid out as by hand", function()
     local first = repo("first")

@@ -712,10 +712,14 @@ function M.agent_name(dir)
     return nil
   end
   local res = vim
-    .system(
-      { "git", "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-dir", "--git-common-dir" },
-      { cwd = dir, text = true }
-    )
+    .system({
+      "git",
+      "rev-parse",
+      "--path-format=absolute",
+      "--show-toplevel",
+      "--git-dir",
+      "--git-common-dir",
+    }, { cwd = dir, text = true })
     :wait()
   local top, git_dir, common_dir = unpack(vim.split(vim.trim(res.stdout or ""), "\n"))
   if res.code == 0 and git_dir ~= common_dir then

@@ -523,7 +523,8 @@ function M.below(pr, ctx)
   for _, ref in ipairs(pr.depends_on) do
     local key = M.ref_key(ref)
     if ctx.open_refs[key] then
-      local here = lower(ref.owner) == lower(ctx.repo.owner) and lower(ref.name) == lower(ctx.repo.name)
+      local here = lower(ref.owner) == lower(ctx.repo.owner)
+        and lower(ref.name) == lower(ctx.repo.name)
       local label = here and ("#" .. ref.number)
         or ("%s/%s#%d"):format(ref.owner, ref.name, ref.number)
       if not vim.tbl_contains(out, label) then
@@ -590,7 +591,11 @@ function M.checks_of(rollup)
       -- CheckRuns carry a status and conclusion, legacy StatusContexts a state.
       local result = c.conclusion or c.state
       local name = c.name or c.context or "?"
-      if (c.status ~= nil and c.status ~= "COMPLETED") or result == "PENDING" or result == "EXPECTED" then
+      if
+        (c.status ~= nil and c.status ~= "COMPLETED")
+        or result == "PENDING"
+        or result == "EXPECTED"
+      then
         out.pending = out.pending + 1
       elseif FAILED_RESULTS[result] then
         -- A name can repeat (one job in several workflows): list it once.
@@ -1082,7 +1087,10 @@ local function open_refs(refs)
   local states = parallel(vim.tbl_map(function(ref)
     return function()
       local ok, data = pcall(graphql, PR_STATE, ref)
-      return ok and data.repository and data.repository.pullRequest and data.repository.pullRequest.state
+      return ok
+        and data.repository
+        and data.repository.pullRequest
+        and data.repository.pullRequest.state
     end
   end, refs))
   local out = {}
@@ -1192,8 +1200,8 @@ function M.checks(dir, number, cb)
   coroutine.wrap(function()
     local ok, checks = pcall(function()
       local repo = repo_of(dir)
-      local node = graphql(CHECKS, { owner = repo.owner, name = repo.name, number = number })
-        .repository.pullRequest
+      local node =
+        graphql(CHECKS, { owner = repo.owner, name = repo.name, number = number }).repository.pullRequest
       with_all_contexts(repo, node)
       local head = node.commits.nodes[1]
       local rollup = head and head.commit.statusCheckRollup
