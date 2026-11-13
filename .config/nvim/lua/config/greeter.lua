@@ -228,8 +228,7 @@ function M.fetch_pr(root, branch, force)
     return
   end
   pr_fetching[root] = true
-  local fields =
-    "number,title,state,isDraft,body,reviewDecision,statusCheckRollup,url,headRefOid,baseRefName"
+  local fields = "number,title,state,isDraft,body,reviewDecision,url,headRefOid,baseRefName"
   vim.system(
     { "gh", "pr", "view", branch, "--json", fields },
     { cwd = root, text = true },
@@ -247,7 +246,8 @@ function M.fetch_pr(root, branch, force)
         local old = cached and cached.pr
         local same_head = pr and old and old.number == pr.number and old.headRefOid == pr.headRefOid
         if same_head then
-          pr.size = old.size
+          -- Last round's checks stand in until this round's land (below).
+          pr.size, pr.checks = old.size, old.checks
         end
         local changed = not (cached and vim.deep_equal(cached.pr, pr))
         local was = cached and cached.branch == branch and M.pr_base(root, branch)
@@ -263,8 +263,17 @@ function M.fetch_pr(root, branch, force)
         if M.pr_base(root, branch) ~= was and triage.is_enabled(root) then
           triage.refresh()
         end
+        local rq = require("util.reviewqueue")
+        if pr then
+          rq.checks(root, pr.number, function(checks)
+            if checks and M.prs[root] == entry and not vim.deep_equal(pr.checks, checks) then
+              pr.checks = checks
+              M.update_dashboards()
+            end
+          end)
+        end
         if pr and not same_head then
-          require("util.reviewqueue").size(root, pr.number, function(size)
+          rq.size(root, pr.number, function(size)
             if size and M.prs[root] == entry then
               pr.size = size
               M.update_dashboards()
@@ -677,7 +686,7 @@ function M.wrap(text, width)
 end
 
 --- The PR's status line chunks: state, review decision, checks.
----@param pr table `gh pr view` JSON
+---@param pr table `gh pr view` JSON, plus `checks` (reviewqueue.Checks) once fetched
 ---@return table[] chunks
 function M.pr_status(pr)
   local dim = "SnacksDashboardDesc"
@@ -698,31 +707,16 @@ function M.pr_status(pr)
     chunks[#chunks + 1] = { decision[1], hl = decision[2] }
   end
 
-  -- Checks: CheckRuns carry status/conclusion, legacy StatusContexts a state.
-  local failed, pending, passed = 0, 0, 0
-  for _, c in ipairs(pr.statusCheckRollup or {}) do
-    local result = c.conclusion or c.state
-    if c.status and c.status ~= "COMPLETED" or result == "PENDING" or result == "EXPECTED" then
-      pending = pending + 1
-    elseif
-      result == "FAILURE"
-      or result == "ERROR"
-      or result == "TIMED_OUT"
-      or result == "CANCELLED"
-      or result == "ACTION_REQUIRED"
-      or result == "STARTUP_FAILURE"
-    then
-      failed = failed + 1
-    else
-      passed = passed + 1 -- SUCCESS, NEUTRAL, SKIPPED
-    end
-  end
-  if failed + pending + passed > 0 then
+  -- Set by fetch_pr once the checks land; no checks segment until then.
+  local checks = pr.checks
+  local failed = checks and #checks.failing or 0
+  if checks and failed + checks.pending + checks.passed > 0 then
     chunks[#chunks + 1] = { "  \u{00b7}  ", hl = dim }
     if failed > 0 then
       chunks[#chunks + 1] = { ("\u{2717} %d failing"):format(failed), hl = "Removed" }
-    elseif pending > 0 then
-      chunks[#chunks + 1] = { ("\u{25cf} %d pending"):format(pending), hl = "DiagnosticWarn" }
+    elseif checks.pending > 0 then
+      chunks[#chunks + 1] =
+        { ("\u{25cf} %d pending"):format(checks.pending), hl = "DiagnosticWarn" }
     else
       chunks[#chunks + 1] = { "\u{2713} checks pass", hl = "Added" }
     end

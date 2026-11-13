@@ -330,24 +330,35 @@ describe("greeter.pr_status", function()
     assert.equals("open", text({ state = "OPEN" }))
   end)
 
-  it("summarises checks: any failure wins, then pending, else pass", function()
-    local done = { status = "COMPLETED", conclusion = "SUCCESS" }
-    local skipped = { status = "COMPLETED", conclusion = "SKIPPED" }
-    local running = { status = "IN_PROGRESS" }
-    local failed = { status = "COMPLETED", conclusion = "FAILURE" }
-    local legacy_pending = { state = "PENDING" }
-    assert.equals(
-      "open  \u{00b7}  \u{2713} checks pass",
-      text({ state = "OPEN", statusCheckRollup = { done, skipped } })
-    )
-    assert.equals(
-      "open  \u{00b7}  \u{25cf} 2 pending",
-      text({ state = "OPEN", statusCheckRollup = { done, running, legacy_pending } })
-    )
-    assert.equals(
-      "open  \u{00b7}  \u{2717} 1 failing",
-      text({ state = "OPEN", statusCheckRollup = { running, failed } })
-    )
+  -- The rollup goes through the review queue's reading, so the greeter and
+  -- <leader>rm agree on what's failing.
+  local done = { name = "lint", status = "COMPLETED", conclusion = "SUCCESS" }
+  local skipped = { name = "docs", status = "COMPLETED", conclusion = "SKIPPED" }
+  local running = { name = "build", status = "IN_PROGRESS" }
+  local failed = { name = "test", status = "COMPLETED", conclusion = "FAILURE" }
+  local legacy_pending = { context = "ci/legacy", state = "PENDING" }
+  local gate = {
+    name = "Mergify Merge Protections",
+    status = "COMPLETED",
+    conclusion = "FAILURE",
+    checkSuite = { app = { slug = "mergify" } },
+  }
+  for _, case in ipairs({
+    { "passes when nothing failed or is running", "SUCCESS", { done, skipped }, "\u{2713} checks pass" },
+    { "counts what's pending", "PENDING", { done, running, legacy_pending }, "\u{25cf} 2 pending" },
+    { "lets any failure win", "FAILURE", { running, failed }, "\u{2717} 1 failing" },
+    { "leaves Mergify's review gate out", "FAILURE", { done, gate }, "\u{2713} checks pass" },
+    { "still counts CI failing beside the gate", "FAILURE", { gate, failed }, "\u{2717} 1 failing" },
+  }) do
+    it("summarises checks: " .. case[1], function()
+      local rollup = { state = case[2], contexts = { nodes = case[3] } }
+      local checks = require("util.reviewqueue").checks_of(rollup)
+      assert.equals("open  \u{00b7}  " .. case[4], text({ state = "OPEN", checks = checks }))
+    end)
+  end
+
+  it("says nothing about checks before they've been fetched", function()
+    assert.equals("open", text({ state = "OPEN" }))
   end)
 end)
 

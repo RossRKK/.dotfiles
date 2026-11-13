@@ -539,35 +539,44 @@ local function is_merge_gate(c)
   return (MERGE_GATES[app.slug] or {})[c.name] == true
 end
 
---- The rollup's state and failing check names, merge gates left out. A gate
---- failing fails the whole rollup, so a failed rollup is re-derived from the
---- rest (details() fetches every context of a failed rollup).
+---@class reviewqueue.Checks
+---@field state string? statusCheckRollup state, merge gates left out
+---@field failing string[] names of the failing checks
+---@field pending integer checks still running or expected
+---@field passed integer checks done without failing (success, neutral, skipped)
+
+--- A statusCheckRollup read with merge gates left out. A gate failing fails
+--- the whole rollup, so a failed rollup is re-derived from the rest (callers
+--- fetch every context of a failed rollup: with_all_contexts()).
 ---@param rollup table
----@return string? state, string[] failing
-local function checks_of(rollup)
+---@return reviewqueue.Checks
+function M.checks_of(rollup)
   local contexts = type(rollup.contexts) == "table" and rollup.contexts.nodes or {}
-  local failing, seen, pending = {}, {}, false
+  local out = { failing = {}, pending = 0, passed = 0 }
+  local seen = {}
   for _, c in ipairs(contexts) do
     if not is_merge_gate(c) then
       -- CheckRuns carry a status and conclusion, legacy StatusContexts a state.
       local result = c.conclusion or c.state
-      pending = pending
-        or (c.status ~= nil and c.status ~= "COMPLETED")
-        or result == "PENDING"
-        or result == "EXPECTED"
-      -- A name can repeat (one job in several workflows): list it once.
       local name = c.name or c.context or "?"
-      if FAILED_RESULTS[result] and not seen[name] then
-        seen[name] = true
-        failing[#failing + 1] = name
+      if (c.status ~= nil and c.status ~= "COMPLETED") or result == "PENDING" or result == "EXPECTED" then
+        out.pending = out.pending + 1
+      elseif FAILED_RESULTS[result] then
+        -- A name can repeat (one job in several workflows): list it once.
+        if not seen[name] then
+          seen[name] = true
+          out.failing[#out.failing + 1] = name
+        end
+      elseif result then
+        out.passed = out.passed + 1
       end
     end
   end
-  local state = type(rollup.state) == "string" and rollup.state or nil
-  if CHECKS_FAILED[state or ""] and #failing == 0 then
-    state = pending and "PENDING" or "SUCCESS"
+  out.state = type(rollup.state) == "string" and rollup.state or nil
+  if CHECKS_FAILED[out.state or ""] and #out.failing == 0 then
+    out.state = out.pending > 0 and "PENDING" or "SUCCESS"
   end
-  return state, failing
+  return out
 end
 
 --- Normalize a search-result PR node from the GraphQL query below.
@@ -629,7 +638,8 @@ function M.from_node(node, reviewed_by_me)
   local head = nodes(node.commits)[1]
   local rollup = head and type(head.commit) == "table" and head.commit.statusCheckRollup
   if type(rollup) == "table" then
-    pr.checks, pr.failing = checks_of(rollup)
+    local checks = M.checks_of(rollup)
+    pr.checks, pr.failing = checks.state, checks.failing
   end
   for _, rr in ipairs(nodes(node.reviewRequests)) do
     local who = type(rr.requestedReviewer) == "table" and rr.requestedReviewer or {}
@@ -780,6 +790,16 @@ query($owner: String!, $name: String!, $number: Int!, $after: String) {
   }
 }]]):format(CONTEXTS)
 
+local CHECKS = ([[
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      number
+      commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) { %s } } } } }
+    }
+  }
+}]]):format(CONTEXTS)
+
 local TEAMS =
   "teams(first: 100, userLogins: [%s]) { nodes { combinedSlug ancestors(first: 20) { nodes { combinedSlug } } } }"
 
@@ -840,6 +860,26 @@ local function search(repo, qualifier)
   return out
 end
 
+--- Page in the rest of a failed rollup's contexts on a PR node, in place: only a
+--- failed rollup is re-derived from them (checks_of()).
+---@param repo { owner: string, name: string }
+---@param node table a pullRequest node with `commits(last: 1)` and its rollup
+local function with_all_contexts(repo, node)
+  local head = node.commits and node.commits.nodes and node.commits.nodes[1]
+  local rollup = head and head.commit and head.commit.statusCheckRollup
+  local contexts = rollup and CHECKS_FAILED[rollup.state or ""] and rollup.contexts
+  while contexts and contexts.pageInfo.hasNextPage do
+    local more = graphql(MORE_CONTEXTS, {
+      owner = repo.owner,
+      name = repo.name,
+      number = node.number,
+      after = contexts.pageInfo.endCursor,
+    }).repository.pullRequest.commits.nodes[1].commit.statusCheckRollup.contexts
+    vim.list_extend(contexts.nodes, more.nodes)
+    contexts.pageInfo = more.pageInfo
+  end
+end
+
 --- Full PR nodes for some numbers, in one request, files fully paginated.
 ---@param repo { owner: string, name: string }
 ---@param numbers integer[]
@@ -869,21 +909,7 @@ local function details(repo, numbers, extra)
         vim.list_extend(files.nodes, more.nodes)
         files.pageInfo = more.pageInfo
       end
-      local head = node.commits and node.commits.nodes and node.commits.nodes[1]
-      local rollup = head and head.commit and head.commit.statusCheckRollup
-      local contexts = rollup
-        and (rollup.state == "FAILURE" or rollup.state == "ERROR")
-        and rollup.contexts
-      while contexts and contexts.pageInfo.hasNextPage do
-        local more = graphql(MORE_CONTEXTS, {
-          owner = repo.owner,
-          name = repo.name,
-          number = node.number,
-          after = contexts.pageInfo.endCursor,
-        }).repository.pullRequest.commits.nodes[1].commit.statusCheckRollup.contexts
-        vim.list_extend(contexts.nodes, more.nodes)
-        contexts.pageInfo = more.pageInfo
-      end
+      with_all_contexts(repo, node)
       out[#out + 1] = node
     end
   end
@@ -1037,6 +1063,27 @@ function M.size(dir, number, cb)
       return pr.size
     end)
     cb(ok and size or nil)
+  end)()
+end
+
+--- The checks on one PR's head (the greeter's PR), read as the queue reads
+--- them, or nil if they couldn't be had. GraphQL rather than `gh pr view`,
+--- whose rollup has no app slug to tell a merge gate by.
+---@param dir string
+---@param number integer
+---@param cb fun(checks: reviewqueue.Checks?)
+function M.checks(dir, number, cb)
+  coroutine.wrap(function()
+    local ok, checks = pcall(function()
+      local repo = repo_of(dir)
+      local node = graphql(CHECKS, { owner = repo.owner, name = repo.name, number = number })
+        .repository.pullRequest
+      with_all_contexts(repo, node)
+      local head = node.commits.nodes[1]
+      local rollup = head and head.commit.statusCheckRollup
+      return rollup and M.checks_of(rollup) or nil
+    end)
+    cb(ok and checks or nil)
   end)()
 end
 
