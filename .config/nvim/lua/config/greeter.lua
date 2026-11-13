@@ -171,6 +171,10 @@ function M.fetch(root)
   fetching[root] = true
   triage.report({ root = root }, function(report)
     fetching[root] = nil
+    -- The tab or its checkout can go while the report is in flight (<leader>tX).
+    if not M.live_roots()[root] or not vim.uv.fs_stat(root) then
+      return
+    end
     if report then
       M.watch(root, report)
       if report.branch then

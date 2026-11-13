@@ -466,3 +466,66 @@ describe("greeter.pr_base", function()
     assert.is_nil(greeter.pr_base(root, nil))
   end)
 end)
+
+-- Regression: <leader>tX closes the tab and deletes its checkout while a report
+-- is in flight; acting on it ran `gh` with the deleted checkout as its cwd.
+describe("greeter.fetch", function()
+  local saved, calls, dir
+
+  before_each(function()
+    saved = {
+      triage = package.loaded.triage,
+      fetch_pr = greeter.fetch_pr,
+      watch = greeter.watch,
+      cache_report = greeter.cache_report,
+    }
+    calls = {}
+    package.loaded.triage = {
+      report = function(_, cb)
+        cb({ branch = "feat", git_dir = "/x/.git" })
+      end,
+    }
+    for _, name in ipairs({ "fetch_pr", "watch", "cache_report" }) do
+      greeter[name] = function()
+        calls[#calls + 1] = name
+      end
+    end
+    dir = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(dir, "p")
+  end)
+
+  after_each(function()
+    package.loaded.triage = saved.triage
+    greeter.fetch_pr, greeter.watch, greeter.cache_report =
+      saved.fetch_pr, saved.watch, saved.cache_report
+    vim.cmd("silent! tabonly!")
+    vim.fn.delete(dir, "rf")
+  end)
+
+  --- A tab rooted at `dir`, then back to the first tab (a current tab's
+  --- deleted cwd reads as "", another tab's still reads as the path).
+  local function open_tab()
+    vim.cmd("tabnew")
+    vim.cmd.tcd(vim.fn.fnameescape(dir))
+    vim.cmd("tabfirst")
+  end
+
+  for _, case in ipairs({
+    { "acts on a report for a live tab's checkout", open_tab, { "watch", "fetch_pr", "cache_report" } },
+    { "drops a report whose tab has closed", function() end, {} },
+    {
+      "drops a report whose checkout was deleted under its tab",
+      function()
+        open_tab()
+        vim.fn.delete(dir, "rf")
+      end,
+      {},
+    },
+  }) do
+    it(case[1], function()
+      case[2]()
+      greeter.fetch(dir)
+      assert.same(case[3], calls)
+    end)
+  end
+end)
