@@ -857,6 +857,9 @@ function M.candidates(root)
   return items
 end
 
+-- Defined below M.pick, which uses them.
+local agent_worktrees, live_colours, latest_transcript, recorded_colours
+
 --- <M-b>w: pick a branch, get its worktree as a tab. Recently opened
 --- worktrees float to the top (see M.order); typing a name that matches nothing
 --- creates a new branch off HEAD.
@@ -868,6 +871,7 @@ function M.pick()
     return
   end
   local items = M.rows(M.order(M.candidates(root), M.recent_load()), root)
+  local hls = M.agent_hls(agent_worktrees(items), options.claude_projects, live_colours())
   Snacks.picker.pick({
     source = "worktree",
     title = "Worktrees",
@@ -881,7 +885,7 @@ function M.pick()
       -- Mark rows that already have a worktree: picking one is a plain tab open.
       table.insert(ret, 2, { item.worktree and "\u{f0e8e} " or "   ", "SnacksPickerGitBranch" })
       if item.agent then
-        table.insert(ret, 4, { item.agent .. " ", "SnacksPickerDimmed" })
+        table.insert(ret, 4, M.agent_chunk(item, hls))
       end
       return ret
     end,
@@ -948,6 +952,99 @@ function M.agent_of(it, root)
   if name ~= M.slug(it.name or it.branch) then
     return name
   end
+end
+
+--- A row's agent name, in the colour the agent's tab has, or dimmed when that's unknown.
+---@param item worktree.Candidate a row with an agent (M.rows)
+---@param hls table<string, string> worktree -> highlight group (M.agent_hls)
+---@return string[] a snacks text chunk
+function M.agent_chunk(item, hls)
+  return { item.agent .. " ", hls[item.worktree] or "SnacksPickerDimmed" }
+end
+
+--- The highlight group of each agent worktree's colour: that of the agent running
+--- in it, else the last its latest transcript recorded. Worktrees with neither,
+--- or a colour fishmonger has no group for, are left out.
+---@param paths string[] agent worktrees
+---@param projects string Claude's projects directory
+---@param live table<string, string> worktree -> colour of the agent running there
+---@return table<string, string> worktree -> highlight group
+function M.agent_hls(paths, projects, live)
+  local transcripts = {}
+  for _, path in ipairs(paths) do
+    if not live[path] then
+      transcripts[path] = latest_transcript(M.claude_project(projects, path))
+    end
+  end
+  local recorded = recorded_colours(vim.tbl_values(transcripts))
+  local colour_hl = require("fishmonger.agent").colour_hl
+  local out = {}
+  for _, path in ipairs(paths) do
+    out[path] = colour_hl(live[path] or recorded[transcripts[path]])
+  end
+  return out
+end
+
+--- The worktrees the picker shows an agent name for.
+---@param items worktree.Candidate[] rows (M.rows)
+---@return string[]
+function agent_worktrees(items)
+  local out = {}
+  for _, it in ipairs(items) do
+    if it.agent then
+      out[#out + 1] = it.worktree
+    end
+  end
+  return out
+end
+
+--- Each running agent's claimed colour by its directory, as fishmonger reads them
+--- for the tab bar: a claim can outlast the /color its transcript recorded.
+---@return table<string, string>
+function live_colours()
+  local out = {}
+  for _, record in ipairs(require("fishmonger.agent").all()) do
+    if record.cwd and record.colour then
+      out[record.cwd] = record.colour
+    end
+  end
+  return out
+end
+
+--- The most recently written transcript in a Claude project directory, if any.
+---@param dir string
+---@return string?
+function latest_transcript(dir)
+  local latest, latest_time
+  for name, kind in vim.fs.dir(dir) do
+    local stat = kind == "file" and name:match("%.jsonl$") and vim.uv.fs_stat(dir .. "/" .. name)
+    local time = stat and stat.mtime.sec + stat.mtime.nsec / 1e9
+    if time and (not latest_time or time > latest_time) then
+      latest, latest_time = dir .. "/" .. name, time
+    end
+  end
+  return latest
+end
+
+--- The colour each transcript's last agent-color row names, from one grep over
+--- them all: transcripts run to megabytes and the picker shouldn't wait on Lua
+--- reading them.
+---@param transcripts string[]
+---@return table<string, string> transcript -> colour
+function recorded_colours(transcripts)
+  if #transcripts == 0 then
+    return {}
+  end
+  local cmd = { "grep", "--null", "-HF", '"type":"agent-color"', "--", unpack(transcripts) }
+  local out = {}
+  for line in vim.gsplit(vim.system(cmd, { text = true }):wait().stdout or "", "\n") do
+    local nul = line:find("\0", 1, true)
+    local ok, row = pcall(vim.json.decode, nul and line:sub(nul + 1) or "")
+    if ok and type(row) == "table" and type(row.agentColor) == "string" then
+      out[line:sub(1, nul - 1)] = row.agentColor
+    end
+  end
+  return out
 end
 
 return M

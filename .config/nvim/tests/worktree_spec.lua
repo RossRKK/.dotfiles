@@ -234,6 +234,80 @@ describe("worktree.rows", function()
   end)
 end)
 
+-- An agent's name is drawn in the colour its tab has: the running agent's claim,
+-- else the last /color its latest transcript recorded.
+describe("worktree.agent_hls", function()
+  local projects, wt = nil, "/repo/.worktrees/fuzzy-otter"
+
+  local function colour(c)
+    return vim.json.encode({ type = "agent-color", agentColor = c, sessionId = "s" })
+  end
+
+  -- A transcript of `rows` in `wt`'s project directory, written `age` seconds ago.
+  local function transcript(name, rows, age)
+    local dir = worktree.claude_project(projects, wt)
+    vim.fn.mkdir(dir, "p")
+    local path = dir .. "/" .. name .. ".jsonl"
+    vim.fn.writefile(rows, path)
+    local time = os.time() - age
+    vim.uv.fs_utime(path, time, time)
+  end
+
+  local function hl(live)
+    return worktree.agent_hls({ wt }, projects, live or {})[wt]
+  end
+
+  before_each(function()
+    projects = vim.fn.tempname()
+  end)
+
+  after_each(function()
+    vim.fn.delete(projects, "rf")
+  end)
+
+  it("takes the transcript's last agent-color row", function()
+    transcript("a", { colour("red"), '{"type":"user"}', colour("blue"), '{"type":"user"}' }, 0)
+    assert.equals("FishmongerAgentBlue", hl())
+  end)
+
+  it("reads the most recently written transcript", function()
+    transcript("old", { colour("red") }, 60)
+    transcript("new", { colour("green") }, 0)
+    transcript("older", { colour("pink") }, 120)
+    assert.equals("FishmongerAgentGreen", hl())
+  end)
+
+  it("prefers the colour the running agent claims", function()
+    transcript("a", { colour("red") }, 0)
+    assert.equals("FishmongerAgentCyan", hl({ [wt] = "cyan" }))
+  end)
+
+  it("has none without a transcript or a colour row", function()
+    assert.is_nil(hl())
+    transcript("a", { '{"type":"user"}' }, 0)
+    assert.is_nil(hl())
+  end)
+
+  it("has none for a colour fishmonger has no group for", function()
+    transcript("a", { colour("chartreuse") }, 0)
+    assert.is_nil(hl())
+  end)
+end)
+
+describe("worktree.agent_chunk", function()
+  local row =
+    { branch = "rkk/fix", agent = "fuzzy-otter", worktree = "/repo/.worktrees/fuzzy-otter" }
+
+  it("draws the agent name in its colour", function()
+    local hls = { ["/repo/.worktrees/fuzzy-otter"] = "FishmongerAgentRed" }
+    assert.same({ "fuzzy-otter ", "FishmongerAgentRed" }, worktree.agent_chunk(row, hls))
+  end)
+
+  it("dims it when the colour is unknown", function()
+    assert.same({ "fuzzy-otter ", "SnacksPickerDimmed" }, worktree.agent_chunk(row, {}))
+  end)
+end)
+
 describe("worktree.parse_worktrees", function()
   it("maps branches to paths and lists detached worktrees with their commit", function()
     local out = table.concat({
