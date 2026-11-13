@@ -77,6 +77,14 @@ return {
           },
           {
             icon = " ",
+            key = "s",
+            desc = "Resume workspaces",
+            action = into_this_tab(function(opts)
+              require("util.workspace_state").restore(opts)
+            end),
+          },
+          {
+            icon = " ",
             key = "f",
             desc = "Find file",
             action = function()

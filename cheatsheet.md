@@ -343,9 +343,19 @@ terminal — **switches to the tab** if that exact directory is already open as 
 workspace, rather than opening a duplicate. A subdirectory of an open project
 still gets its own tab.
 
-> **There is no session restore.** A saved session carries a single cwd, which
-> has no meaning once several projects share one nvim, so startup opens an empty
-> editor rather than reopening the last files.
+**Resuming workspaces after a restart.** Every nvim keeps its open workspaces in
+`~/.local/state/nvim/workspaces.json`: each project's directory, its number and
+terminal 1's Claude session. Neovide and terminal nvim share the file without
+wiping each other's projects. A project leaves it only when you close its tab
+(`Space+tx`, `Space+tX`); quitting nvim, a crash or a WSL shutdown keep them all.
+On the start screen of a bare `nvim`, **`s` Resume** (or `:WorkspaceRestore`
+from anywhere) reopens every saved project not already open here, under its old
+number where that is free, and terminal 1 resumes its Claude session with
+`claude --resume <id>`. Its name and colour come back with it. A session whose
+transcript is gone falls back to `claude --continue`, and a project whose
+directory is gone (a removed worktree) is skipped and forgotten. Nothing resumes
+on its own, so a second or nested nvim never starts duplicate agents. Only
+terminal 1 comes back: other terminals' jobs and the open files don't.
 
 ---
 
