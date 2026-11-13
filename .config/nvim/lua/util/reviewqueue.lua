@@ -193,6 +193,7 @@ end
 ---@field head_oid string
 ---@field cross_repo boolean
 ---@field body string?
+---@field depends_on reviewqueue.Ref[] Mergify `Depends-On:` lines in the body
 ---@field user_requests string[] logins requested by name
 ---@field team_requests string[] "org/team" slugs requested
 ---@field reviews reviewqueue.Review[] latest opinionated review per user
@@ -377,6 +378,8 @@ end
 ---@class reviewqueue.MineCtx: reviewqueue.Ctx
 ---@field default_branch string?
 ---@field heads table<string, integer> head ref -> number, over my open PRs
+---@field repo { owner: string, name: string }
+---@field open_refs table<string, true> ref_key()s of the open PRs among the `Depends-On`s
 
 local CHECKS_FAILED = { FAILURE = true, ERROR = true }
 local CHECKS_PENDING = { PENDING = true, EXPECTED = true }
@@ -487,11 +490,9 @@ function M.classify_mine(pr, ctx)
     or #awaiting > 0 and ("awaiting " .. table.concat(awaiting, ", "))
     or "awaiting review"
 
-  -- GitHub retargets a stacked PR when the one below merges; until then,
-  -- merging it would land it in that branch, not the default one.
-  if ctx.default_branch and pr.base ~= ctx.default_branch then
-    local below = ctx.heads[pr.base]
-    return verdict(5, { status, "stacked on " .. (below and ("#" .. below) or pr.base) })
+  local below = M.below(pr, ctx)
+  if #below > 0 then
+    return verdict(5, { status, "stacked on " .. table.concat(below, ", ") })
   end
   if not approved then
     return verdict(5, { status })
@@ -504,6 +505,33 @@ function M.classify_mine(pr, ctx)
     extra[#extra + 1] = "behind " .. pr.base
   end
   return verdict(2, vim.list_extend({ status }, extra))
+end
+
+--- What `pr` is stacked on, as labels: the branch it targets, and the still
+--- open PRs its `Depends-On:` lines name (Mergify holds it until they merge).
+---@param pr reviewqueue.PR
+---@param ctx reviewqueue.MineCtx
+---@return string[]
+function M.below(pr, ctx)
+  local out = {}
+  -- GitHub retargets a stacked PR when the one below merges; until then,
+  -- merging it would land it in that branch, not the default one.
+  if ctx.default_branch and pr.base ~= ctx.default_branch then
+    local n = ctx.heads[pr.base]
+    out[1] = n and ("#" .. n) or pr.base
+  end
+  for _, ref in ipairs(pr.depends_on) do
+    local key = M.ref_key(ref)
+    if ctx.open_refs[key] then
+      local here = lower(ref.owner) == lower(ctx.repo.owner) and lower(ref.name) == lower(ctx.repo.name)
+      local label = here and ("#" .. ref.number)
+        or ("%s/%s#%d"):format(ref.owner, ref.name, ref.number)
+      if not vim.tbl_contains(out, label) then
+        out[#out + 1] = label
+      end
+    end
+  end
+  return out
 end
 
 --- Verdicts in display order: tier, then newest PR first.
@@ -579,11 +607,62 @@ function M.checks_of(rollup)
   return out
 end
 
+---@class reviewqueue.Ref a pull request, in any repository
+---@field owner string
+---@field name string
+---@field number integer
+
+-- Mergify's three reference forms; anything else on the line voids it.
+local DEPENDS_ON_REFS = {
+  function(ref, repo)
+    local n = ref:match("^#(%d+)$")
+    return n and { owner = repo.owner, name = repo.name, number = tonumber(n) }
+  end,
+  function(ref)
+    local owner, name, n = ref:match("^([%w_.-]+)/([%w_.-]+)#(%d+)$")
+    return owner and { owner = owner, name = name, number = tonumber(n) }
+  end,
+  function(ref)
+    local owner, name, n = ref:match("^https?://[^/]+/([^/]+)/([^/]+)/pull/(%d+)/?$")
+    return owner and { owner = owner, name = name, number = tonumber(n) }
+  end,
+}
+
+--- The pull requests a PR body names in Mergify `Depends-On:` lines
+--- (https://docs.mergify.com/merge-protections/builtin/#depends-on).
+---@param body string?
+---@param repo { owner: string, name: string } the PR's own repository, for `#123`
+---@return reviewqueue.Ref[]
+function M.depends_on(body, repo)
+  local out = {}
+  for line in ((body or ""):gsub("\r", "") .. "\n"):gmatch("([^\n]*)\n") do
+    if line:lower():match("^%s*depends%-on:") then
+      local ref = vim.trim((line:gsub("^%s*[^:]*:", "")))
+      for _, parse in ipairs(DEPENDS_ON_REFS) do
+        local found = parse(ref, repo)
+        if found then
+          out[#out + 1] = found
+          break
+        end
+      end
+    end
+  end
+  return out
+end
+
+--- The key a ref is looked up by: owner and repo name are case-insensitive.
+---@param ref reviewqueue.Ref
+---@return string
+function M.ref_key(ref)
+  return ("%s/%s#%d"):format(lower(ref.owner), lower(ref.name), ref.number)
+end
+
 --- Normalize a search-result PR node from the GraphQL query below.
 ---@param node table
 ---@param reviewed_by_me boolean
+---@param repo { owner: string, name: string } the repository it's in
 ---@return reviewqueue.PR
-function M.from_node(node, reviewed_by_me)
+function M.from_node(node, reviewed_by_me, repo)
   local function nodes(conn)
     return type(conn) == "table" and type(conn.nodes) == "table" and conn.nodes or {}
   end
@@ -601,6 +680,7 @@ function M.from_node(node, reviewed_by_me)
     head_oid = str(node.headRefOid) or "",
     cross_repo = node.isCrossRepository == true,
     body = str(node.body),
+    depends_on = M.depends_on(str(node.body), repo),
     user_requests = {},
     team_requests = {},
     reviews = {},
@@ -979,6 +1059,31 @@ local function teams_of(org, logins)
   return out
 end
 
+local PR_STATE = [[
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) { state } }
+}]]
+
+--- Which of `refs` are open PRs, as ref_key()s. One request each: gh fails a
+--- whole request over one unreadable ref (no such PR, no access), which isn't open.
+---@param refs reviewqueue.Ref[]
+---@return table<string, true>
+local function open_refs(refs)
+  local states = parallel(vim.tbl_map(function(ref)
+    return function()
+      local ok, data = pcall(graphql, PR_STATE, ref)
+      return ok and data.repository and data.repository.pullRequest and data.repository.pullRequest.state
+    end
+  end, refs))
+  local out = {}
+  for i, ref in ipairs(refs) do
+    if states[i] == "OPEN" then
+      out[M.ref_key(ref)] = true
+    end
+  end
+  return out
+end
+
 --- Excluded teams from the repo's git config (reviewqueue.excludeTeam).
 ---@param dir string
 ---@return table<string, true>
@@ -1054,11 +1159,12 @@ end
 function M.size(dir, number, cb)
   coroutine.wrap(function()
     local ok, size = pcall(function()
-      local node = details(repo_of(dir), { number })[1]
+      local repo = repo_of(dir)
+      local node = details(repo, { number })[1]
       if not node then
         return nil
       end
-      local pr = M.from_node(node, false)
+      local pr = M.from_node(node, false, repo)
       sizes(dir, { pr })
       return pr.size
     end)
@@ -1166,10 +1272,10 @@ function M.fetch(dir)
   })
   local prs, my_prs = {}, {}
   for _, node in ipairs(fetched[1]) do
-    prs[#prs + 1] = M.from_node(node, reviewed_set[node.number] == true)
+    prs[#prs + 1] = M.from_node(node, reviewed_set[node.number] == true, repo)
   end
   for _, node in ipairs(fetched[2]) do
-    my_prs[#my_prs + 1] = M.from_node(node, false)
+    my_prs[#my_prs + 1] = M.from_node(node, false, repo)
   end
 
   local bases, approvers = {}, { [me] = true }
@@ -1183,6 +1289,15 @@ function M.fetch(dir)
       end
     end
   end
+  local refs, seen_refs = {}, {}
+  for _, pr in ipairs(my_prs) do
+    for _, ref in ipairs(pr.depends_on) do
+      if not seen_refs[M.ref_key(ref)] then
+        seen_refs[M.ref_key(ref)] = true
+        refs[#refs + 1] = ref
+      end
+    end
+  end
   local second = parallel({
     function()
       return next(bases) and codeowners(repo, sorted_keys(bases)) or {}
@@ -1190,8 +1305,11 @@ function M.fetch(dir)
     function()
       return teams_of(repo.owner, sorted_keys(approvers))
     end,
+    function()
+      return open_refs(refs)
+    end,
   })
-  local owners_text, teams = second[1], second[2]
+  local owners_text, teams, open = second[1], second[2], second[3]
 
   local rules = {}
   local function rules_for(base)
@@ -1228,6 +1346,8 @@ function M.fetch(dir)
         teams_of = teams,
         default_branch = default_branch,
         heads = heads,
+        repo = repo,
+        open_refs = open,
       }),
     }
   end

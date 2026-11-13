@@ -310,6 +310,37 @@ describe("reviewqueue.from_node", function()
   end)
 end)
 
+describe("reviewqueue.depends_on", function()
+  local repo = { owner = "Acme", name = "app" }
+  for _, case in ipairs({
+    { "#123", "Depends-On: #123", { { owner = "Acme", name = "app", number = 123 } } },
+    {
+      "a PR URL",
+      "Depends-On: https://github.com/acme/lib/pull/9",
+      { { owner = "acme", name = "lib", number = 9 } },
+    },
+    { "org/repo#123", "Depends-On: acme/lib#9", { { owner = "acme", name = "lib", number = 9 } } },
+    {
+      "any case, padding and CRLF",
+      "intro\r\n  depends-on:   #4  \r\nDEPENDS-ON: #5\r\n",
+      { { owner = "Acme", name = "app", number = 4 }, { owner = "Acme", name = "app", number = 5 } },
+    },
+    { "nothing but the reference on the line", "Depends-On: #4 (the proto)", {} },
+    { "the header at the start of the line", "This depends-on: #4", {} },
+    { "not a mention in prose", "depends on #4", {} },
+    { "no body", nil, {} },
+  }) do
+    it("reads " .. case[1], function()
+      assert.same(case[3], rq.depends_on(case[2], repo))
+    end)
+  end
+
+  it("is read off a PR node against its own repo", function()
+    local p = rq.from_node({ number = 2, body = "Depends-On: #1" }, false, repo)
+    assert.same({ { owner = "Acme", name = "app", number = 1 } }, p.depends_on)
+  end)
+end)
+
 describe("reviewqueue.sort", function()
   it("orders by tier, then newest PR first", function()
     local items = rq.sort({
@@ -345,6 +376,8 @@ describe("reviewqueue.classify_mine", function()
       },
       default_branch = "main",
       heads = { ["feat-1"] = 41 },
+      repo = { owner = "Acme", name = "app" },
+      open_refs = {},
     }, over or {})
   end
 
@@ -360,6 +393,7 @@ describe("reviewqueue.classify_mine", function()
       base = "main",
       head_oid = "HEAD",
       cross_repo = false,
+      depends_on = {},
       user_requests = {},
       team_requests = {},
       reviews = {},
@@ -423,6 +457,35 @@ describe("reviewqueue.classify_mine", function()
       { verdict({ reviews = approved, base = "release" }) }
     )
   end)
+
+  -- Mergify holds a PR until every PR its Depends-On lines name has merged.
+  local dep = { owner = "Acme", name = "app", number = 50 }
+  local other_repo = { owner = "acme", name = "lib", number = 7 }
+  for _, case in ipairs({
+    { "an open dependency stacks it", { dep }, { "acme/app#50" }, "main", "approved, stacked on #50" },
+    { "a merged or closed dependency doesn't", { dep }, {}, "main", "approved" },
+    { "another repo's dependency is named in full", { other_repo }, { "acme/lib#7" }, "main", "approved, stacked on acme/lib#7" },
+    { "the branch below comes first", { dep }, { "acme/app#50" }, "feat-1", "approved, stacked on #41, #50" },
+    {
+      "a dependency on the branch below is said once",
+      { { owner = "acme", name = "APP", number = 41 } },
+      { "acme/app#41" },
+      "feat-1",
+      "approved, stacked on #41",
+    },
+  }) do
+    it("Depends-On: " .. case[1], function()
+      local open = {}
+      for _, key in ipairs(case[3]) do
+        open[key] = true
+      end
+      local tier, reason = verdict(
+        { reviews = approved, depends_on = case[2], base = case[4] },
+        { open_refs = open }
+      )
+      assert.same({ #case[3] > 0 and 5 or 2, case[5] }, { tier, reason })
+    end)
+  end
 
   it("says what's still in the way of an approved PR", function()
     assert.same(
