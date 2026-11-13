@@ -2,9 +2,13 @@ require("config.options")
 require("config.keymaps")
 require("config.autocmds")
 local agent_worktrees = vim.env.AGENT_WORKTREES == "1"
+local claude_dir = vim.env.CLAUDE_CONFIG_DIR or vim.fn.expand("~/.claude")
 require("util.worktree").setup({
   agent_worktrees = agent_worktrees,
-  claude_projects = (vim.env.CLAUDE_CONFIG_DIR or vim.fn.expand("~/.claude")) .. "/projects",
+  claude_projects = claude_dir .. "/projects",
 })
-require("config.workspace").setup({ agent_worktrees = agent_worktrees })
+require("config.workspace").setup({
+  agent_worktrees = agent_worktrees,
+  claude_sessions = claude_dir .. "/sessions",
+})
 require("config.lazy")

@@ -20,9 +20,12 @@ local M = {}
 
 ---@class workspace.Options
 ---@field agent_worktrees boolean worktrees are named after their agent (util/worktree.lua)
-local options = { agent_worktrees = false }
+---@field claude_sessions string Claude's live-session records (util/claude_session.lua)
+local options = { agent_worktrees = false, claude_sessions = vim.fn.expand("~/.claude/sessions") }
 
-local name_parts, join_name, label_prefix, tab_label, labels_width
+local claude_session = require("util.claude_session")
+
+local name_parts, agent_name, join_name, label_prefix, tab_label, labels_width
 
 --- Set once at startup, from the environment (init.lua).
 ---@param opts workspace.Options
@@ -50,7 +53,8 @@ end
 ---
 --- "<repo> - <branch>", so a worktree reads as the repo and the
 --- branch it holds (myrepo/.worktrees/rkk-some-branch -> "myrepo -
---- rkk/some-branch") rather than as its checkout directory. Drawn from the
+--- rkk/some-branch") rather than as its checkout directory; with an agent,
+--- "<repo> · <agent> · <branch>" (see agent_name). Drawn from the
 --- greeter's cached branch report (config.greeter fetches one per workspace
 --- and watches the git dirs, so it follows checkouts); before the report lands
 --- -- or for a directory git can't say anything about -- it falls back to the
@@ -80,16 +84,35 @@ function name_parts(tab)
     return { parts = { { part = "workspace", text = M.name(tab) } }, sep = "" }
   end
   local parts = { { part = "repo", text = report.repo } }
-  -- An agent worktree is named after its agent, and the branch is whatever it has out now.
-  local agent = options.agent_worktrees and report.git_dir ~= report.common_dir
+  local agent = agent_name(tab, cwd, report)
   if agent then
-    parts[#parts + 1] = { part = "agent", text = vim.fs.basename(cwd) }
+    parts[#parts + 1] = { part = "agent", text = agent }
   end
   local branch = report.branch or report.head
   if branch then
     parts[#parts + 1] = { part = "branch", text = branch }
   end
   return { parts = parts, sep = agent and " · " or " - " }
+end
+
+--- Who works in a workspace: the name terminal 1's Claude goes by, else, before
+--- it is up, the agent an agent worktree is named after.
+---@param tab integer tabpage handle
+---@param cwd string the tab's normalized cwd
+---@param report { git_dir: string, common_dir: string } its branch report
+---@return string?
+function agent_name(tab, cwd, report)
+  local fishmonger = package.loaded["fishmonger"]
+  for _, term in ipairs(fishmonger and fishmonger.tabs(tab) or {}) do
+    local pid = term.slot == 1 and term.agent and term.agent.agent_pid
+    local name = pid and claude_session.name(options.claude_sessions, pid)
+    if name then
+      return name
+    end
+  end
+  if options.agent_worktrees and report.git_dir ~= report.common_dir then
+    return vim.fs.basename(cwd)
+  end
 end
 
 --- The name without the `dropped` parts, or whole if that would leave nothing.

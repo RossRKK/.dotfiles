@@ -26,7 +26,7 @@ end)
 
 -- Full labels take 54 + 22 = 76 columns in the tab strip, two thirds of 114; without the repo, 45 + 10 = 55.
 describe("workspace.set_labels fitting the screen", function()
-  local ws, root, saved, columns
+  local ws, root, saved, columns, terms
 
   --- Number the current tabpage as workspace `slot` on a checkout `report` describes.
   local function checkout(dir, report)
@@ -34,6 +34,21 @@ describe("workspace.set_labels fitting the screen", function()
     vim.cmd.tcd(vim.fn.fnameescape(dir))
     ws.assign_slot()
     package.loaded["config.greeter"].reports[vim.fs.normalize(dir)] = report
+  end
+
+  --- Run a Claude that goes by `name` as pid `pid` in terminal `slot` of tabpage `tab`.
+  local function claude(tab, slot, pid, name)
+    vim.fn.mkdir(root .. "/sessions", "p")
+    vim.fn.writefile(
+      { vim.json.encode({ pid = pid, name = name }) },
+      root .. "/sessions/" .. pid .. ".json"
+    )
+    terms[tab] = { { slot = slot, agent = { agent_pid = pid, state = "done" } } }
+    package.loaded["fishmonger"] = {
+      tabs = function(t)
+        return terms[t] or {}
+      end,
+    }
   end
 
   --- Every tab's label, left to right, after relabelling at `width` columns.
@@ -54,9 +69,10 @@ describe("workspace.set_labels fitting the screen", function()
     package.loaded["fishmonger"] = nil
     package.loaded["config.workspace"] = nil
     ws = require("config.workspace")
-    ws.setup({ agent_worktrees = true })
     columns = vim.o.columns
     root = vim.fn.tempname()
+    terms = {}
+    ws.setup({ agent_worktrees = true, claude_sessions = root .. "/sessions" })
     checkout(root .. "/widget/.worktrees/helpful-teal", {
       repo = "widget",
       branch = "rkk/feature-cache-test-2",
@@ -96,6 +112,35 @@ describe("workspace.set_labels fitting the screen", function()
 
   it("drops nothing more when they still don't fit without the repo", function()
     assert.same({ "1 helpful-teal · rkk/feature-cache-test-2", "2 main" }, labels_at(30))
+  end)
+
+  it("names a checkout's agent after the Claude session in its terminal 1", function()
+    claude(vim.api.nvim_list_tabpages()[2], 1, 4242, "dotty")
+    assert.same({
+      "1 widget · helpful-teal · rkk/feature-cache-test-2",
+      "2 .dotfiles · dotty · main",
+    }, labels_at(200))
+  end)
+
+  it("names a worktree's agent after its session once that has a name of its own", function()
+    claude(vim.api.nvim_list_tabpages()[1], 1, 4243, "calm-otter")
+    assert.same(
+      { "1 widget · calm-otter · rkk/feature-cache-test-2", "2 .dotfiles - main" },
+      labels_at(200)
+    )
+  end)
+
+  it("names no agent after a Claude in another terminal", function()
+    claude(vim.api.nvim_list_tabpages()[2], 2, 4244, "keen-heron")
+    assert.same(
+      { "1 widget · helpful-teal · rkk/feature-cache-test-2", "2 .dotfiles - main" },
+      labels_at(200)
+    )
+  end)
+
+  it("drops the repo and keeps the session's name when the labels don't fit", function()
+    claude(vim.api.nvim_list_tabpages()[2], 1, 4245, "dotty")
+    assert.same({ "1 helpful-teal · rkk/feature-cache-test-2", "2 dotty · main" }, labels_at(30))
   end)
 
   it("gives the repo back once the screen widens again", function()

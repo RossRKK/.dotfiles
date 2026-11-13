@@ -25,6 +25,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | ---------------- | ----------------------------------------- |
 | `ide_spec.lua`      | side-terminal width, explorer geometry |
 | `worktree_spec.lua` | worktree dir naming, `git worktree add` flags, git progress-line parsing; agent worktrees: naming, and a new one for any branch not checked out, on a temp repo; `<leader>tX` removal on a temp repo: jobs stopped and buffers wiped before the tab closes, `--force` only once a dirty checkout is confirmed |
+| `claude_session_spec.lua` | a live Claude's name from Claude Code's `sessions/<pid>.json`; none for a missing, half-written or unnamed record |
 | `term_caps_spec.lua` | inline-image capability (Ghostty yes, Neovide/other no) |
 | `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
 | `reviewqueue_spec.lua` | CODEOWNERS glob matching / last-match-wins, "does this PR need my review" tiers, "what's my PR waiting on" tiers |
