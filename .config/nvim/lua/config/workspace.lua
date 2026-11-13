@@ -523,7 +523,7 @@ local announce_ready
 
 --- Set the current (or a new) tabpage up as a workspace on `dir`.
 ---@param dir string project directory
----@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer, agent?: boolean, background?: boolean, until_ready?: fun(ready: fun()) }
+---@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer, agent?: boolean, resume?: string, background?: boolean, until_ready?: fun(ready: fun()) }
 ---   tab: open a new tabpage first, and scope the cwd to it with :tcd -- or,
 ---     if a workspace on `dir` is already open, switch to that instead of
 ---     opening a second one (slot is then ignored: it keeps its number).
@@ -534,6 +534,7 @@ local announce_ready
 ---     directory buffer, which nvim creates for `nvim <dir>`).
 ---   slot: the workspace number to take, if free (see M.assign_slot).
 ---   agent: false leaves terminal 1 a plain shell instead of M.agent_shell.
+---   resume: the Claude session terminal 1 resumes (see M.agent_shell).
 ---   background: with tab, leave focus (and the mode) where it was once the tab
 ---     is built, for a tab an agent opened rather than you.
 ---   until_ready: called once the tab is built with a `ready` callback; terminal
@@ -588,7 +589,8 @@ function M.open(dir, opts)
     require("fishmonger").show(1, {
       tab = tab,
       insert = false,
-      shell = opts.agent ~= false and M.agent_shell(background.user_manager(), M.agent_name(dir))
+      shell = opts.agent ~= false
+          and M.agent_shell(background.user_manager(), M.agent_name(dir), opts.resume)
         or nil,
     })
     if vim.api.nvim_get_current_tabpage() == tab and vim.api.nvim_win_is_valid(editor) then
@@ -653,21 +655,24 @@ function M.restore_focus(focus)
   end
 end
 
---- What a workspace's first terminal runs: Claude, back in this directory's last
---- conversation, or a new one when there is none (--continue then exits 1). fish
+--- What a workspace's first terminal runs: Claude, back in session `resume` when
+--- given, else in this directory's last conversation, or a new one when there is
+--- none (--continue then exits 1). fish
 --- -C runs it at the prompt, so a shell remains once Claude exits.
 --- WORKSPACE_TERMINAL tells that Claude which terminal it is in, and
 --- CLAUDE_AGENT_NAME what to call itself (see the session-identity mod).
 ---@param user_manager boolean see util/background.lua
 ---@param agent_name? string
+---@param resume? string a session id whose transcript exists
 ---@return string|string[]
-function M.agent_shell(user_manager, agent_name)
+function M.agent_shell(user_manager, agent_name, resume)
   local env = { "env", "WORKSPACE_TERMINAL=1" }
   if agent_name then
     env[#env + 1] = "CLAUDE_AGENT_NAME=" .. agent_name
   end
+  local claude = resume and ("claude --resume " .. resume) or "claude --continue; or claude"
   return require("util.background").command(
-    vim.list_extend(env, { "fish", "-C", "claude --continue; or claude" }),
+    vim.list_extend(env, { "fish", "-C", claude }),
     user_manager
   )
 end

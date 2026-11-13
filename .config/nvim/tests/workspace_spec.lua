@@ -229,6 +229,20 @@ describe("workspace.agent_shell", function()
       "claude --continue; or claude",
     }, require("config.workspace").agent_shell(false, "keen-heron"))
   end)
+
+  it("resumes the session it is given instead of continuing the directory's last", function()
+    assert.same({
+      "env",
+      "WORKSPACE_TERMINAL=1",
+      "fish",
+      "-C",
+      "claude --resume 5acea7d5-42e4-48ab-bae8-c06adaa57027",
+    }, require("config.workspace").agent_shell(
+      false,
+      nil,
+      "5acea7d5-42e4-48ab-bae8-c06adaa57027"
+    ))
+  end)
 end)
 
 -- <M-b>e: a browser for a project that is NOT open yet, so it must start at
