@@ -12,4 +12,8 @@ require("config.workspace").setup({
   claude_sessions = claude_dir .. "/sessions",
   claude_roles = (vim.env.XDG_CONFIG_HOME or vim.fn.expand("~/.config")) .. "/claude-roles",
 })
+require("util.workspace_state").setup({
+  file = vim.fn.stdpath("state") .. "/workspaces.json",
+  claude_projects = claude_dir .. "/projects",
+})
 require("config.lazy")
