@@ -368,8 +368,11 @@ local function restore_code(selected)
   return "%#" .. name .. "#"
 end
 
--- What every tab label sheds, first to last, until the strip fits the screen.
+-- What every tab label sheds, first to last, until the strip fits its share of the screen.
 local drop_order = { "repo" } ---@type workspace.NamePart[]
+
+-- bufferline squeezes the buffer list into whatever the tab strip leaves, so the strip takes at most this much.
+local tab_strip_share = 2 / 3
 
 -- bufferline frames each tab name in a padding cell and a separator either side.
 local tab_frame_width = 4
@@ -389,8 +392,9 @@ local tab_frame_width = 4
 --- glyph sits on the selected tile's background or an ordinary one. The
 --- TabEnter hook in plugins/fishmonger.lua repaints every label for that.
 ---
---- All at once because the labels share the width: when they overflow
---- `columns`, every tab drops the same parts (drop_order), so they read alike.
+--- All at once because the labels share the width: when they overflow their
+--- share of `columns` (tab_strip_share), every tab drops the same parts
+--- (drop_order), so they read alike.
 function M.set_labels()
   local current = vim.api.nvim_get_current_tabpage()
   local tabs = {}
@@ -400,7 +404,7 @@ function M.set_labels()
   end
   local dropped = {}
   for _, part in ipairs(drop_order) do
-    if labels_width(tabs, dropped) <= vim.o.columns then
+    if labels_width(tabs, dropped) <= vim.o.columns * tab_strip_share then
       break
     end
     dropped[part] = true

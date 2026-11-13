@@ -24,7 +24,7 @@ describe("workspace.set_labels", function()
   end)
 end)
 
--- Full labels take 54 + 22 = 76 columns in the tab strip; without the repo, 45 + 10 = 55.
+-- Full labels take 54 + 22 = 76 columns in the tab strip, two thirds of 114; without the repo, 45 + 10 = 55.
 describe("workspace.set_labels fitting the screen", function()
   local ws, root, saved, columns
 
@@ -79,15 +79,19 @@ describe("workspace.set_labels fitting the screen", function()
     vim.fn.delete(root, "rf")
   end)
 
-  it("keeps the repo on every tab when they all fit", function()
+  it("keeps the repo on every tab when they all fit in two thirds of the screen", function()
     assert.same(
       { "1 widget · helpful-teal · rkk/feature-cache-test-2", "2 .dotfiles - main" },
-      labels_at(76)
+      labels_at(114)
     )
   end)
 
   it("drops the repo from every tab when they don't, and keeps the rest", function()
-    assert.same({ "1 helpful-teal · rkk/feature-cache-test-2", "2 main" }, labels_at(75))
+    assert.same({ "1 helpful-teal · rkk/feature-cache-test-2", "2 main" }, labels_at(113))
+  end)
+
+  it("drops the repo before the labels fill the screen, leaving the buffers room", function()
+    assert.same({ "1 helpful-teal · rkk/feature-cache-test-2", "2 main" }, labels_at(76))
   end)
 
   it("drops nothing more when they still don't fit without the repo", function()
