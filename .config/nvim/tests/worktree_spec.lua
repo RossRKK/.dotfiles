@@ -196,6 +196,44 @@ describe("worktree.order", function()
   end)
 end)
 
+-- Agents switch branches in their worktree, so <M-b>w has to find a branch by
+-- the agent's name as well as its own.
+describe("worktree.rows", function()
+  local root = "/repo"
+
+  local function row(it)
+    return worktree.rows({ it }, root)[1]
+  end
+
+  it("shows and matches the agent whose worktree has the branch", function()
+    local it = row({
+      branch = "rkk/fix",
+      time = 1,
+      msg = "fix it",
+      worktree = "/repo/.worktrees/fuzzy-otter",
+    })
+    assert.equals("fuzzy-otter", it.agent)
+    assert.equals("rkk/fix fuzzy-otter fix it", it.text)
+  end)
+
+  it("leaves a plain branch without one", function()
+    local it = row({ branch = "feat/x", time = 1, msg = "wip" })
+    assert.is_nil(it.agent)
+    assert.equals("feat/x wip", it.text)
+  end)
+
+  it("leaves the main checkout's branch without one", function()
+    assert.is_nil(row({ branch = "main", time = 1, worktree = root }).agent)
+  end)
+
+  it("leaves a worktree named after its branch without one", function()
+    assert.is_nil(row({ branch = "feat/x", time = 1, worktree = "/repo/.worktrees/feat-x" }).agent)
+    local remote =
+      { branch = "origin/y", name = "y", remote = true, time = 1, worktree = "/repo/.worktrees/y" }
+    assert.is_nil(row(remote).agent)
+  end)
+end)
+
 describe("worktree.path", function()
   it("uses wherever git already has the branch checked out", function()
     assert.equals("/elsewhere/x", worktree.path("/repo", "feat/x", { ["feat/x"] = "/elsewhere/x" }))

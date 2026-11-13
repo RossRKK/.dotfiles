@@ -759,6 +759,7 @@ end
 ---@field date? string committer date as shown ("3 days ago")
 ---@field worktree? string path of an existing worktree for this branch
 ---@field current? boolean
+---@field agent? string the worktree's name, when not the branch's (M.agent_of)
 
 --- Picker order. Branches that have a worktree come first, most recently opened
 --- first (never-opened ones after, by commit date); every other branch follows
@@ -849,12 +850,7 @@ function M.pick()
     vim.notify(err or "not a git repository", vim.log.levels.ERROR)
     return
   end
-  local items = M.order(candidates(root), M.recent_load())
-  for i, it in ipairs(items) do
-    it.text = (it.name or it.branch) .. " " .. (it.msg or "")
-    it.cwd = root
-    it.idx = i
-  end
+  local items = M.rows(M.order(candidates(root), M.recent_load()), root)
   Snacks.picker.pick({
     source = "worktree",
     title = "Worktrees",
@@ -866,6 +862,9 @@ function M.pick()
       )
       -- Mark rows that already have a worktree: picking one is a plain tab open.
       table.insert(ret, 2, { item.worktree and "\u{f0e8e} " or "   ", "SnacksPickerGitBranch" })
+      if item.agent then
+        table.insert(ret, 4, { item.agent .. " ", "SnacksPickerDimmed" })
+      end
       return ret
     end,
     preview = "git_log",
@@ -878,6 +877,41 @@ function M.pick()
       end
     end,
   })
+end
+
+--- Ordered candidates (M.order) made picker items. A branch checked out in an
+--- agent's worktree carries the agent's name, matched as well as shown, since
+--- agents switch branches and are remembered by name.
+---@param items worktree.Candidate[]
+---@param root string the main worktree
+---@return worktree.Candidate[]
+function M.rows(items, root)
+  for i, it in ipairs(items) do
+    it.agent = M.agent_of(it, root)
+    local words = vim.tbl_filter(function(w)
+      return w ~= ""
+    end, { it.name or it.branch, it.agent or "", it.msg or "" })
+    it.text = table.concat(words, " ")
+    it.cwd = root
+    it.idx = i
+  end
+  return items
+end
+
+--- The name of the worktree `it` is checked out in, when the branch shown
+--- doesn't already say it: nil for the main checkout and for a worktree named
+--- after its branch (M.slug).
+---@param it worktree.Candidate
+---@param root string the main worktree
+---@return string?
+function M.agent_of(it, root)
+  if not it.worktree or it.worktree == root then
+    return nil
+  end
+  local name = vim.fs.basename(it.worktree)
+  if name ~= M.slug(it.name or it.branch) then
+    return name
+  end
 end
 
 return M
