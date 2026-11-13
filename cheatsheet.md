@@ -918,7 +918,13 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
 | `Ctrl+B m N`  | Move the current tab to workspace N (the number on its label; you follow it) |
 | `Ctrl+B a`    | Agent view: every agent across all workspaces, blocked first; the row's key jumps to it |
+| `Ctrl+B r`    | Mark this terminal's agent read: an empty circle, whatever its state, until it next reports one |
+| `Ctrl+B u`    | Mark it unread: a question mark until it next reports a status (or `Ctrl+B r`) |
 | `Ctrl+T`      | Toggle the side terminal (`Ctrl+N` first from a terminal) |
+
+**Seen agents.** A finished agent's tick turns into an empty circle once you
+enter terminal mode in its terminal (going to it with `Ctrl+B N`, the agent
+view or `Alt+N` does). Its next turn brings the tick back.
 
 **Yanking Claude's replies.** A yank from a terminal comes back as the lines
 Claude wrote, not the rows it wrapped them into: the `line-end-marks` plugin
