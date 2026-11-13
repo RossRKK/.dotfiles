@@ -122,7 +122,7 @@ function session_name(tab)
   end
 end
 
---- The name without the `dropped` parts, or whole if that would leave nothing.
+--- The name without the `dropped` parts, or its leading part if that would leave nothing.
 ---@param name workspace.Name
 ---@param dropped table<workspace.NamePart, true>
 ---@return string
@@ -133,7 +133,7 @@ function join_name(name, dropped)
       kept[#kept + 1] = p.text
     end
   end
-  return #kept > 0 and table.concat(kept, name.sep) or join_name(name, {})
+  return #kept > 0 and table.concat(kept, name.sep) or name.parts[1].text
 end
 
 --- A workspace's number: the key that reaches it (<M-N>, and fishmonger's
@@ -367,7 +367,7 @@ end
 local labels = {} ---@type table<integer, workspace.TabLabel>
 
 -- The parts every tab label leaves out, longest labels first; the strip takes the first that fits.
-local shortenings = { {}, { repo = true } } ---@type table<workspace.NamePart, true>[]
+local shortenings = { {}, { repo = true }, { repo = true, branch = true } } ---@type table<workspace.NamePart, true>[]
 
 -- bufferline's close-tab button (its default close_icon, padded), drawn after the tabs as bufferline does.
 local close_button = " \u{f00d} "

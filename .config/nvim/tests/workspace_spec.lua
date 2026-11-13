@@ -46,7 +46,8 @@ describe("workspace.tab_strip glyphs", function()
   end)
 end)
 
--- Full labels take 54 + 22 = 76 columns in the tab strip, 79 with the close button; without the repo, 58.
+-- Full labels take 54 + 22 = 76 columns in the tab strip, 79 with the close button; without the repo,
+-- 58; without the branch too, 36.
 describe("workspace.tab_strip fitting its room", function()
   local ws, root, saved, terms
 
@@ -154,8 +155,19 @@ describe("workspace.tab_strip fitting its room", function()
     )
   end)
 
-  it("drops nothing more when they still don't fit without the repo", function()
-    assert.same({ "1 helpful-teal · rkk/feature-cache-test-2", "2 main" }, labels_at(30))
+  it("keeps the branch while the labels fit without the repo", function()
+    assert.same({ "1 helpful-teal · rkk/feature-cache-test-2", "2 main" }, labels_at(58))
+  end)
+
+  it(
+    "names each tab by its agent alone, a checkout without one by its repo, when that's short",
+    function()
+      assert.same({ "1 helpful-teal", "2 .dotfiles" }, labels_at(57))
+    end
+  )
+
+  it("draws the shortest labels when even those don't fit", function()
+    assert.same({ "1 helpful-teal", "2 .dotfiles" }, labels_at(10))
   end)
 
   it("names a checkout's agent after the Claude session in its terminal 1", function()
@@ -200,9 +212,10 @@ describe("workspace.tab_strip fitting its room", function()
     )
   end)
 
-  it("drops the repo and keeps the session's name when the labels don't fit", function()
+  it("keeps the session's name as the labels shorten", function()
     claude(vim.api.nvim_list_tabpages()[2], 1, 4245, "dotty")
-    assert.same({ "1 helpful-teal · rkk/feature-cache-test-2", "2 dotty · main" }, labels_at(30))
+    assert.same({ "1 helpful-teal · rkk/feature-cache-test-2", "2 dotty · main" }, labels_at(66))
+    assert.same({ "1 helpful-teal", "2 dotty" }, labels_at(65))
   end)
 
   it("gives the repo back once the screen widens again", function()

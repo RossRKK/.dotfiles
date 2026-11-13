@@ -8,6 +8,18 @@ local function close_buffer(bufnr)
   require("snacks").bufdelete(bufnr)
 end
 
+--- How wide bufferline draws the current buffer's tile: given less room, it blanks every buffer.
+---@return integer
+local function current_tile_width()
+  local state = require("bufferline.state")
+  for _, element in ipairs(require("bufferline.buffers").get_components(state)) do
+    if element:current() then
+      return element.length
+    end
+  end
+  return 0
+end
+
 return {
   {
     -- Tab bar showing one tab per open buffer; cycle with <S-l>/<S-h>. The
@@ -91,7 +103,8 @@ return {
         show_close_icon = false,
         custom_areas = {
           right = function()
-            local strip = require("config.workspace").tab_strip(vim.o.columns)
+            local room = vim.o.columns - current_tile_width()
+            local strip = require("config.workspace").tab_strip(room)
             return { { text = strip, link = "BufferLineFill" } }
           end,
         },
