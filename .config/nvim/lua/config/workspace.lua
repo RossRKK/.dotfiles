@@ -221,13 +221,7 @@ end
 --- waiting on you -- the one case where a slip throws away work in flight.
 --- A finished agent ("done") or a plain shell closes on the keypress.
 function M.close()
-  local fishmonger = package.loaded["fishmonger"]
-  local live = 0
-  for _, term in ipairs(fishmonger and fishmonger.tabs() or {}) do
-    if term.agent and term.agent.state ~= "done" then
-      live = live + 1
-    end
-  end
+  local live = M.live_agents(vim.api.nvim_get_current_tabpage())
   if live > 0 then
     local msg = ("Close %s? %d agent%s still working or waiting."):format(
       M.display_name(),
@@ -242,6 +236,20 @@ function M.close()
   if not ok then
     vim.notify("can't close the last workspace", vim.log.levels.WARN)
   end
+end
+
+--- How many of a tabpage's terminals hold an agent that is working or waiting on you.
+---@param tab integer tabpage handle
+---@return integer
+function M.live_agents(tab)
+  local fishmonger = package.loaded["fishmonger"]
+  local live = 0
+  for _, term in ipairs(fishmonger and fishmonger.tabs(tab) or {}) do
+    if term.agent and term.agent.state ~= "done" then
+      live = live + 1
+    end
+  end
+  return live
 end
 
 --- <M-b>: the workspace prefix, fishmonger's <C-b> with a different modifier
