@@ -38,3 +38,35 @@ describe("claude_session.name", function()
     assert.is_nil(claude_session.name(dir, 10))
   end)
 end)
+
+describe("claude_session.role", function()
+  local home, roles, real_home
+
+  before_each(function()
+    home = vim.uv.fs_realpath(vim.fn.tempname()) or vim.fn.tempname()
+    vim.fn.mkdir(home .. "/.dotfiles", "p")
+    vim.fn.mkdir(home .. "/widget", "p")
+    roles = home .. "/claude-roles"
+    real_home = vim.env.HOME
+    vim.env.HOME = home
+  end)
+
+  after_each(function()
+    vim.env.HOME = real_home
+    vim.fn.delete(home, "rf")
+  end)
+
+  it("gives a checkout listed under ~ its role", function()
+    vim.fn.writefile({ "~/widget captain", "~/.dotfiles dotty" }, roles)
+    assert.equals("dotty", claude_session.role(roles, home .. "/.dotfiles"))
+  end)
+
+  it("gives a checkout no role when it isn't listed", function()
+    vim.fn.writefile({ "~/.dotfiles dotty" }, roles)
+    assert.is_nil(claude_session.role(roles, home .. "/widget"))
+  end)
+
+  it("gives no role without a roles file", function()
+    assert.is_nil(claude_session.role(roles, home .. "/.dotfiles"))
+  end)
+end)

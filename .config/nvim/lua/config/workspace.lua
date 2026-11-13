@@ -21,11 +21,16 @@ local M = {}
 ---@class workspace.Options
 ---@field agent_worktrees boolean worktrees are named after their agent (util/worktree.lua)
 ---@field claude_sessions string Claude's live-session records (util/claude_session.lua)
-local options = { agent_worktrees = false, claude_sessions = vim.fn.expand("~/.claude/sessions") }
+---@field claude_roles string the session-identity mod's "<checkout> <role>" file
+local options = {
+  agent_worktrees = false,
+  claude_sessions = vim.fn.expand("~/.claude/sessions"),
+  claude_roles = vim.fn.expand("~/.config/claude-roles"),
+}
 
 local claude_session = require("util.claude_session")
 
-local name_parts, agent_name, join_name, label_prefix, tab_label, labels_width
+local name_parts, session_name, join_name, label_prefix, tab_label, labels_width
 
 --- Set once at startup, from the environment (init.lua).
 ---@param opts workspace.Options
@@ -54,7 +59,8 @@ end
 --- "<repo> - <branch>", so a worktree reads as the repo and the
 --- branch it holds (myrepo/.worktrees/rkk-some-branch -> "myrepo -
 --- rkk/some-branch") rather than as its checkout directory; with an agent,
---- "<repo> · <agent> · <branch>" (see agent_name). Drawn from the
+--- "<repo> · <agent> · <branch>", and a Claude in a standing role (claude-roles)
+--- is the whole name, since the role already says which checkout it is. Drawn from the
 --- greeter's cached branch report (config.greeter fetches one per workspace
 --- and watches the git dirs, so it follows checkouts); before the report lands
 --- -- or for a directory git can't say anything about -- it falls back to the
@@ -76,6 +82,10 @@ end
 ---@return workspace.Name
 function name_parts(tab)
   local cwd = vim.fs.normalize(M.cwd(tab))
+  local session = session_name(tab)
+  if session and session == claude_session.role(options.claude_roles, cwd) then
+    return { parts = { { part = "agent", text = session } }, sep = "" }
+  end
   -- package.loaded, not require: no reason to drag the greeter in just to name
   -- a tab, and before its setup there is no report to read anyway.
   local greeter = package.loaded["config.greeter"]
@@ -84,7 +94,10 @@ function name_parts(tab)
     return { parts = { { part = "workspace", text = M.name(tab) } }, sep = "" }
   end
   local parts = { { part = "repo", text = report.repo } }
-  local agent = agent_name(tab, cwd, report)
+  -- An agent worktree is named after its agent until that agent's Claude says otherwise.
+  local agent = session
+    or (options.agent_worktrees and report.git_dir ~= report.common_dir and vim.fs.basename(cwd))
+    or nil
   if agent then
     parts[#parts + 1] = { part = "agent", text = agent }
   end
@@ -95,13 +108,10 @@ function name_parts(tab)
   return { parts = parts, sep = agent and " · " or " - " }
 end
 
---- Who works in a workspace: the name terminal 1's Claude goes by, else, before
---- it is up, the agent an agent worktree is named after.
+--- The name terminal 1's Claude, the workspace's own agent, goes by.
 ---@param tab integer tabpage handle
----@param cwd string the tab's normalized cwd
----@param report { git_dir: string, common_dir: string } its branch report
 ---@return string?
-function agent_name(tab, cwd, report)
+function session_name(tab)
   local fishmonger = package.loaded["fishmonger"]
   for _, term in ipairs(fishmonger and fishmonger.tabs(tab) or {}) do
     local pid = term.slot == 1 and term.agent and term.agent.agent_pid
@@ -109,9 +119,6 @@ function agent_name(tab, cwd, report)
     if name then
       return name
     end
-  end
-  if options.agent_worktrees and report.git_dir ~= report.common_dir then
-    return vim.fs.basename(cwd)
   end
 end
 

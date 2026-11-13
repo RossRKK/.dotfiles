@@ -72,7 +72,11 @@ describe("workspace.set_labels fitting the screen", function()
     columns = vim.o.columns
     root = vim.fn.tempname()
     terms = {}
-    ws.setup({ agent_worktrees = true, claude_sessions = root .. "/sessions" })
+    ws.setup({
+      agent_worktrees = true,
+      claude_sessions = root .. "/sessions",
+      claude_roles = root .. "/claude-roles",
+    })
     checkout(root .. "/widget/.worktrees/helpful-teal", {
       repo = "widget",
       branch = "rkk/feature-cache-test-2",
@@ -119,6 +123,24 @@ describe("workspace.set_labels fitting the screen", function()
     assert.same({
       "1 widget · helpful-teal · rkk/feature-cache-test-2",
       "2 .dotfiles · dotty · main",
+    }, labels_at(200))
+  end)
+
+  it("names a checkout after its standing role alone, the repo and branch left out", function()
+    vim.fn.writefile({ root .. "/.dotfiles dotty" }, root .. "/claude-roles")
+    claude(vim.api.nvim_list_tabpages()[2], 1, 4246, "dotty")
+    assert.same(
+      { "1 widget · helpful-teal · rkk/feature-cache-test-2", "2 dotty" },
+      labels_at(200)
+    )
+  end)
+
+  it("keeps the repo and branch once a role's session goes by another name", function()
+    vim.fn.writefile({ root .. "/.dotfiles dotty" }, root .. "/claude-roles")
+    claude(vim.api.nvim_list_tabpages()[2], 1, 4247, "calm-otter")
+    assert.same({
+      "1 widget · helpful-teal · rkk/feature-cache-test-2",
+      "2 .dotfiles · calm-otter · main",
     }, labels_at(200))
   end)
 

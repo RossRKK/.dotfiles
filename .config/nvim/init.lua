@@ -10,5 +10,6 @@ require("util.worktree").setup({
 require("config.workspace").setup({
   agent_worktrees = agent_worktrees,
   claude_sessions = claude_dir .. "/sessions",
+  claude_roles = (vim.env.XDG_CONFIG_HOME or vim.fn.expand("~/.config")) .. "/claude-roles",
 })
 require("config.lazy")

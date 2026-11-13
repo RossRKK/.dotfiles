@@ -258,8 +258,9 @@ background workspace waiting on you says so — in that state's colour — witho
 switching to it. When the labels would take more than two thirds of the screen
 (leaving the rest for buffers), every tab drops
 its repo name and keeps the agent and branch. The agent is the name terminal
-1's Claude session goes by (`.dotfiles · dotty · main`), else an agent
-worktree's directory name until its Claude is up. (The
+1's Claude session goes by (`widget · calm-otter · main`), else an agent
+worktree's directory name until its Claude is up. A session in its standing
+role from `~/.config/claude-roles` is the whole label (`dotty`). (The
 OS window title still tracks the workspace you're _in_.)
 
 Opening a workspace starts **Claude in terminal 1**, continuing that directory's
