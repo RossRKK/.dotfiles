@@ -85,6 +85,16 @@ return {
         -- its place on the bar). Both close paths leave it alone instead.
         close_command = close_buffer,
         right_mouse_command = close_buffer,
+        -- A custom area is measured as drawn; tab indicators count `t:name`'s highlight codes as width.
+        show_tab_indicators = false,
+        -- Drawn with the workspace tabs, so it stays at their right.
+        show_close_icon = false,
+        custom_areas = {
+          right = function()
+            local strip = require("config.workspace").tab_strip(vim.o.columns)
+            return { { text = strip, link = "BufferLineFill" } }
+          end,
+        },
       },
     },
   },

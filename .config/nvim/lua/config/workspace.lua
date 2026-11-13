@@ -31,7 +31,9 @@ local options = {
 local claude_session = require("util.claude_session")
 local branch_reports = require("util.branch_reports")
 
-local name_parts, session_name, join_name, label_prefix, tab_label, labels_width
+local name_parts, session_name, join_name
+local status_glyphs, define_glyph_groups, glyph_group, tile_group
+local draw_strip, draw_tile, tab_label, drawn_width
 
 --- Set once at startup, from the environment (init.lua).
 ---@param opts workspace.Options
@@ -352,90 +354,38 @@ function M.cwd(tab)
   return vim.fn.getcwd(-1, nr)
 end
 
--- Short highlight names for the tab-strip status glyphs. bufferline reserves
--- width for a tab by measuring the raw `t:name` string, %-codes and all, so
--- every character of a group name inside the label narrows the buffer section
--- of the bar -- hence FmT1/FmT1S rather than the state group's own name.
-local glyph_groups = {}
+---@class workspace.Glyph
+---@field cell string the status glyph, padded to its cell
+---@field hl? string the agent state's highlight group, for a coloured glyph
 
---- The tabline highlight code for a status glyph: the agent state's colour
---- (fishmonger's hl, e.g. DiagnosticWarn) over the tab tile's own background,
---- which differs between the selected tile and the rest. Re-derived on every
---- call rather than cached: it follows colorscheme changes and bufferline
---- setting its groups up late (VeryLazy) for free, and set_labels runs on events
---- (an agent or title change, a tabpage switch), never on a timer.
----@param hl string highlight group carrying the state's fg
----@param selected boolean is this the current tabpage's tile
----@return string
-local function glyph_code(hl, selected)
-  local id = glyph_groups[hl]
-  if not id then
-    id = tostring(vim.tbl_count(glyph_groups) + 1)
-    glyph_groups[hl] = id
-  end
-  local name = "FmT" .. id .. (selected and "S" or "")
-  local tile = selected and "BufferLineTabSelected" or "BufferLineTab"
-  vim.api.nvim_set_hl(0, name, {
-    fg = vim.api.nvim_get_hl(0, { name = hl, link = false }).fg,
-    bg = vim.api.nvim_get_hl(0, { name = tile, link = false }).bg,
-  })
-  return "%#" .. name .. "#"
-end
+---@class workspace.TabLabel
+---@field glyphs workspace.Glyph[]
+---@field name workspace.Name
 
---- The code that hands the rest of the label back to the tile's own highlight
---- after a coloured glyph. An alias of the bufferline group rather than the
---- group itself, purely to keep the label short (see glyph_groups).
----@param selected boolean
----@return string
-local function restore_code(selected)
-  local name = selected and "FmT0S" or "FmT0"
-  vim.api.nvim_set_hl(0, name, { link = selected and "BufferLineTabSelected" or "BufferLineTab" })
-  return "%#" .. name .. "#"
-end
+-- Every tabpage's label as set_labels last read it: the strip is drawn on every
+-- redraw, too often to read session records each time.
+local labels = {} ---@type table<integer, workspace.TabLabel>
 
--- What every tab label sheds, first to last, until the strip fits the screen.
-local drop_order = { "repo" } ---@type workspace.NamePart[]
+-- The parts every tab label leaves out, longest labels first; the strip takes the first that fits.
+local shortenings = { {}, { repo = true } } ---@type table<workspace.NamePart, true>[]
 
--- bufferline frames each tab name in a padding cell and a separator either side.
-local tab_frame_width = 4
-
--- bufferline's close-tab button (its default close_icon, padded) shares the line after the strip.
+-- bufferline's close-tab button (its default close_icon, padded), drawn after the tabs as bufferline does.
 local close_button = " \u{f00d} "
 
---- Paint every tabpage's label on the bufferline's tab indicators: the project name,
---- prefixed with the status glyph of each of that tabpage's side terminals, in
---- that state's colour -- the same icon and highlight the agent view and the
+--- Read every tabpage's label for the tab strip: the project name, prefixed
+--- with the status glyph of each of that tabpage's side terminals, in that
+--- state's colour -- the same icon and highlight the agent view and the
 --- greeter's Agents section use (fishmonger resolves the hook-reported agent
 --- state first, falling back to the leading glyph of the terminal's OSC title).
 --- That's the point of the glyphs being here rather than only in the OS title: a
 --- background project whose agent is waiting on you says so from its tab -- and
 --- says so in orange -- without switching to it.
----
---- bufferline renders a tabpage as `t:name` (falling back to the tab number)
---- without escaping it, which is what lets the %#..# codes through; it also
---- means they must be re-picked when the current tabpage changes, since the
---- glyph sits on the selected tile's background or an ordinary one. The
---- TabEnter hook in plugins/fishmonger.lua repaints every label for that.
----
---- All at once because the labels share the width: when they overflow
---- `columns`, every tab drops the same parts (drop_order), so they read alike.
 function M.set_labels()
-  local current = vim.api.nvim_get_current_tabpage()
-  local tabs = {}
+  local fresh = {}
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
-    tabs[#tabs + 1] =
-      { tab = tab, prefix = label_prefix(tab, tab == current), name = name_parts(tab) }
+    fresh[tab] = { glyphs = status_glyphs(tab), name = name_parts(tab) }
   end
-  local dropped = {}
-  for _, part in ipairs(drop_order) do
-    if labels_width(tabs, dropped) <= vim.o.columns then
-      break
-    end
-    dropped[part] = true
-  end
-  for _, t in ipairs(tabs) do
-    vim.api.nvim_tabpage_set_var(t.tab, "name", tab_label(t, dropped))
-  end
+  labels = fresh
   -- Coalesced: an agent change relabels every tabpage, and one redraw shows
   -- all of them -- per-call redraws re-evaluated the whole bufferline per tab.
   if not M._redraw_queued then
@@ -447,56 +397,143 @@ function M.set_labels()
   end
 end
 
----@class workspace.TabLabel
----@field tab integer
----@field prefix string the number and status glyphs, already tabline-escaped
----@field name workspace.Name
-
---- A tabpage's number and its side terminals' status glyphs, ready for the name.
----@param tab integer
----@param selected boolean is this the current tabpage's tile
----@return string
-function label_prefix(tab, selected)
-  local fishmonger = package.loaded["fishmonger"]
-  local icons, coloured = {}, false
-  if fishmonger then
-    -- Each glyph's cell ends in its padding, which also parts the last from the name.
-    local glyph_cell = require("fishmonger.agent").glyph_cell
-    for _, term in ipairs(fishmonger.tabs(tab)) do
-      if term.icon and term.hl then
-        coloured = true
-        icons[#icons + 1] = glyph_code(term.hl, selected) .. glyph_cell(term.icon)
-      elseif term.icon then
-        icons[#icons + 1] = glyph_cell(term.icon)
-      end
+--- The workspace tabs for the right end of the bufferline (plugins/buffers.lua):
+--- a tile per tabpage, then the close-tab button, framed as bufferline frames
+--- its own tab indicators. Every label is shortened alike, so they read alike,
+--- to the longest that fit in `room` columns. Empty for a lone tabpage, which
+--- bufferline shows no tabs for either.
+---@param room integer columns the strip may take
+---@return string tabline format string
+function M.tab_strip(room)
+  local tabs = vim.api.nvim_list_tabpages()
+  if #tabs <= 1 then
+    return ""
+  end
+  local strip = ""
+  for _, dropped in ipairs(shortenings) do
+    strip = draw_strip(tabs, dropped)
+    if drawn_width(strip, room) <= room then
+      break
     end
   end
-  local glyphs = table.concat(icons) .. (coloured and restore_code(selected) or "")
-  -- The number first, where it lines up with the key that reaches it (<M-N>).
-  local slot = M.slot(tab)
-  return slot and (slot .. " " .. glyphs) or glyphs
+  return strip
 end
 
---- A tab's label with the `dropped` parts of its name left out.
----@param t workspace.TabLabel
+--- A tabpage's side terminals' status glyphs, with the highlight groups their colours are drawn in defined.
+---@param tab integer
+---@return workspace.Glyph[]
+function status_glyphs(tab)
+  local fishmonger = package.loaded["fishmonger"]
+  local glyphs = {}
+  for _, term in ipairs(fishmonger and fishmonger.tabs(tab) or {}) do
+    if term.icon then
+      if term.hl then
+        define_glyph_groups(term.hl)
+      end
+      -- Each glyph's cell ends in its padding, which also parts the last from the name.
+      glyphs[#glyphs + 1] =
+        { cell = require("fishmonger.agent").glyph_cell(term.icon), hl = term.hl }
+    end
+  end
+  return glyphs
+end
+
+--- The agent state's colour (fishmonger's hl, e.g. DiagnosticWarn) over each
+--- tile's own background, selected and not. Redefined on every relabel: it
+--- follows colorscheme changes and bufferline setting its groups up late
+--- (VeryLazy), and set_labels runs on events, never on a timer.
+---@param hl string highlight group carrying the state's fg
+function define_glyph_groups(hl)
+  for _, selected in ipairs({ true, false }) do
+    vim.api.nvim_set_hl(0, glyph_group(hl, selected), {
+      fg = vim.api.nvim_get_hl(0, { name = hl, link = false }).fg,
+      bg = vim.api.nvim_get_hl(0, { name = tile_group(selected), link = false }).bg,
+    })
+  end
+end
+
+---@param hl string the agent state's highlight group
+---@param selected boolean is the glyph on the current tabpage's tile
+---@return string
+function glyph_group(hl, selected)
+  return (selected and "WorkspaceTabGlyphSelected_" or "WorkspaceTabGlyph_") .. hl
+end
+
+---@param selected boolean is this the current tabpage's tile
+---@return string
+function tile_group(selected)
+  return selected and "BufferLineTabSelected" or "BufferLineTab"
+end
+
+--- Every tab's tile with the `dropped` parts of its name left out, and the close button.
+---@param tabs integer[] tabpage handles, left to right
 ---@param dropped table<workspace.NamePart, true>
 ---@return string
-function tab_label(t, dropped)
-  -- Escaped because the label lands in the tabline as-is: a directory with a
-  -- literal % in its name must not become a statusline item.
-  return t.prefix .. (join_name(t.name, dropped):gsub("%%", "%%%%"))
+function draw_strip(tabs, dropped)
+  local current = vim.api.nvim_get_current_tabpage()
+  local tiles = {}
+  for nr, tab in ipairs(tabs) do
+    local selected = tab == current
+    tiles[nr] = draw_tile(nr, selected, tab_label(tab, nr, selected, dropped))
+  end
+  return table.concat(tiles) .. "%#BufferLineTabClose#%999X" .. close_button
 end
 
---- How wide bufferline reserves the tab strip and its close button: it measures each raw label, %-codes and all.
----@param tabs workspace.TabLabel[]
+--- A tab's tile as bufferline draws one: its label padded between thin
+--- separators, clicking anywhere from the label on switching to the tabpage.
+---@param nr integer tabpage number
+---@param selected boolean is this the current tabpage's tile
+---@param label string
+---@return string
+function draw_tile(nr, selected, label)
+  local separator = selected and "%#BufferLineTabSeparatorSelected#" or "%#BufferLineTabSeparator#"
+  return separator
+    .. "▏%#"
+    .. tile_group(selected)
+    .. "#%"
+    .. nr
+    .. "T "
+    .. label
+    .. " "
+    .. separator
+    .. "▕"
+end
+
+--- A tab's label with the `dropped` parts of its name left out: its number,
+--- its glyphs and its name. Just the number, as bufferline would show it, for
+--- a tabpage opened since the last relabel.
+---@param tab integer
+---@param nr integer tabpage number
+---@param selected boolean is this the current tabpage's tile
 ---@param dropped table<workspace.NamePart, true>
----@return integer
-function labels_width(tabs, dropped)
-  local width = vim.fn.strdisplaywidth(close_button)
-  for _, t in ipairs(tabs) do
-    width = width + vim.api.nvim_strwidth(tab_label(t, dropped)) + tab_frame_width
+---@return string
+function tab_label(tab, nr, selected, dropped)
+  local label = labels[tab]
+  if not label then
+    return tostring(nr)
   end
-  return width
+  local cells = {}
+  for i, glyph in ipairs(label.glyphs) do
+    cells[i] = glyph.hl
+        and ("%#" .. glyph_group(glyph.hl, selected) .. "#" .. glyph.cell .. "%#" .. tile_group(
+          selected
+        ) .. "#")
+      or glyph.cell
+  end
+  -- Escaped because the name lands in the tabline as-is: a directory with a
+  -- literal % in its name must not become a statusline item.
+  local name = join_name(label.name, dropped):gsub("%%", "%%%%")
+  -- The number first, where it lines up with the key that reaches it (<M-N>).
+  local slot = M.slot(tab)
+  return (slot and (slot .. " ") or "") .. table.concat(cells) .. name
+end
+
+--- How wide a tabline string draws, counted only to one past `room`: enough to tell it overflows.
+---@param str string tabline format string
+---@param room integer
+---@return integer
+function drawn_width(str, room)
+  return vim.api.nvim_eval_statusline(str, { use_tabline = true, maxwidth = math.max(room, 0) + 1 }).width
 end
 
 --- The workspace tabpage already rooted at `dir`, or nil. Compared after

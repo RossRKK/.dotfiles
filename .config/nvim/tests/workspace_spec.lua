@@ -2,8 +2,20 @@
 
 local assert = require("luassert")
 
-describe("workspace.set_labels", function()
-  --- The tab label with one terminal showing `icon`, as it shows on screen.
+--- Each tab's label in a tab strip, left to right, as it draws on screen.
+---@param strip string
+---@return string[]
+local function drawn_labels(strip)
+  local drawn = vim.api.nvim_eval_statusline(strip, { use_tabline = true, maxwidth = 1000 }).str
+  local labels = {}
+  for label in drawn:gmatch("▏ (.-) ▕") do
+    labels[#labels + 1] = label
+  end
+  return labels
+end
+
+describe("workspace.tab_strip glyphs", function()
+  --- The current tab's label with one terminal showing `icon`, as it shows on screen.
   local function label_with(icon)
     local real = package.loaded["fishmonger"]
     package.loaded["fishmonger"] = {
@@ -11,10 +23,14 @@ describe("workspace.set_labels", function()
         return { { slot = 1, icon = icon, hl = "Comment" } }
       end,
     }
-    local ok, err = pcall(require("config.workspace").set_labels)
+    vim.cmd("tabnew")
+    local ws = require("config.workspace")
+    local ok, err = pcall(ws.set_labels)
+    local labels = drawn_labels(ws.tab_strip(1000))
+    pcall(vim.cmd, "tabonly")
     package.loaded["fishmonger"] = real
     assert(ok, err)
-    return (vim.t.name:gsub("%%#[^#]*#", ""))
+    return labels[2]
   end
 
   it("draws a label with a wide status glyph as wide as one with a narrow glyph", function()
@@ -22,11 +38,17 @@ describe("workspace.set_labels", function()
     assert.truthy(wide:find("⏳", 1, true))
     assert.equals(vim.fn.strdisplaywidth(narrow), vim.fn.strdisplaywidth(wide))
   end)
+
+  it("draws nothing for a lone tabpage, as bufferline shows no tabs then", function()
+    pcall(vim.cmd, "tabonly")
+    require("config.workspace").set_labels()
+    assert.equals("", require("config.workspace").tab_strip(1000))
+  end)
 end)
 
 -- Full labels take 54 + 22 = 76 columns in the tab strip, 79 with the close button; without the repo, 58.
-describe("workspace.set_labels fitting the screen", function()
-  local ws, root, saved, columns, terms
+describe("workspace.tab_strip fitting its room", function()
+  local ws, root, saved, terms
 
   --- Number the current tabpage as workspace `slot` on a checkout `report` describes.
   local function checkout(dir, report)
@@ -51,13 +73,10 @@ describe("workspace.set_labels fitting the screen", function()
     }
   end
 
-  --- Every tab's label, left to right, after relabelling at `width` columns.
-  local function labels_at(width)
-    vim.o.columns = width
+  --- Every tab's label, left to right, after relabelling, in a strip given `room` columns.
+  local function labels_at(room)
     ws.set_labels()
-    return vim.tbl_map(function(tab)
-      return vim.api.nvim_tabpage_get_var(tab, "name")
-    end, vim.api.nvim_list_tabpages())
+    return drawn_labels(ws.tab_strip(room))
   end
 
   before_each(function()
@@ -67,7 +86,6 @@ describe("workspace.set_labels fitting the screen", function()
     package.loaded["fishmonger"] = nil
     package.loaded["config.workspace"] = nil
     ws = require("config.workspace")
-    columns = vim.o.columns
     root = vim.fn.tempname()
     terms = {}
     ws.setup({
@@ -89,14 +107,36 @@ describe("workspace.set_labels fitting the screen", function()
   end)
 
   after_each(function()
-    vim.o.columns = columns
     ws.setup({ agent_worktrees = false })
     package.loaded["fishmonger"] = saved.fishmonger
     pcall(vim.cmd, "tabonly")
     vim.fn.delete(root, "rf")
   end)
 
-  it("keeps the repo on every tab when they exactly fit the screen", function()
+  it("makes each tile a click target for its tabpage, the current one drawn selected", function()
+    ws.set_labels()
+    local strip = ws.tab_strip(200)
+    assert.truthy(strip:find("%#BufferLineTab#%1T", 1, true))
+    assert.truthy(strip:find("%#BufferLineTabSelected#%2T", 1, true))
+    assert.truthy(strip:find("%999X", 1, true))
+  end)
+
+  it("shortens labels with coloured status glyphs only where uncoloured ones shorten", function()
+    local first = vim.api.nvim_list_tabpages()[1]
+    package.loaded["fishmonger"] = {
+      tabs = function(t)
+        return terms[t] or {}
+      end,
+    }
+    for room = 70, 100 do
+      terms[first] = { { slot = 2, icon = "✓" } }
+      local plain = labels_at(room)
+      terms[first] = { { slot = 2, icon = "✓", hl = "DiagnosticOk" } }
+      assert.same(plain, labels_at(room), "at " .. room .. " columns")
+    end
+  end)
+
+  it("keeps the repo on every tab when they exactly fit their room", function()
     assert.same(
       { "1 widget · helpful-teal · rkk/feature-cache-test-2", "2 .dotfiles - main" },
       labels_at(79)
@@ -403,7 +443,7 @@ describe("workspace numbers", function()
   it("puts the new number on the label", function()
     open_ws()
     ws.renumber(7)
-    assert.matches("^7 ", vim.t.name)
+    assert.matches("^7 ", drawn_labels(ws.tab_strip(1000))[vim.fn.tabpagenr()])
   end)
 
   it("reads <M-b> . N as renumber and <M-b> N as switch", function()
