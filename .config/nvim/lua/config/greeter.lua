@@ -1220,6 +1220,8 @@ function M.setup()
   vim.api.nvim_create_autocmd("User", {
     group = group,
     pattern = "WorkspaceReady",
+    -- Nested so the start screen it replaces gets its BufDelete, on which snacks restores laststatus.
+    nested = true,
     callback = function(ev)
       M.open(ev.data.win)
     end,
