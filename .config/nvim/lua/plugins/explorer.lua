@@ -221,7 +221,6 @@ return {
       -- column lives in util.sidebar -- config.workspace opens one per project
       -- tabpage, so it can't stay local to this file.
       local sidebar = require("util.sidebar")
-      sidebar.setup()
 
       vim.keymap.set("n", "<leader>e", sidebar.toggle, { desc = "Toggle explorer" })
       -- The symbols outline, on demand as a float. `toggle` so the same key
