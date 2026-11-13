@@ -201,8 +201,8 @@ end
 ---@field size diffsize.Size? set by fetch() for the PRs that make the list
 ---@field reviewed_by_me boolean? found via `reviewed-by:@me`
 --- The rest only for my own PRs (MINE_FIELDS):
----@field checks string? statusCheckRollup state: SUCCESS | FAILURE | ERROR | PENDING | EXPECTED
----@field failing string[] names of the failing checks
+---@field checks string? statusCheckRollup state, merge gates left out: SUCCESS | FAILURE | ERROR | PENDING | EXPECTED
+---@field failing string[] names of the failing checks, merge gates left out
 ---@field threads { resolved: boolean, outdated: boolean, last: string? }[] review threads, with who spoke last
 ---@field mergeable string? MERGEABLE | CONFLICTING | UNKNOWN (computed lazily by GitHub)
 ---@field merge_state string? mergeStateStatus; only BEHIND is used
@@ -518,6 +518,58 @@ function M.sort(items)
   return items
 end
 
+-- Checks gating merges on what the PR already shows (reviews, CI), by app then name.
+local MERGE_GATES = {
+  mergify = { ["Mergify Merge Protections"] = true },
+}
+
+local FAILED_RESULTS = {
+  FAILURE = true,
+  ERROR = true,
+  TIMED_OUT = true,
+  CANCELLED = true,
+  ACTION_REQUIRED = true,
+  STARTUP_FAILURE = true,
+}
+
+---@param c table a rollup context
+local function is_merge_gate(c)
+  local suite = type(c.checkSuite) == "table" and c.checkSuite or {}
+  local app = type(suite.app) == "table" and suite.app or {}
+  return (MERGE_GATES[app.slug] or {})[c.name] == true
+end
+
+--- The rollup's state and failing check names, merge gates left out. A gate
+--- failing fails the whole rollup, so a failed rollup is re-derived from the
+--- rest (details() fetches every context of a failed rollup).
+---@param rollup table
+---@return string? state, string[] failing
+local function checks_of(rollup)
+  local contexts = type(rollup.contexts) == "table" and rollup.contexts.nodes or {}
+  local failing, seen, pending = {}, {}, false
+  for _, c in ipairs(contexts) do
+    if not is_merge_gate(c) then
+      -- CheckRuns carry a status and conclusion, legacy StatusContexts a state.
+      local result = c.conclusion or c.state
+      pending = pending
+        or (c.status ~= nil and c.status ~= "COMPLETED")
+        or result == "PENDING"
+        or result == "EXPECTED"
+      -- A name can repeat (one job in several workflows): list it once.
+      local name = c.name or c.context or "?"
+      if FAILED_RESULTS[result] and not seen[name] then
+        seen[name] = true
+        failing[#failing + 1] = name
+      end
+    end
+  end
+  local state = type(rollup.state) == "string" and rollup.state or nil
+  if CHECKS_FAILED[state or ""] and #failing == 0 then
+    state = pending and "PENDING" or "SUCCESS"
+  end
+  return state, failing
+end
+
 --- Normalize a search-result PR node from the GraphQL query below.
 ---@param node table
 ---@param reviewed_by_me boolean
@@ -577,27 +629,7 @@ function M.from_node(node, reviewed_by_me)
   local head = nodes(node.commits)[1]
   local rollup = head and type(head.commit) == "table" and head.commit.statusCheckRollup
   if type(rollup) == "table" then
-    pr.checks = str(rollup.state)
-    -- CheckRuns carry a conclusion, legacy StatusContexts a state. A name
-    -- can repeat (one job in several workflows): list it once.
-    local seen = {}
-    for _, c in ipairs(nodes(rollup.contexts)) do
-      local result = c.conclusion or c.state
-      if
-        result == "FAILURE"
-        or result == "ERROR"
-        or result == "TIMED_OUT"
-        or result == "CANCELLED"
-        or result == "ACTION_REQUIRED"
-        or result == "STARTUP_FAILURE"
-      then
-        local name = str(c.name) or str(c.context) or "?"
-        if not seen[name] then
-          seen[name] = true
-          table.insert(pr.failing, name)
-        end
-      end
-    end
+    pr.checks, pr.failing = checks_of(rollup)
   end
   for _, rr in ipairs(nodes(node.reviewRequests)) do
     local who = type(rr.requestedReviewer) == "table" and rr.requestedReviewer or {}
@@ -696,8 +728,8 @@ local PR_FIELDS = [[
 ]]
 
 -- My own PRs also need what's holding them up. The rollup state is what
--- classifies; the contexts only name the failing checks in the preview, so
--- details() pages past the first 100 only when the rollup has failed.
+-- classifies, unless it failed: then the contexts say whether anything but a
+-- merge gate did, so details() pages past the first 100 only in that case.
 local MINE_FIELDS = [[
   mergeable mergeStateStatus
   autoMergeRequest { enabledAt }
@@ -710,7 +742,10 @@ local MINE_FIELDS = [[
 ]]
 local CONTEXTS = [[
   pageInfo { hasNextPage endCursor }
-  nodes { ... on CheckRun { name conclusion } ... on StatusContext { context state } }
+  nodes {
+    ... on CheckRun { name status conclusion checkSuite { app { slug } } }
+    ... on StatusContext { context state }
+  }
 ]]
 MINE_FIELDS = MINE_FIELDS:format(CONTEXTS)
 

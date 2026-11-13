@@ -589,6 +589,52 @@ describe("reviewqueue.from_node (my PRs)", function()
     assert.same({}, p.threads)
     assert.same({}, p.failing)
   end)
+
+  -- Mergify's review gate fails every unapproved PR; any other Mergify check,
+  -- or another app's check of the same name, is a real result.
+  local function mergify(name, conclusion)
+    return { name = name, conclusion = conclusion, checkSuite = { app = { slug = "mergify" } } }
+  end
+  local gate = mergify("Mergify Merge Protections", "FAILURE")
+  local impostor = {
+    name = "Mergify Merge Protections",
+    conclusion = "FAILURE",
+    checkSuite = { app = { slug = "impostor" } },
+  }
+  for _, case in ipairs({
+    { "only the gate failing passes", { gate }, "SUCCESS", {} },
+    {
+      "only the gate failing, CI still running, is pending",
+      { gate, { name = "test", status = "IN_PROGRESS" } },
+      "PENDING",
+      {},
+    },
+    {
+      "only the gate failing, a legacy status pending, is pending",
+      { gate, { context = "ci/legacy", state = "PENDING" } },
+      "PENDING",
+      {},
+    },
+    {
+      "CI failing alongside the gate fails",
+      { gate, { name = "test", status = "COMPLETED", conclusion = "FAILURE" } },
+      "FAILURE",
+      { "test" },
+    },
+    {
+      "another Mergify check failing fails",
+      { gate, mergify("Mergify Merge Queue", "FAILURE") },
+      "FAILURE",
+      { "Mergify Merge Queue" },
+    },
+    { "the gate's name from another app fails", { impostor }, "FAILURE", { "Mergify Merge Protections" } },
+  }) do
+    it(case[1], function()
+      local rollup = { state = "FAILURE", contexts = { nodes = case[2] } }
+      local p = rq.from_node({ number = 1, commits = { nodes = { { commit = { statusCheckRollup = rollup } } } } }, false)
+      assert.same({ case[3], case[4] }, { p.checks, p.failing })
+    end)
+  end
 end)
 
 describe("reviewqueue.counts_of", function()
