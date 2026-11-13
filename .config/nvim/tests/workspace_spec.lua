@@ -7,7 +7,7 @@ describe("workspace.set_labels", function()
   local function label_with(icon)
     local real = package.loaded["fishmonger"]
     package.loaded["fishmonger"] = {
-      tabs = function()
+      tabs = function(_)
         return { { slot = 1, icon = icon, hl = "Comment" } }
       end,
     }
@@ -428,7 +428,7 @@ describe("workspace numbers", function()
 
   it("closes a workspace without asking when no agent is live", function()
     package.loaded["fishmonger"] = {
-      tabs = function()
+      tabs = function(_)
         return { { slot = 1 }, { slot = 2, agent = { state = "done" } } }
       end,
     }
@@ -448,7 +448,7 @@ describe("workspace numbers", function()
 
   it("asks before closing a workspace with a live agent, and cancel keeps it", function()
     package.loaded["fishmonger"] = {
-      tabs = function()
+      tabs = function(_)
         return { { slot = 1, agent = { state = "permission" } } }
       end,
     }
