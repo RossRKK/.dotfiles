@@ -519,6 +519,8 @@ function M.find(dir)
   end
 end
 
+local announce_ready
+
 --- Set the current (or a new) tabpage up as a workspace on `dir`.
 ---@param dir string project directory
 ---@param opts? { tab?: boolean, drop_buf?: integer, slot?: integer, agent?: boolean, background?: boolean, until_ready?: fun(ready: fun()) }
@@ -561,12 +563,9 @@ function M.open(dir, opts)
   M.assign_slot(opts.slot)
   M.set_labels() -- name the tab now; the glyphs land as its terminals report in
 
-  -- The editor window for files to open into. Not an empty buffer: the
-  -- workspace greeter (config/greeter.lua) — branch status, recent files, and
-  -- pickers — which any opened file simply replaces. Not before the directory
-  -- is ready: git there would describe the enclosing repo, and the greeter keeps watching it.
+  -- Announced only once the directory is ready: what fills the editor window (the greeter) reads git there.
   if not opts.until_ready then
-    require("config.greeter").open()
+    announce_ready(vim.api.nvim_get_current_win())
   end
   if opts.drop_buf then
     pcall(vim.api.nvim_buf_delete, opts.drop_buf, { force = true })
@@ -607,7 +606,7 @@ function M.open(dir, opts)
       opts.until_ready(function()
         if vim.api.nvim_win_is_valid(editor) then
           vim.api.nvim_win_call(editor, function()
-            require("config.greeter").open(editor)
+            announce_ready(editor)
           end)
         end
         require("util.sidebar").refresh()
@@ -620,6 +619,12 @@ function M.open(dir, opts)
       M.restore_focus(return_to)
     end
   end)
+end
+
+--- Hand the editor window to whatever fills it, by event since the greeter that does builds on this module.
+---@param win integer the editor window
+function announce_ready(win)
+  vim.api.nvim_exec_autocmds("User", { pattern = "WorkspaceReady", data = { win = win } })
 end
 
 ---@class workspace.Focus

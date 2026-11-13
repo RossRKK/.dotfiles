@@ -1209,6 +1209,15 @@ function M.setup()
     callback = M.update_dashboards,
   })
 
+  -- A new workspace's editor window starts on its greeter rather than an empty buffer.
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "WorkspaceReady",
+    callback = function(ev)
+      M.open(ev.data.win)
+    end,
+  })
+
   -- A closed workspace tab leaves its greeter behind in the (global) buffer
   -- list. The bufferline filters it off every other project's bar, so it is
   -- invisible rather than wrong -- but a long session would accumulate one per

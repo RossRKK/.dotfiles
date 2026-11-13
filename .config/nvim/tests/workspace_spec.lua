@@ -533,12 +533,10 @@ describe("workspace.open in the background", function()
     vim.t.workspace_slot = nil
     saved = {
       snacks = _G.Snacks,
-      greeter = package.loaded["config.greeter"],
       sidebar = package.loaded["util.sidebar"],
       fishmonger = package.loaded["fishmonger"],
     }
     _G.Snacks = { dashboard = { update = function() end } }
-    package.loaded["config.greeter"] = { open = function() end }
     package.loaded["util.sidebar"] = { open = function() end }
     package.loaded["fishmonger"] = { show = function(_, _) end }
     package.loaded["config.workspace"] = nil
@@ -553,7 +551,6 @@ describe("workspace.open in the background", function()
     pcall(vim.cmd, "tabonly")
     vim.fn.delete(dir, "rf")
     _G.Snacks = saved.snacks
-    package.loaded["config.greeter"] = saved.greeter
     package.loaded["util.sidebar"] = saved.sidebar
     package.loaded["fishmonger"] = saved.fishmonger
   end)
@@ -608,6 +605,45 @@ describe("workspace.open in the background", function()
     ready()
     assert.equals(ws.find(dir), shown_in)
     assert.equals(origin, vim.api.nvim_get_current_tabpage())
+  end)
+
+  --- The windows WorkspaceReady hands over while `run` goes.
+  local function ready_windows(run)
+    local wins = {}
+    local id = vim.api.nvim_create_autocmd("User", {
+      pattern = "WorkspaceReady",
+      callback = function(ev)
+        wins[#wins + 1] = ev.data.win
+      end,
+    })
+    run()
+    vim.api.nvim_del_autocmd(id)
+    return wins
+  end
+
+  it("hands the new tab's editor window over as soon as it is built", function()
+    local wins = ready_windows(function()
+      ws.open(dir, { tab = true })
+    end)
+    assert.same({ vim.api.nvim_tabpage_get_win(ws.find(dir)) }, wins)
+  end)
+
+  it("hands the editor window over only once the directory is ready", function()
+    package.loaded["util.sidebar"].refresh = function() end
+    local ready
+    local before = ready_windows(function()
+      ws.open(dir, {
+        tab = true,
+        until_ready = function(cb)
+          ready = cb
+        end,
+      })
+      assert.is_true(vim.wait(1000, function()
+        return ready ~= nil
+      end))
+    end)
+    assert.same({}, before)
+    assert.same({ vim.api.nvim_tabpage_get_win(ws.find(dir)) }, ready_windows(ready))
   end)
 
   it("starts terminal 1's Claude under the agent name its directory gives", function()
