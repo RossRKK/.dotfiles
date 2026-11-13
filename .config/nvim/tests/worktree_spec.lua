@@ -234,6 +234,73 @@ describe("worktree.rows", function()
   end)
 end)
 
+describe("worktree.parse_worktrees", function()
+  it("maps branches to paths and lists detached worktrees with their commit", function()
+    local out = table.concat({
+      "worktree /repo",
+      "HEAD 1111111111111111111111111111111111111111",
+      "branch refs/heads/main",
+      "",
+      "worktree /repo/.worktrees/fuzzy-otter",
+      "HEAD 2222222222222222222222222222222222222222",
+      "detached",
+    }, "\n")
+    local branches, detached = worktree.parse_worktrees(out)
+    assert.same({ main = "/repo" }, branches)
+    assert.same({ { path = "/repo/.worktrees/fuzzy-otter", head = ("2"):rep(40) } }, detached)
+  end)
+end)
+
+-- A detached agent worktree on a real repo: listed by its sha and agent name,
+-- and picking it opens that worktree rather than checking the sha out anew.
+describe("worktree.candidates", function()
+  local dir, repo, wt
+
+  local function git(...)
+    local cmd = { "git", "-c", "user.name=t", "-c", "user.email=t@t", ... }
+    local res = vim.system(cmd, { cwd = repo, text = true }):wait()
+    assert(res.code == 0, table.concat(cmd, " ") .. ": " .. (res.stderr or ""))
+    return vim.trim(res.stdout)
+  end
+
+  before_each(function()
+    dir = vim.fn.tempname()
+    repo = dir .. "/repo"
+    vim.fn.mkdir(repo, "p")
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "init")
+    wt = repo .. "/.worktrees/fuzzy-otter"
+    git("worktree", "add", "-q", "--detach", wt)
+  end)
+
+  after_each(function()
+    vim.fn.delete(dir, "rf")
+  end)
+
+  local function detached_row(root)
+    local rows = worktree.rows(worktree.order(worktree.candidates(root), {}), root)
+    return vim.tbl_filter(function(it)
+      return it.detached
+    end, rows)
+  end
+
+  it("lists a detached worktree by its short sha, findable by agent name", function()
+    local root = assert(worktree.root(repo))
+    local rows = detached_row(root)
+    assert.equals(1, #rows)
+    assert.equals(git("rev-parse", "HEAD"):sub(1, 7), rows[1].branch)
+    assert.equals("fuzzy-otter", rows[1].agent)
+    assert.truthy(rows[1].text:find("fuzzy-otter", 1, true))
+  end)
+
+  it("opens the detached worktree itself", function()
+    local root = assert(worktree.root(repo))
+    local t = worktree.detached_target(root, detached_row(root)[1])
+    assert.equals("open", t.kind)
+    assert.equals(vim.uv.fs_realpath(wt), vim.uv.fs_realpath(t.path))
+  end)
+end)
+
 describe("worktree.path", function()
   it("uses wherever git already has the branch checked out", function()
     assert.equals("/elsewhere/x", worktree.path("/repo", "feat/x", { ["feat/x"] = "/elsewhere/x" }))

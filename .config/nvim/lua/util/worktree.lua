@@ -272,25 +272,35 @@ function M.path(root, local_branch, worktrees)
   return worktrees[local_branch] or root .. "/.worktrees/" .. M.slug(local_branch)
 end
 
---- Existing worktrees of the repo at `dir`, as branch -> path. Branch is the
---- short name (`refs/heads/x` -> `x`); detached worktrees are skipped, having no
---- branch to pick them by.
+--- Existing worktrees of the repo at `dir` (M.parse_worktrees).
 ---@param dir string
----@return table<string, string>
+---@return table<string, string> branches, worktree.Detached[] detached
 local function existing(dir)
-  local out = git(dir, { "worktree", "list", "--porcelain" }) or ""
-  local map, path = {}, nil
+  return M.parse_worktrees(git(dir, { "worktree", "list", "--porcelain" }) or "")
+end
+
+---@class worktree.Detached
+---@field path string
+---@field head string the commit checked out, full sha
+
+--- `git worktree list --porcelain` as branch -> path, branch being the short
+--- name (`refs/heads/x` -> `x`), plus the detached worktrees, which no branch
+--- name can reach.
+---@param out string
+---@return table<string, string> branches, worktree.Detached[] detached
+function M.parse_worktrees(out)
+  local branches, detached, path, head = {}, {}, nil, nil
   for line in vim.gsplit(out, "\n") do
-    local p = line:match("^worktree (.+)$")
-    if p then
-      path = p
-    end
+    path = line:match("^worktree (.+)$") or path
+    head = line:match("^HEAD (%x+)$") or head
     local ref = line:match("^branch refs/heads/(.+)$")
     if ref and path then
-      map[ref] = path
+      branches[ref] = path
+    elseif line == "detached" and path and head then
+      detached[#detached + 1] = { path = path, head = head }
     end
   end
-  return map
+  return branches, detached
 end
 
 ---@param dir string
@@ -760,6 +770,7 @@ end
 ---@field worktree? string path of an existing worktree for this branch
 ---@field current? boolean
 ---@field agent? string the worktree's name, when not the branch's (M.agent_of)
+---@field detached? boolean a detached worktree's row: branch is its short sha
 
 --- Picker order. Branches that have a worktree come first, most recently opened
 --- first (never-opened ones after, by commit date); every other branch follows
@@ -812,15 +823,21 @@ function M.order(items, recent)
   return out
 end
 
---- Every branch, local and remote-tracking, with what the picker needs.
+--- Every branch, local and remote-tracking, with what the picker needs, and a
+--- row per detached worktree, picked by its commit.
 ---@param root string
 ---@return worktree.Candidate[]
-local function candidates(root)
+function M.candidates(root)
   local fmt =
     "%(refname)%09%(refname:short)%09%(objectname:short)%09%(committerdate:unix)%09%(committerdate:relative)%09%(HEAD)%09%(contents:subject)"
   local out = git(root, { "for-each-ref", "--format=" .. fmt, "refs/heads", "refs/remotes" }) or ""
-  local wts = existing(root)
+  local wts, detached = existing(root)
   local items = {}
+  for _, wt in ipairs(detached) do
+    local sha = wt.head:sub(1, 7)
+    items[#items + 1] =
+      { branch = sha, commit = sha, time = 0, worktree = wt.path, detached = true }
+  end
   for line in vim.gsplit(out, "\n") do
     local ref, branch, commit, time, date, head, msg =
       line:match("^([^\t]+)\t([^\t]+)\t([^\t]+)\t(%d+)\t([^\t]+)\t([^\t]*)\t(.*)$")
@@ -850,14 +867,15 @@ function M.pick()
     vim.notify(err or "not a git repository", vim.log.levels.ERROR)
     return
   end
-  local items = M.rows(M.order(candidates(root), M.recent_load()), root)
+  local items = M.rows(M.order(M.candidates(root), M.recent_load()), root)
   Snacks.picker.pick({
     source = "worktree",
     title = "Worktrees",
     items = items,
     format = function(item, picker)
+      -- detached = false: show the sha, not git_branch's "(detached HEAD)".
       local ret = Snacks.picker.format.git_branch(
-        vim.tbl_extend("force", item, { branch = item.name or item.branch }),
+        vim.tbl_extend("force", item, { branch = item.name or item.branch, detached = false }),
         picker
       )
       -- Mark rows that already have a worktree: picking one is a plain tab open.
@@ -872,11 +890,29 @@ function M.pick()
       local pattern = picker:filter().pattern
       picker:close()
       local branch = item and item.branch or pattern
-      if branch then
+      if item and item.detached then
+        M.go(M.detached_target(root, item), {})
+      elseif branch then
         M.open(branch, cwd)
       end
     end,
   })
+end
+
+--- Where a detached worktree's row opens: that worktree as it is. Its sha
+--- must not go through M.target, which would check it out somewhere new.
+---@param root string the main worktree
+---@param item worktree.Candidate a detached row (M.candidates)
+---@return worktree.Target
+function M.detached_target(root, item)
+  return {
+    kind = "open",
+    path = assert(item.worktree),
+    root = root,
+    branch = item.branch,
+    locals = {},
+    remotes = {},
+  }
 end
 
 --- Ordered candidates (M.order) made picker items. A branch checked out in an

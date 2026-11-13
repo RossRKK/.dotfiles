@@ -306,7 +306,8 @@ it on the remotes — fetching `origin/<name>` if it isn't known yet — and onl
 makes a new branch off `HEAD` when no remote has it. Picking a branch that
 already has a worktree just opens it. A branch checked out in a worktree not named
 after it (an agent's `.worktrees/<pet-name>`) shows that name, dimmed, and typing
-the agent's name finds it.
+the agent's name finds it. A worktree on a detached HEAD gets a row too, by its
+short sha, and picking it opens that worktree as it is.
 
 The same thing is reachable from **lazygit**: `w` on a branch (local or remote)
 opens it as a worktree project tab in the surrounding nvim.
