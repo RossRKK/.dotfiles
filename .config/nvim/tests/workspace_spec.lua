@@ -152,6 +152,46 @@ describe("workspace.set_labels fitting the screen", function()
   end)
 end)
 
+-- util.worktree builds on config.workspace, so the prefix's worktree keys come in from the keymap.
+describe("workspace.prefix", function()
+  local real_getcharstr, keys
+
+  before_each(function()
+    real_getcharstr = vim.fn.getcharstr
+    vim.fn.getcharstr = function(_, _)
+      return table.remove(keys, 1)
+    end
+    package.loaded["util.worktree"] = nil
+    package.preload["util.worktree"] = function()
+      error("config.workspace required util.worktree")
+    end
+    package.loaded["config.workspace"] = nil
+  end)
+
+  after_each(function()
+    vim.fn.getcharstr = real_getcharstr
+    package.preload["util.worktree"] = nil
+    package.loaded["config.workspace"] = nil
+  end)
+
+  it("runs the key it is given, without reaching for util.worktree", function()
+    local ran = {}
+    keys = { "w", "b" }
+    local ws = require("config.workspace")
+    for _ = 1, 2 do
+      ws.prefix({
+        w = function()
+          ran[#ran + 1] = "w"
+        end,
+        b = function()
+          ran[#ran + 1] = "b"
+        end,
+      })
+    end
+    assert.same({ "w", "b" }, ran)
+  end)
+end)
+
 describe("workspace.agent_shell", function()
   it("continues this directory's last Claude conversation, else starts one, at a fish prompt, marked as terminal 1", function()
     assert.same(

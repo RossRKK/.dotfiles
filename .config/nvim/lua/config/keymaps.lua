@@ -157,9 +157,11 @@ end
 -- instead of Ctrl (N switch, c new, & close, .N renumber), plus w / b / e for
 -- the other ways into a new workspace (a branch's worktree, a new branch's
 -- worktree, a browsed-to directory). In terminal mode it takes fish's alt-b
--- (back a word) from the shell; ctrl-left does the same.
+-- (back a word) from the shell; ctrl-left does the same. w's typed-name
+-- fallback only fires when nothing fuzzy-matches, hence b for a new branch.
 map({ "n", "i", "x", "t" }, "<M-b>", function()
-  require("config.workspace").prefix()
+  local worktree = require("util.worktree")
+  require("config.workspace").prefix({ w = worktree.pick, b = worktree.new })
 end, { desc = "Workspace prefix (N switch / c new / & close / .N renumber / w worktree / b new branch / e browse)" })
 map("n", "<leader>tn", function()
   require("config.workspace").pick_new()

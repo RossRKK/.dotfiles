@@ -309,14 +309,13 @@ end
 --- <M-b>: the workspace prefix, fishmonger's <C-b> with a different modifier
 --- and the same keys -- N switches (or opens into N), c opens a new one, &
 --- closes this one, .N renumbers it. Plus the other ways in, numbered as c
---- is: w opens a branch's worktree (util/worktree.lua), b names a new branch
---- for one (w's typed-name fallback only fires when nothing fuzzy-matches,
---- which a ticket name nearly always does), e a browsed-to
---- directory for a project the recent list doesn't know (a fresh clone). One
+--- is: e a browsed-to directory for a project the recent list doesn't know (a
+--- fresh clone), and whatever `others` binds (the keymap's worktree keys). One
 --- mapping that then reads the next key (as fishmonger's prefix does) rather
 --- than separate <M-b>N maps, which race
 --- the mapping timeout in terminal mode and leak a late key to the shell.
-function M.prefix()
+---@param others table<string, fun()> more ways in, by key; passed in since util.worktree builds on this module
+function M.prefix(others)
   local ok, key = pcall(vim.fn.getcharstr)
   if not ok then
     return
@@ -325,10 +324,6 @@ function M.prefix()
     M.switch(tonumber(key))
   elseif key == "c" then
     M.pick_new()
-  elseif key == "w" then
-    require("util.worktree").pick()
-  elseif key == "b" then
-    require("util.worktree").new()
   elseif key == "e" then
     M.explore()
   elseif key == "&" then
@@ -338,6 +333,8 @@ function M.prefix()
     if ok2 and dest:match("^[1-9]$") then
       M.renumber(tonumber(dest))
     end
+  elseif others[key] then
+    others[key]()
   end
 end
 
