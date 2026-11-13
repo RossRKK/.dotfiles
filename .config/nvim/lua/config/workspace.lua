@@ -393,14 +393,14 @@ local function restore_code(selected)
   return "%#" .. name .. "#"
 end
 
--- What every tab label sheds, first to last, until the strip fits its share of the screen.
+-- What every tab label sheds, first to last, until the strip fits the screen.
 local drop_order = { "repo" } ---@type workspace.NamePart[]
-
--- bufferline squeezes the buffer list into whatever the tab strip leaves, so the strip takes at most this much.
-local tab_strip_share = 2 / 3
 
 -- bufferline frames each tab name in a padding cell and a separator either side.
 local tab_frame_width = 4
+
+-- bufferline's close-tab button (its default close_icon, padded) shares the line after the strip.
+local close_button = " \u{f00d} "
 
 --- Paint every tabpage's label on the bufferline's tab indicators: the project name,
 --- prefixed with the status glyph of each of that tabpage's side terminals, in
@@ -417,9 +417,8 @@ local tab_frame_width = 4
 --- glyph sits on the selected tile's background or an ordinary one. The
 --- TabEnter hook in plugins/fishmonger.lua repaints every label for that.
 ---
---- All at once because the labels share the width: when they overflow their
---- share of `columns` (tab_strip_share), every tab drops the same parts
---- (drop_order), so they read alike.
+--- All at once because the labels share the width: when they overflow
+--- `columns`, every tab drops the same parts (drop_order), so they read alike.
 function M.set_labels()
   local current = vim.api.nvim_get_current_tabpage()
   local tabs = {}
@@ -429,7 +428,7 @@ function M.set_labels()
   end
   local dropped = {}
   for _, part in ipairs(drop_order) do
-    if labels_width(tabs, dropped) <= vim.o.columns * tab_strip_share then
+    if labels_width(tabs, dropped) <= vim.o.columns then
       break
     end
     dropped[part] = true
@@ -488,12 +487,12 @@ function tab_label(t, dropped)
   return t.prefix .. (join_name(t.name, dropped):gsub("%%", "%%%%"))
 end
 
---- How wide bufferline reserves the tab strip: it measures each raw label, %-codes and all.
+--- How wide bufferline reserves the tab strip and its close button: it measures each raw label, %-codes and all.
 ---@param tabs workspace.TabLabel[]
 ---@param dropped table<workspace.NamePart, true>
 ---@return integer
 function labels_width(tabs, dropped)
-  local width = 0
+  local width = vim.fn.strdisplaywidth(close_button)
   for _, t in ipairs(tabs) do
     width = width + vim.api.nvim_strwidth(tab_label(t, dropped)) + tab_frame_width
   end
