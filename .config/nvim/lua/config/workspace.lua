@@ -519,7 +519,7 @@ function M.find(dir)
   end
 end
 
-local announce_ready
+local announce_ready, when_current
 
 --- Set the current (or a new) tabpage up as a workspace on `dir`.
 ---@param dir string project directory
@@ -535,8 +535,8 @@ local announce_ready
 ---   slot: the workspace number to take, if free (see M.assign_slot).
 ---   agent: false leaves terminal 1 a plain shell instead of M.agent_shell.
 ---   resume: the Claude session terminal 1 resumes (see M.agent_shell).
----   background: with tab, leave focus (and the mode) where it was once the tab
----     is built, for a tab an agent opened rather than you.
+---   background: with tab, leave focus (and the mode) where it was, for a tab
+---     an agent opened rather than you. Its file tree opens when you first enter it.
 ---   until_ready: called once the tab is built with a `ready` callback; terminal
 ---     1 starts only when it is called, since a Claude started in a directory
 ---     still being checked out would miss its CLAUDE.md and git state.
@@ -577,8 +577,12 @@ function M.open(dir, opts)
   -- stolen focus (Lazy's update UI popping up on startup).
   local editor = vim.api.nvim_get_current_win()
   local tab = vim.api.nvim_get_current_tabpage()
-  require("util.sidebar").open() -- `show`, so focus stays here
-  vim.api.nvim_set_current_win(editor)
+  when_current(tab, function()
+    require("util.sidebar").open() -- `show`, so focus stays here
+    if vim.api.nvim_win_is_valid(editor) then
+      vim.api.nvim_set_current_win(editor)
+    end
+  end)
 
   local function start_terminal()
     if not vim.api.nvim_tabpage_is_valid(tab) then
@@ -617,9 +621,29 @@ function M.open(dir, opts)
     else
       start_terminal()
     end
-    if return_to then
-      M.restore_focus(return_to)
+  end)
+  if return_to then
+    M.restore_focus(return_to)
+  end
+end
+
+--- Run `build` once `tab` is current, after the opens queued with it: neo-tree draws a tree only in the current tab.
+---@param tab integer
+---@param build fun()
+function when_current(tab, build)
+  vim.schedule(function()
+    if not vim.api.nvim_tabpage_is_valid(tab) then
+      return
     end
+    if vim.api.nvim_get_current_tabpage() == tab then
+      return build()
+    end
+    vim.api.nvim_create_autocmd("TabEnter", {
+      once = true,
+      callback = function()
+        when_current(tab, build)
+      end,
+    })
   end)
 end
 
