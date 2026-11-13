@@ -29,6 +29,7 @@ local options = {
 }
 
 local claude_session = require("util.claude_session")
+local branch_reports = require("util.branch_reports")
 
 local name_parts, session_name, join_name, label_prefix, tab_label, labels_width
 
@@ -61,8 +62,8 @@ end
 --- rkk/some-branch") rather than as its checkout directory; with an agent,
 --- "<repo> · <agent> · <branch>", and a Claude in a standing role (claude-roles)
 --- is the whole name, since the role already says which checkout it is. Drawn from the
---- greeter's cached branch report (config.greeter fetches one per workspace
---- and watches the git dirs, so it follows checkouts); before the report lands
+--- cached branch report (util.branch_reports, which config.greeter fills per
+--- workspace and keeps current as checkouts move); before the report lands
 --- -- or for a directory git can't say anything about -- it falls back to the
 --- plain workspace name.
 ---@param tab? integer tabpage handle (default: current)
@@ -86,10 +87,7 @@ function name_parts(tab)
   if session and session == claude_session.role(options.claude_roles, cwd) then
     return { parts = { { part = "agent", text = session } }, sep = "" }
   end
-  -- package.loaded, not require: no reason to drag the greeter in just to name
-  -- a tab, and before its setup there is no report to read anyway.
-  local greeter = package.loaded["config.greeter"]
-  local report = greeter and greeter.reports[cwd]
+  local report = branch_reports[cwd]
   if not (report and report.repo) then
     return { parts = { { part = "workspace", text = M.name(tab) } }, sep = "" }
   end

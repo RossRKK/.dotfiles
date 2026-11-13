@@ -33,15 +33,7 @@
 
 local M = {}
 
--- Branch overview per workspace root: normalized cwd -> TriageReport, or false
--- for "asked, not a git repo" (nil means the answer hasn't arrived yet, which
--- renders as a bare header rather than as an empty repo).
---
--- Cached because triage.report is async: the dashboard has to render before the
--- git work finishes, so it draws from here and is told to redraw when a fresh
--- report lands. Keyed by root so switching tabs shows that project's overview
--- immediately, without a flash of the previous one.
-M.reports = {}
+local reports = require("util.branch_reports")
 
 -- The live greeter buffer per workspace root: normalized cwd -> buffer.
 --
@@ -191,10 +183,10 @@ end
 function M.cache_report(root, report)
   -- Only redraw on an actual change: re-rendering an identical dashboard
   -- fights the cursor for no benefit.
-  if vim.deep_equal(M.reports[root], report) then
+  if vim.deep_equal(reports[root], report) then
     return
   end
-  M.reports[root] = report
+  reports[root] = report
   -- Re-resolves every open dashboard's sections, which is how the overview
   -- appears without reopening the greeter.
   M.update_dashboards()
@@ -336,7 +328,7 @@ function M.on_review_toggle(on, root)
     require("util.reviewqueue").refresh(root)
     return
   end
-  local report = M.reports[root]
+  local report = reports[root]
   if report and report.branch then
     M.fetch_pr(root, report.branch, true)
   else
@@ -959,7 +951,7 @@ function M.sections(root, buf, tab, report)
     -- Not a git repo: there's no overview to show, so fall back to the
     -- pickers -- the only case where the greeter still needs a menu.
     function()
-      if M.reports[root] ~= false then
+      if reports[root] ~= false then
         return nil
       end
       return {
@@ -1053,7 +1045,7 @@ function M.open(win)
 
   --- The cached report, or nil while it's still in flight / not a repo.
   local function report()
-    local cached = M.reports[root]
+    local cached = reports[root]
     return cached ~= false and cached or nil
   end
 

@@ -33,7 +33,7 @@ describe("workspace.set_labels fitting the screen", function()
     vim.fn.mkdir(dir, "p")
     vim.cmd.tcd(vim.fn.fnameescape(dir))
     ws.assign_slot()
-    package.loaded["config.greeter"].reports[vim.fs.normalize(dir)] = report
+    require("util.branch_reports")[vim.fs.normalize(dir)] = report
   end
 
   --- Run a Claude that goes by `name` as pid `pid` in terminal `slot` of tabpage `tab`.
@@ -63,9 +63,7 @@ describe("workspace.set_labels fitting the screen", function()
   before_each(function()
     pcall(vim.cmd, "tabonly")
     vim.t.workspace_slot = nil
-    saved =
-      { greeter = package.loaded["config.greeter"], fishmonger = package.loaded["fishmonger"] }
-    package.loaded["config.greeter"] = { reports = {} }
+    saved = { fishmonger = package.loaded["fishmonger"] }
     package.loaded["fishmonger"] = nil
     package.loaded["config.workspace"] = nil
     ws = require("config.workspace")
@@ -93,7 +91,6 @@ describe("workspace.set_labels fitting the screen", function()
   after_each(function()
     vim.o.columns = columns
     ws.setup({ agent_worktrees = false })
-    package.loaded["config.greeter"] = saved.greeter
     package.loaded["fishmonger"] = saved.fishmonger
     pcall(vim.cmd, "tabonly")
     vim.fn.delete(root, "rf")
@@ -638,23 +635,18 @@ describe("workspace.open in the background", function()
 end)
 
 describe("workspace.display_name", function()
-  local ws, saved, dir
+  local ws, dir
 
   local function report(git_dir, common_dir, branch)
-    package.loaded["config.greeter"] = {
-      reports = {
-        [vim.fs.normalize(dir)] = {
-          repo = "dotfiles",
-          branch = branch,
-          git_dir = git_dir,
-          common_dir = common_dir,
-        },
-      },
+    require("util.branch_reports")[vim.fs.normalize(dir)] = {
+      repo = "dotfiles",
+      branch = branch,
+      git_dir = git_dir,
+      common_dir = common_dir,
     }
   end
 
   before_each(function()
-    saved = package.loaded["config.greeter"]
     ws = require("config.workspace")
     dir = vim.fn.tempname() .. "/.worktrees/keen-heron"
     vim.fn.mkdir(dir, "p")
@@ -663,7 +655,7 @@ describe("workspace.display_name", function()
   end)
 
   after_each(function()
-    package.loaded["config.greeter"] = saved
+    require("util.branch_reports")[vim.fs.normalize(dir)] = nil
     ws.setup({ agent_worktrees = false })
     pcall(vim.cmd, "tabonly")
     vim.fn.delete(vim.fs.dirname(vim.fs.dirname(dir)), "rf")
