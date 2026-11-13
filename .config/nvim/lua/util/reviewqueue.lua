@@ -208,7 +208,7 @@ end
 ---@field mergeable string? MERGEABLE | CONFLICTING | UNKNOWN (computed lazily by GitHub)
 ---@field merge_state string? mergeStateStatus; only BEHIND is used
 ---@field auto_merge boolean
----@field queue { state: string, position: integer? }? merge queue entry
+---@field queue { state: string?, position: integer? }? in a merge queue: GitHub's says where, Mergify's (a label) doesn't
 ---@field dequeued { reason: string, by: string? }? last merge-queue event was a removal
 
 ---@class reviewqueue.Ctx
@@ -471,9 +471,9 @@ function M.classify_mine(pr, ctx)
   end
   -- Queued (or auto-merging) lands without me: loose ends don't hold it up.
   if pr.queue then
-    local state = pr.queue.state:lower():gsub("_", " ")
     local at = pr.queue.position and ("#%d in the merge queue"):format(pr.queue.position)
       or "in the merge queue"
+    local state = pr.queue.state and (pr.queue.state:lower():gsub("_", " "))
     return verdict(4, { at, state })
   end
   if pr.auto_merge then
@@ -545,6 +545,9 @@ function M.sort(items)
   end)
   return items
 end
+
+-- Mergify's default queued_label (https://docs.mergify.com/merge-queue/lifecycle/#queue-labels).
+local MERGIFY_QUEUED_LABEL = "queued"
 
 -- Checks gating merges on what the PR already shows (reviews, CI), by app then name.
 local MERGE_GATES = {
@@ -695,9 +698,15 @@ function M.from_node(node, reviewed_by_me, repo)
   }
   if type(node.mergeQueueEntry) == "table" then
     pr.queue = {
-      state = str(node.mergeQueueEntry.state) or "",
+      state = str(node.mergeQueueEntry.state),
       position = tonumber(node.mergeQueueEntry.position),
     }
+  end
+  for _, label in ipairs(nodes(node.labels)) do
+    -- Mergify's queue has no mergeQueueEntry, only its label while queued.
+    if label.name == MERGIFY_QUEUED_LABEL and not pr.queue then
+      pr.queue = {}
+    end
   end
   -- timelineItems is filtered to the queue's added/removed events, last one.
   local ev = nodes(node.timelineItems)[1]
@@ -824,6 +833,7 @@ local MINE_FIELDS = [[
   mergeable mergeStateStatus
   autoMergeRequest { enabledAt }
   mergeQueueEntry { state position }
+  labels(first: 50) { nodes { name } }
   timelineItems(last: 1, itemTypes: [ADDED_TO_MERGE_QUEUE_EVENT, REMOVED_FROM_MERGE_QUEUE_EVENT]) {
     nodes { __typename ... on RemovedFromMergeQueueEvent { reason actor { login } } }
   }

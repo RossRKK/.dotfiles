@@ -560,6 +560,8 @@ describe("reviewqueue.classify_mine", function()
       { verdict({ reviews = approved, queue = { state = "AWAITING_CHECKS", position = 4 } }) }
     )
     assert.same({ 4, "auto-merge on" }, { verdict({ auto_merge = true }) })
+    -- Mergify's queue says neither where nor in what state.
+    assert.same({ 4, "in the merge queue" }, { verdict({ reviews = approved, queue = {} }) })
     -- It lands without me: an open thread I've answered doesn't hold it up.
     assert.same({ 4, "#1 in the merge queue, queued" }, {
       verdict({
@@ -642,6 +644,22 @@ describe("reviewqueue.from_node (my PRs)", function()
     assert.equals("FAILURE", p.checks)
     assert.same({ "test", "ci/legacy" }, p.failing)
   end)
+
+  -- Mergify's queue leaves mergeQueueEntry null; its "queued" label marks it.
+  for _, case in ipairs({
+    { "Mergify's queued label", nil, { "queued" }, {} },
+    { "GitHub's entry over the label", { state = "QUEUED", position = 2 }, { "queued" }, { state = "QUEUED", position = 2 } },
+    { "Mergify's dequeued label isn't queued", nil, { "dequeued" }, nil },
+    { "another label isn't queued", nil, { "queue" }, nil },
+  }) do
+    it("reads a merge queue from " .. case[1], function()
+      local labels = vim.tbl_map(function(name)
+        return { name = name }
+      end, case[3])
+      local p = rq.from_node({ number = 1, mergeQueueEntry = case[2], labels = { nodes = labels } }, false)
+      assert.same(case[4], p.queue)
+    end)
+  end
 
   it("leaves a review-queue node (no such fields) with nothing to report", function()
     local p = rq.from_node({ number = 1 }, false)
