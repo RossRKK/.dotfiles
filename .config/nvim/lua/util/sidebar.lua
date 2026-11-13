@@ -30,6 +30,18 @@ function M.win(source)
   end
 end
 
+--- Called after neo-tree's setup: it debounces every tab's tree under one id, dropping trees of tabs opened together.
+function M.setup()
+  local filesystem = require("neo-tree.sources.filesystem")
+  local utils = require("neo-tree.utils")
+  filesystem.navigate = function(state, path, path_to_reveal, callback, async)
+    state._ready = false
+    utils.debounce("filesystem_navigate:" .. state.id, function()
+      filesystem._navigate_internal(state, path, path_to_reveal, callback, async)
+    end, 100, utils.debounce_strategy.CALL_FIRST_AND_LAST)
+  end
+end
+
 -- Open the file tree in the left edgebar. `show` reveals without focusing, so
 -- this is safe to call from auto-open.
 function M.open()
