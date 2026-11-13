@@ -33,6 +33,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `diffsize_spec.lua` | PR diff size without generated files (`git check-attr` parsing, lockfiles) |
 | `background_spec.lua` | side-terminal shells wrapped into systemd's `background.slice` only when a user manager is running |
 | `sidebar_reveal_spec.lua` | `<leader>v` reveals in the tree without re-rooting it or `:tcd`-ing the tab; files outside the workspace float at their project root. Loads real neo-tree |
+| `workspace_tabs_spec.lua` | workspace tabs opened from the start screen, restored (`s`, `:WorkspaceRestore`) or opened in one burst each get the hand-opened layout (winlayout + filetypes) and one statusline at the screen bottom. Drives a child nvim with the full config on a pty, terminal 1 running sh |
 | `edgy_spec.lua` | edgy views sized by another plugin's windows: fishmonger's task list takes the height fishmonger asks for |
 | `api_linter_spec.lua` | api-linter JSON to diagnostics; proto root (buf module, else git checkout, else the file's dir); the real api-linter (on PATH, common protos linked by home-manager) flags a camelCase field, resolves `google/api` imports, ignores a repo's opt-outs, skips the Java-option rules |
 | `options_spec.lua` | the mouse starts off (`<leader>um` turns it on) |
