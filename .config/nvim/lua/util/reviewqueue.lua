@@ -1551,9 +1551,8 @@ function M.refresh(dir, cb)
       not vim.deep_equal(M.counts_of(prev), M.counts_of(entry))
       or not vim.deep_equal(M.counts_of(prev, "mine"), M.counts_of(entry, "mine"))
     then
-      pcall(function()
-        require("config.greeter").update_dashboards()
-      end)
+      -- An event, not a call: the greeter that shows the counts builds on this module.
+      vim.api.nvim_exec_autocmds("User", { pattern = "ReviewQueueChanged" })
     end
   end)()
 end

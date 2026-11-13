@@ -775,3 +775,43 @@ describe("reviewqueue.pick", function()
     end)
   end
 end)
+
+describe("reviewqueue.refresh", function()
+  local saved_key, saved_fetch, tiers, changes, listener
+
+  before_each(function()
+    saved_key, saved_fetch = rq.key, rq.fetch
+    rq.key = function(_)
+      return "refresh-spec"
+    end
+    rq.fetch = function(_)
+      return vim.tbl_map(function(tier)
+        return { verdict = { tier = tier } }
+      end, tiers), nil, {}
+    end
+    changes = 0
+    listener = vim.api.nvim_create_autocmd("User", {
+      pattern = "ReviewQueueChanged",
+      callback = function()
+        changes = changes + 1
+      end,
+    })
+  end)
+
+  after_each(function()
+    rq.key, rq.fetch = saved_key, saved_fetch
+    rq.cache["refresh-spec"] = nil
+    vim.api.nvim_del_autocmd(listener)
+  end)
+
+  it("announces a change in the counts, and stays quiet when they hold", function()
+    tiers = { 1 }
+    rq.refresh("/repo")
+    assert.equals(1, changes)
+    rq.refresh("/repo")
+    assert.equals(1, changes)
+    tiers = { 1, 2 }
+    rq.refresh("/repo")
+    assert.equals(2, changes)
+  end)
+end)

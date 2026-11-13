@@ -1209,6 +1209,13 @@ function M.setup()
     callback = M.update_dashboards,
   })
 
+  -- The review queue's counts are on every greeter outside review mode.
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "ReviewQueueChanged",
+    callback = M.update_dashboards,
+  })
+
   -- A new workspace's editor window starts on its greeter rather than an empty buffer.
   vim.api.nvim_create_autocmd("User", {
     group = group,
