@@ -234,6 +234,7 @@ renumbering the rest.
 | `Alt+1-9`   | Switch to workspace N (works in terminal mode too); an unused number opens the project picker, and the pick becomes workspace N |
 | `Space+tt`  | Switch to an open project (picker; matches number or name) |
 | `Space+tx`  | Close this project tab (its terminals shut down with it; asks first if an agent there is live) |
+| `Space+tX`  | Close this worktree tab and remove its worktree, keeping the branch (asks first if it has uncommitted or untracked files, unsaved buffers or a live agent; only then `--force`) |
 | `gt` / `gT` | Next / prev tab                                            |
 
 `Alt+B` is the workspace prefix: the same keys as the terminal's `Ctrl+B`, with
@@ -317,7 +318,8 @@ So a branch becomes a project tab: its own checkout, terminals and buffer list,
 with your main checkout untouched in the tab next door — no stash, no
 `git checkout` dance, and an agent can work a branch while you work another.
 `.worktrees/` is in the global gitignore, so it never shows up in `git status`.
-To tidy up, `git worktree-clean` lists the worktrees
+To tidy up one you're in, `Space+tX` closes its tab and removes it. For the
+lot, `git worktree-clean` lists the worktrees
 whose HEAD is on a remote and that have no local changes (not even untracked
 files); `-f` removes them, keeping their branches. It is a dry run without
 `-f` and never touches the main or current checkout. A squash-merged branch

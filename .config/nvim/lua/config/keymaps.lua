@@ -185,6 +185,10 @@ end, { desc = "Switch to open project tab" })
 map("n", "<leader>tx", function()
   require("config.workspace").close()
 end, { desc = "Close project tab" })
+-- <leader>tx, then the checkout too: a worktree tab's tidy-up, the branch kept.
+map("n", "<leader>tX", function()
+  require("util.worktree").remove()
+end, { desc = "Close worktree tab and remove its worktree" })
 
 -- Parse a `path[:line[:col]]` reference (e.g. printed in the terminal, or a path
 -- in a diff/log) and resolve it to a real file on disk. Best-effort: returns

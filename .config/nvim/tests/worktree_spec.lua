@@ -301,3 +301,116 @@ describe("worktree.target", function()
     assert.is_nil(t.name)
   end)
 end)
+
+describe("worktree.buf_path", function()
+  it("gives a terminal the directory it started in", function()
+    assert.equals("/repo/.worktrees/x", worktree.buf_path("term:///repo/.worktrees/x//4242:fish"))
+  end)
+
+  it("gives any other buffer its own name", function()
+    assert.equals("/repo/a.lua", worktree.buf_path("/repo/a.lua"))
+  end)
+end)
+
+-- M.remove against a real repo: a worktree tab as config.workspace opens one
+-- (a numbered tabpage, :tcd into the checkout), with a terminal job running there.
+describe("worktree.remove", function()
+  local dir, repo, wt, saved_confirm
+  vim.opt.runtimepath:append(vim.fn.stdpath("data") .. "/lazy/snacks.nvim")
+
+  local function git(cwd, ...)
+    local cmd = { "git", "-c", "user.name=t", "-c", "user.email=t@t", ... }
+    local res = vim.system(cmd, { cwd = cwd, text = true }):wait()
+    assert(res.code == 0, table.concat(cmd, " ") .. ": " .. (res.stderr or ""))
+    return vim.trim(res.stdout)
+  end
+
+  local function confirm_with(choice)
+    vim.fn.confirm = function(_, _, _, _)
+      return choice
+    end
+  end
+
+  local function open_tab(path)
+    vim.cmd("tabnew")
+    vim.cmd.tcd(vim.fn.fnameescape(path))
+    vim.api.nvim_tabpage_set_var(0, "workspace_slot", 2)
+    return vim.api.nvim_get_current_tabpage()
+  end
+
+  local function gone()
+    return vim.wait(5000, function()
+      return vim.uv.fs_stat(wt) == nil
+    end)
+  end
+
+  before_each(function()
+    dir = vim.uv.fs_realpath(vim.fn.tempname()) or vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    dir = vim.uv.fs_realpath(dir)
+    repo, wt = dir .. "/repo", dir .. "/repo/.worktrees/feat-x"
+    vim.fn.mkdir(repo, "p")
+    vim.fn.writefile({ "hi" }, repo .. "/README")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "add", "README")
+    git(repo, "commit", "-q", "-m", "init")
+    git(repo, "worktree", "add", "-q", "-b", "feat/x", wt)
+    vim.cmd.cd(vim.fn.fnameescape(repo))
+    saved_confirm = vim.fn.confirm
+  end)
+
+  after_each(function()
+    vim.fn.confirm = saved_confirm
+    vim.cmd("silent! tabonly!")
+    vim.cmd("silent! %bwipeout!")
+    vim.fn.delete(dir, "rf")
+  end)
+
+  it("stops its jobs, wipes its buffers everywhere, closes the tab, then removes it", function()
+    vim.cmd.edit(vim.fn.fnameescape(wt .. "/README")) -- in the first tab: wiped from every tab
+    local file = vim.api.nvim_get_current_buf()
+    local tab = open_tab(wt)
+    vim.cmd("enew")
+    local chan = vim.fn.jobstart({ "sleep", "600" }, { term = true })
+    local term, pid = vim.api.nvim_get_current_buf(), vim.fn.jobpid(chan)
+    confirm_with(1) -- asked only if something would be lost: it isn't
+
+    worktree.remove()
+
+    assert.is_false(vim.api.nvim_tabpage_is_valid(tab))
+    assert.is_false(vim.api.nvim_buf_is_valid(term))
+    assert.is_false(vim.api.nvim_buf_is_valid(file))
+    assert.is_not_nil(select(2, vim.uv.kill(pid, 0)), "the terminal's process is still running")
+    assert.is_true(gone())
+    assert.equals("feat/x", git(repo, "branch", "--list", "feat/x"):gsub("^[*+ ]+", ""))
+  end)
+
+  it("leaves a dirty worktree alone unless confirmed, then forces it", function()
+    vim.fn.writefile({ "wip" }, wt .. "/untracked")
+    local tab = open_tab(wt)
+    confirm_with(2)
+    worktree.remove()
+    assert.is_true(vim.api.nvim_tabpage_is_valid(tab))
+    assert.is_not_nil(vim.uv.fs_stat(wt .. "/untracked"))
+
+    confirm_with(1)
+    worktree.remove()
+    assert.is_false(vim.api.nvim_tabpage_is_valid(tab))
+    assert.is_true(gone())
+  end)
+
+  it("does nothing in a tab on the main checkout", function()
+    local tab = open_tab(repo)
+    worktree.remove()
+    assert.is_true(vim.api.nvim_tabpage_is_valid(tab))
+    assert.is_not_nil(vim.uv.fs_stat(wt))
+  end)
+
+  it("moves a global cwd inside the checkout to the main one", function()
+    vim.cmd.cd(vim.fn.fnameescape(wt))
+    open_tab(wt)
+    worktree.remove()
+    assert.equals(repo, vim.fn.getcwd(-1, -1))
+    assert.is_true(gone())
+  end)
+end)

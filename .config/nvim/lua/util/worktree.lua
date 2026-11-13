@@ -576,6 +576,141 @@ function M.open_for_agent(branch, cwd)
   return vim.json.encode({ path = target.path, name = target.name })
 end
 
+--- The linked worktree whose top level is `dir`, or nil for the main checkout,
+--- a subdirectory, or no repo at all.
+---@param dir string
+---@return { top: string, root: string }?
+function M.linked(dir)
+  local out = git(
+    dir,
+    { "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-dir", "--git-common-dir" }
+  )
+  local top, git_dir, common_dir = unpack(vim.split(out or "", "\n"))
+  if not common_dir or git_dir == common_dir or top ~= (vim.uv.fs_realpath(dir) or dir) then
+    return nil
+  end
+  return { top = top, root = vim.fs.dirname(common_dir) }
+end
+
+--- The directory a buffer belongs to on disk: a terminal's is the cwd it started
+--- in (`term://<cwd>//<pid>:<cmd>`), any other buffer's is its name.
+---@param name string buffer name
+---@return string
+function M.buf_path(name)
+  local cwd = name:match("^term://(.-)//%d+:")
+  return cwd and vim.fs.normalize(cwd) or name
+end
+
+---@param path string
+---@param dir string
+---@return boolean
+function M.inside(path, dir)
+  path = vim.uv.fs_realpath(path) or path
+  return path == dir or vim.startswith(path, dir .. "/")
+end
+
+---@param dir string
+---@return integer[]
+local function buffers_inside(dir)
+  return vim.tbl_filter(function(buf)
+    local name = vim.api.nvim_buf_get_name(buf)
+    return name ~= "" and M.inside(M.buf_path(name), dir)
+  end, vim.api.nvim_list_bufs())
+end
+
+--- <leader>tX: close this worktree tab and remove its worktree, keeping the
+--- branch. Everything living in the checkout goes first -- its terminals'
+--- processes (waited for, so nothing writes into it mid-removal), then its
+--- buffers in every tab, then the tab -- so no window is left on a deleted cwd.
+function M.remove()
+  local workspace = require("config.workspace")
+  local tab = vim.api.nvim_get_current_tabpage()
+  local wt = workspace.slot(tab) and M.linked(workspace.cwd(tab))
+  if not wt then
+    return status("not a worktree tab", vim.log.levels.WARN)
+  end
+  if #vim.api.nvim_list_tabpages() == 1 then
+    return status("can't close the last workspace", vim.log.levels.WARN)
+  end
+  for nr, other in ipairs(vim.api.nvim_list_tabpages()) do
+    if
+      other ~= tab
+      and vim.fn.haslocaldir(-1, nr) == 1
+      and M.inside(workspace.cwd(other), wt.top)
+    then
+      return status(("tab %d is also in %s"):format(nr, wt.top), vim.log.levels.WARN)
+    end
+  end
+  local changes, err = git(wt.top, { "status", "--porcelain" })
+  if not changes then
+    return status(err, vim.log.levels.ERROR)
+  end
+  local bufs = buffers_inside(wt.top)
+  if not M.confirm_remove(wt.top, changes ~= "", workspace.live_agents(tab), bufs) then
+    return
+  end
+
+  local jobs = {}
+  for _, buf in ipairs(bufs) do
+    if vim.bo[buf].buftype == "terminal" and vim.bo[buf].channel > 0 then
+      jobs[#jobs + 1] = vim.bo[buf].channel
+      vim.fn.jobstop(vim.bo[buf].channel)
+    end
+  end
+  vim.fn.jobwait(jobs, 5000)
+  -- snacks moves each window off the buffer first: a plain wipe closes them, and with a tab's last window the tab.
+  for _, buf in ipairs(bufs) do
+    require("snacks").bufdelete({ buf = buf, force = true, wipe = true })
+  end
+  -- Tabs without a :tcd follow the global cwd, so it mustn't stay in the checkout.
+  if M.inside(vim.fn.getcwd(-1, -1), wt.top) then
+    vim.cmd.cd(vim.fn.fnameescape(wt.root))
+  end
+  vim.cmd.tabclose(vim.api.nvim_tabpage_get_number(tab))
+
+  local args = { "git", "worktree", "remove", wt.top }
+  if changes ~= "" then
+    table.insert(args, 4, "--force")
+  end
+  vim.system(args, { cwd = wt.root, text = true }, function(res)
+    vim.schedule(function()
+      if res.code ~= 0 then
+        status("git worktree remove: " .. vim.trim(res.stderr or ""), vim.log.levels.ERROR)
+      else
+        status("removed " .. wt.top, vim.log.levels.INFO)
+      end
+    end)
+  end)
+end
+
+--- Whether removing `top` goes ahead: on the keypress when nothing would be
+--- lost, else only once confirmed.
+---@param top string
+---@param dirty boolean uncommitted or untracked files
+---@param live integer agents working or waiting there
+---@param bufs integer[] buffers inside the worktree
+---@return boolean
+function M.confirm_remove(top, dirty, live, bufs)
+  local lost = {}
+  if dirty then
+    lost[#lost + 1] = "uncommitted changes"
+  end
+  if live > 0 then
+    lost[#lost + 1] = ("%d live agent%s"):format(live, live == 1 and "" or "s")
+  end
+  local unsaved = #vim.tbl_filter(function(buf)
+    return vim.bo[buf].modified
+  end, bufs)
+  if unsaved > 0 then
+    lost[#lost + 1] = ("%d unsaved buffer%s"):format(unsaved, unsaved == 1 and "" or "s")
+  end
+  if #lost == 0 then
+    return true
+  end
+  local msg = ("Remove %s? It has %s."):format(vim.fs.basename(top), table.concat(lost, ", "))
+  return vim.fn.confirm(msg, "&Remove\n&Cancel", 2) == 1
+end
+
 --- Pick a branch to open as a worktree tab.
 ---
 --- snacks' git_branches picker supplies the list (with `all` so remote branches
