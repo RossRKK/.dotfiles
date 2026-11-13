@@ -342,7 +342,7 @@ local function remote_names(dir)
   return set
 end
 
-local checkout, abandon, agent_name_for
+local checkout, abandon, agent_name_for, commits
 
 --- Open `branch`'s worktree as a new workspace tab, creating it if needed.
 --- Reuses whatever already exists: a worktree git already knows about, or a
@@ -765,8 +765,10 @@ end
 ---@field branch string short ref name ("x" or "origin/x")
 ---@field remote? boolean a remote-tracking ref (refs/remotes)
 ---@field name? string display name when it differs from branch ("x" for "origin/x")
+---@field commit string short sha
+---@field msg string commit subject
 ---@field time integer committer date, unix time (sort key)
----@field date? string committer date as shown ("3 days ago")
+---@field date string committer date as shown ("3 days ago")
 ---@field worktree? string path of an existing worktree for this branch
 ---@field current? boolean
 ---@field agent? string the worktree's name, when not the branch's (M.agent_of)
@@ -833,10 +835,25 @@ function M.candidates(root)
   local out = git(root, { "for-each-ref", "--format=" .. fmt, "refs/heads", "refs/remotes" }) or ""
   local wts, detached = existing(root)
   local items = {}
+  local heads = commits(
+    root,
+    vim.tbl_map(function(wt)
+      return wt.head
+    end, detached)
+  )
   for _, wt in ipairs(detached) do
-    local sha = wt.head:sub(1, 7)
-    items[#items + 1] =
-      { branch = sha, commit = sha, time = 0, worktree = wt.path, detached = true }
+    local c = heads[wt.head]
+    if c then
+      items[#items + 1] = {
+        branch = c.commit,
+        commit = c.commit,
+        time = c.time,
+        date = c.date,
+        msg = c.msg,
+        worktree = wt.path,
+        detached = true,
+      }
+    end
   end
   for line in vim.gsplit(out, "\n") do
     local ref, branch, commit, time, date, head, msg =
@@ -855,6 +872,33 @@ function M.candidates(root)
     end
   end
   return items
+end
+
+---@class worktree.Commit
+---@field commit string short sha
+---@field time integer committer date, unix time
+---@field date string committer date as shown ("3 days ago")
+---@field msg string subject
+
+--- The commits at `shas`, by full sha, from one git call: a detached HEAD has
+--- no ref for for-each-ref to describe.
+---@param root string
+---@param shas string[] full shas
+---@return table<string, worktree.Commit>
+function commits(root, shas)
+  if #shas == 0 then
+    return {}
+  end
+  local fmt = "--format=%H%x09%h%x09%ct%x09%cr%x09%s"
+  local out = git(root, vim.list_extend({ "log", "--no-walk=unsorted", fmt }, shas)) or ""
+  local found = {}
+  for line in vim.gsplit(out, "\n") do
+    local sha, commit, time, date, msg = line:match("^(%x+)\t(%x+)\t(%d+)\t([^\t]+)\t(.*)$")
+    if sha then
+      found[sha] = { commit = commit, time = tonumber(time), date = date, msg = msg }
+    end
+  end
+  return found
 end
 
 -- Defined below M.pick, which uses them.

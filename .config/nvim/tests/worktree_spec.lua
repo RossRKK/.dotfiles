@@ -595,3 +595,71 @@ describe("worktree.remove", function()
     assert.is_true(gone())
   end)
 end)
+
+-- Every kind of <M-b>w row through snacks' real git_branch formatter, which
+-- indexes fields (the commit subject) a row can be built without.
+describe("worktree.format_row", function()
+  vim.opt.runtimepath:prepend(vim.fn.stdpath("data") .. "/lazy/snacks.nvim")
+  require("snacks")
+  local dir, repo
+
+  local function git(cwd, ...)
+    local cmd = { "git", "-c", "user.name=t", "-c", "user.email=t@t", ... }
+    local res = vim.system(cmd, { cwd = cwd, text = true }):wait()
+    assert(res.code == 0, table.concat(cmd, " ") .. ": " .. (res.stderr or ""))
+    return vim.trim(res.stdout)
+  end
+
+  before_each(function()
+    dir = vim.fn.tempname()
+    repo = dir .. "/repo"
+    local upstream = dir .. "/upstream"
+    vim.fn.mkdir(upstream, "p")
+    git(upstream, "init", "-q", "-b", "main")
+    git(upstream, "commit", "-q", "--allow-empty", "-m", "remote work")
+    git(upstream, "branch", "rkk/remote-only")
+    vim.fn.mkdir(repo, "p")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "local work")
+    git(repo, "branch", "rkk/plain")
+    git(repo, "remote", "add", "origin", upstream)
+    git(repo, "fetch", "-q", "origin")
+    git(repo, "worktree", "add", "-q", "-b", "rkk/agent-branch", repo .. "/.worktrees/fuzzy-otter")
+    git(repo, "worktree", "add", "-q", "--detach", repo .. "/.worktrees/sleepy-yak")
+  end)
+
+  after_each(function()
+    vim.fn.delete(dir, "rf")
+  end)
+
+  --- Each row's text as the picker draws it, by the name the row shows.
+  local function drawn(root)
+    local picker = { opts = require("snacks.picker.config").get({}) }
+    local rows = worktree.rows(worktree.order(worktree.candidates(root), {}), root)
+    local out = {}
+    for _, row in ipairs(rows) do
+      local text = table.concat(vim.tbl_map(function(chunk)
+        return chunk[1]
+      end, worktree.format_row(row, picker, {})))
+      out[row.detached and "detached" or row.name or row.branch] = text
+    end
+    return out
+  end
+
+  it("draws every kind of row with its commit subject", function()
+    local rows = drawn(assert(worktree.root(repo)))
+    local subjects = {
+      main = "local work",
+      ["rkk/plain"] = "local work",
+      ["rkk/remote-only"] = "remote work",
+      ["rkk/agent-branch"] = "local work",
+      detached = "local work",
+    }
+    for name, subject in pairs(subjects) do
+      assert.truthy(rows[name], name .. " has no row")
+      assert.truthy(rows[name]:find(subject, 1, true), name .. ": " .. rows[name])
+    end
+    assert.truthy(rows["rkk/agent-branch"]:find("fuzzy-otter", 1, true))
+    assert.truthy(rows.detached:find("sleepy-yak", 1, true))
+  end)
+end)
