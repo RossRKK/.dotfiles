@@ -22,6 +22,8 @@ local M = {}
 ---@field agent_worktrees boolean worktrees are named after their agent (util/worktree.lua)
 local options = { agent_worktrees = false }
 
+local name_parts, join_name, label_prefix, tab_label, labels_width
+
 --- Set once at startup, from the environment (init.lua).
 ---@param opts workspace.Options
 function M.setup(opts)
@@ -56,21 +58,52 @@ end
 ---@param tab? integer tabpage handle (default: current)
 ---@return string
 function M.display_name(tab)
-  tab = tab or vim.api.nvim_get_current_tabpage()
+  return join_name(name_parts(tab or vim.api.nvim_get_current_tabpage()), {})
+end
+
+---@alias workspace.NamePart "repo"|"agent"|"branch"|"workspace"
+
+---@class workspace.Name
+---@field parts { part: workspace.NamePart, text: string }[]
+---@field sep string
+
+--- A workspace's display name as the parts a tab label can shed.
+---@param tab integer tabpage handle
+---@return workspace.Name
+function name_parts(tab)
   local cwd = vim.fs.normalize(M.cwd(tab))
   -- package.loaded, not require: no reason to drag the greeter in just to name
   -- a tab, and before its setup there is no report to read anyway.
   local greeter = package.loaded["config.greeter"]
   local report = greeter and greeter.reports[cwd]
-  if report and report.repo then
-    local branch = report.branch or report.head
-    -- An agent worktree is named after its agent, and the branch is whatever it has out now.
-    if options.agent_worktrees and report.git_dir ~= report.common_dir then
-      return table.concat({ report.repo, vim.fs.basename(cwd), branch }, " · ")
-    end
-    return branch and (report.repo .. " - " .. branch) or report.repo
+  if not (report and report.repo) then
+    return { parts = { { part = "workspace", text = M.name(tab) } }, sep = "" }
   end
-  return M.name(tab)
+  local parts = { { part = "repo", text = report.repo } }
+  -- An agent worktree is named after its agent, and the branch is whatever it has out now.
+  local agent = options.agent_worktrees and report.git_dir ~= report.common_dir
+  if agent then
+    parts[#parts + 1] = { part = "agent", text = vim.fs.basename(cwd) }
+  end
+  local branch = report.branch or report.head
+  if branch then
+    parts[#parts + 1] = { part = "branch", text = branch }
+  end
+  return { parts = parts, sep = agent and " · " or " - " }
+end
+
+--- The name without the `dropped` parts, or whole if that would leave nothing.
+---@param name workspace.Name
+---@param dropped table<workspace.NamePart, true>
+---@return string
+function join_name(name, dropped)
+  local kept = {}
+  for _, p in ipairs(name.parts) do
+    if not dropped[p.part] then
+      kept[#kept + 1] = p.text
+    end
+  end
+  return #kept > 0 and table.concat(kept, name.sep) or join_name(name, {})
 end
 
 --- A workspace's number: the key that reaches it (<M-N>, and fishmonger's
@@ -209,9 +242,7 @@ function M.renumber(n)
   end
   vim.api.nvim_tabpage_set_var(tab, "workspace_slot", n)
   sort_tabs()
-  for _, t in ipairs(vim.api.nvim_list_tabpages()) do
-    M.set_label(t)
-  end
+  M.set_labels()
   -- The OS title (plugins/fishmonger.lua) shows the numbers too.
   vim.api.nvim_exec_autocmds("User", { pattern = "WorkspaceRenumbered" })
 end
@@ -306,7 +337,7 @@ local glyph_groups = {}
 --- (fishmonger's hl, e.g. DiagnosticWarn) over the tab tile's own background,
 --- which differs between the selected tile and the rest. Re-derived on every
 --- call rather than cached: it follows colorscheme changes and bufferline
---- setting its groups up late (VeryLazy) for free, and set_label runs on events
+--- setting its groups up late (VeryLazy) for free, and set_labels runs on events
 --- (an agent or title change, a tabpage switch), never on a timer.
 ---@param hl string highlight group carrying the state's fg
 ---@param selected boolean is this the current tabpage's tile
@@ -337,7 +368,13 @@ local function restore_code(selected)
   return "%#" .. name .. "#"
 end
 
---- Paint a tabpage's label on the bufferline's tab indicators: the project name,
+-- What every tab label sheds, first to last, until the strip fits the screen.
+local drop_order = { "repo" } ---@type workspace.NamePart[]
+
+-- bufferline frames each tab name in a padding cell and a separator either side.
+local tab_frame_width = 4
+
+--- Paint every tabpage's label on the bufferline's tab indicators: the project name,
 --- prefixed with the status glyph of each of that tabpage's side terminals, in
 --- that state's colour -- the same icon and highlight the agent view and the
 --- greeter's Agents section use (fishmonger resolves the hook-reported agent
@@ -351,14 +388,48 @@ end
 --- means they must be re-picked when the current tabpage changes, since the
 --- glyph sits on the selected tile's background or an ordinary one. The
 --- TabEnter hook in plugins/fishmonger.lua repaints every label for that.
----@param tab? integer tabpage handle (default: current)
-function M.set_label(tab)
-  tab = tab or vim.api.nvim_get_current_tabpage()
-  if not vim.api.nvim_tabpage_is_valid(tab) then
-    return
+---
+--- All at once because the labels share the width: when they overflow
+--- `columns`, every tab drops the same parts (drop_order), so they read alike.
+function M.set_labels()
+  local current = vim.api.nvim_get_current_tabpage()
+  local tabs = {}
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    tabs[#tabs + 1] =
+      { tab = tab, prefix = label_prefix(tab, tab == current), name = name_parts(tab) }
   end
+  local dropped = {}
+  for _, part in ipairs(drop_order) do
+    if labels_width(tabs, dropped) <= vim.o.columns then
+      break
+    end
+    dropped[part] = true
+  end
+  for _, t in ipairs(tabs) do
+    vim.api.nvim_tabpage_set_var(t.tab, "name", tab_label(t, dropped))
+  end
+  -- Coalesced: an agent change relabels every tabpage, and one redraw shows
+  -- all of them -- per-call redraws re-evaluated the whole bufferline per tab.
+  if not M._redraw_queued then
+    M._redraw_queued = true
+    vim.schedule(function()
+      M._redraw_queued = false
+      pcall(vim.cmd, "redrawtabline")
+    end)
+  end
+end
+
+---@class workspace.TabLabel
+---@field tab integer
+---@field prefix string the number and status glyphs, already tabline-escaped
+---@field name workspace.Name
+
+--- A tabpage's number and its side terminals' status glyphs, ready for the name.
+---@param tab integer
+---@param selected boolean is this the current tabpage's tile
+---@return string
+function label_prefix(tab, selected)
   local fishmonger = package.loaded["fishmonger"]
-  local selected = tab == vim.api.nvim_get_current_tabpage()
   local icons, coloured = {}, false
   if fishmonger then
     -- Each glyph's cell ends in its padding, which also parts the last from the name.
@@ -372,24 +443,32 @@ function M.set_label(tab)
       end
     end
   end
-  -- Escaped because the label lands in the tabline as-is: a directory with a
-  -- literal % in its name must not become a statusline item.
-  local name = M.display_name(tab):gsub("%%", "%%%%")
-  local label = #icons > 0
-      and (table.concat(icons) .. (coloured and restore_code(selected) or "") .. name)
-    or name
+  local glyphs = table.concat(icons) .. (coloured and restore_code(selected) or "")
   -- The number first, where it lines up with the key that reaches it (<M-N>).
   local slot = M.slot(tab)
-  vim.api.nvim_tabpage_set_var(tab, "name", slot and (slot .. " " .. label) or label)
-  -- Coalesced: an agent change relabels every tabpage, and one redraw shows
-  -- all of them -- per-call redraws re-evaluated the whole bufferline per tab.
-  if not M._redraw_queued then
-    M._redraw_queued = true
-    vim.schedule(function()
-      M._redraw_queued = false
-      pcall(vim.cmd, "redrawtabline")
-    end)
+  return slot and (slot .. " " .. glyphs) or glyphs
+end
+
+--- A tab's label with the `dropped` parts of its name left out.
+---@param t workspace.TabLabel
+---@param dropped table<workspace.NamePart, true>
+---@return string
+function tab_label(t, dropped)
+  -- Escaped because the label lands in the tabline as-is: a directory with a
+  -- literal % in its name must not become a statusline item.
+  return t.prefix .. (join_name(t.name, dropped):gsub("%%", "%%%%"))
+end
+
+--- How wide bufferline reserves the tab strip: it measures each raw label, %-codes and all.
+---@param tabs workspace.TabLabel[]
+---@param dropped table<workspace.NamePart, true>
+---@return integer
+function labels_width(tabs, dropped)
+  local width = 0
+  for _, t in ipairs(tabs) do
+    width = width + vim.api.nvim_strwidth(tab_label(t, dropped)) + tab_frame_width
   end
+  return width
 end
 
 --- The workspace tabpage already rooted at `dir`, or nil. Compared after
@@ -451,7 +530,7 @@ function M.open(dir, opts)
   vim.cmd((opts.tab and "tcd " or "cd ") .. vim.fn.fnameescape(dir))
   vim.api.nvim_tabpage_set_var(0, "workspace", vim.fn.fnamemodify(dir, ":t"))
   M.assign_slot(opts.slot)
-  M.set_label() -- name the tab now; the glyphs land as its terminals report in
+  M.set_labels() -- name the tab now; the glyphs land as its terminals report in
 
   -- The editor window for files to open into. Not an empty buffer: the
   -- workspace greeter (config/greeter.lua) — branch status, recent files, and

@@ -197,9 +197,7 @@ function M.cache_report(root, report)
   -- The tab labels carry the same "<repo> - <branch>" name
   -- (workspace.display_name reads this cache), so a fresh report -- the
   -- first one, or a checkout moving the branch -- has to repaint them too.
-  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
-    require("config.workspace").set_label(tab)
-  end
+  require("config.workspace").set_labels()
   -- The OS title carries the same names (see plugins/fishmonger.lua), but
   -- its repaints hang off fishmonger and tabpage events, none of which fire
   -- for a checkout. Announce the fresh report so it can repaint too.

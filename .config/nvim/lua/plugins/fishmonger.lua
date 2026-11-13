@@ -106,13 +106,13 @@ return {
 
       vim.api.nvim_create_autocmd("User", {
         pattern = "FishmongerTabsChanged",
-        callback = function(ev)
-          -- The event's own tabpage gets its bufferline label repainted (project
-          -- name + glyphs, see config.workspace.set_label) -- that's how a
+        callback = function()
+          -- The bufferline labels are repainted (project name + glyphs, see
+          -- config.workspace.set_labels) -- that's how a
           -- background workspace surfaces "the agent here wants you" inside
           -- nvim. The title covers every tabpage, so background events repaint
           -- it too rather than returning early.
-          require("config.workspace").set_label(ev.data.tab)
+          require("config.workspace").set_labels()
           queue_title()
         end,
       })
@@ -124,16 +124,14 @@ return {
       --
       -- The bufferline labels repaint here too: their glyph colours are baked
       -- against the tile's background (selected vs not, see
-      -- config.workspace.set_label), so switching tabpages has to re-pick them
-      -- even though no agent state moved.
+      -- config.workspace.set_labels), so switching tabpages has to re-pick them
+      -- even though no agent state moved. VimResized because they fit the width.
       vim.api.nvim_create_autocmd(
-        { "VimEnter", "TabEnter", "TabNewEntered", "TabClosed", "DirChanged" },
+        { "VimEnter", "TabEnter", "TabNewEntered", "TabClosed", "DirChanged", "VimResized" },
         {
           callback = vim.schedule_wrap(function()
             local workspace = require("config.workspace")
-            for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
-              workspace.set_label(tab)
-            end
+            workspace.set_labels()
             refresh_title()
           end),
         }

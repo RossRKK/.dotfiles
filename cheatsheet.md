@@ -255,7 +255,8 @@ Tab labels sit at the **right end of the bufferline**, showing the project name 
 prefixed with the agent status icon of each of that project's Claude Code
 terminals (the same coloured icons the agent view and greeter use), so a
 background workspace waiting on you says so — in that state's colour — without
-switching to it. (The
+switching to it. When the labels are wider than the screen, every tab drops
+its repo name and keeps the agent and branch. (The
 OS window title still tracks the workspace you're _in_.)
 
 Opening a workspace starts **Claude in terminal 1**, continuing that directory's

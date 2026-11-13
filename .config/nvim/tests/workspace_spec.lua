@@ -2,7 +2,7 @@
 
 local assert = require("luassert")
 
-describe("workspace.set_label", function()
+describe("workspace.set_labels", function()
   --- The tab label with one terminal showing `icon`, as it shows on screen.
   local function label_with(icon)
     local real = package.loaded["fishmonger"]
@@ -11,7 +11,7 @@ describe("workspace.set_label", function()
         return { { slot = 1, icon = icon, hl = "Comment" } }
       end,
     }
-    local ok, err = pcall(require("config.workspace").set_label)
+    local ok, err = pcall(require("config.workspace").set_labels)
     package.loaded["fishmonger"] = real
     assert(ok, err)
     return (vim.t.name:gsub("%%#[^#]*#", ""))
@@ -21,6 +21,85 @@ describe("workspace.set_label", function()
     local narrow, wide = label_with("✓"), label_with("⏳")
     assert.truthy(wide:find("⏳", 1, true))
     assert.equals(vim.fn.strdisplaywidth(narrow), vim.fn.strdisplaywidth(wide))
+  end)
+end)
+
+-- Full labels take 54 + 22 = 76 columns in the tab strip; without the repo, 45 + 10 = 55.
+describe("workspace.set_labels fitting the screen", function()
+  local ws, root, saved, columns
+
+  --- Number the current tabpage as workspace `slot` on a checkout `report` describes.
+  local function checkout(dir, report)
+    vim.fn.mkdir(dir, "p")
+    vim.cmd.tcd(vim.fn.fnameescape(dir))
+    ws.assign_slot()
+    package.loaded["config.greeter"].reports[vim.fs.normalize(dir)] = report
+  end
+
+  --- Every tab's label, left to right, after relabelling at `width` columns.
+  local function labels_at(width)
+    vim.o.columns = width
+    ws.set_labels()
+    return vim.tbl_map(function(tab)
+      return vim.api.nvim_tabpage_get_var(tab, "name")
+    end, vim.api.nvim_list_tabpages())
+  end
+
+  before_each(function()
+    pcall(vim.cmd, "tabonly")
+    vim.t.workspace_slot = nil
+    saved =
+      { greeter = package.loaded["config.greeter"], fishmonger = package.loaded["fishmonger"] }
+    package.loaded["config.greeter"] = { reports = {} }
+    package.loaded["fishmonger"] = nil
+    package.loaded["config.workspace"] = nil
+    ws = require("config.workspace")
+    ws.setup({ agent_worktrees = true })
+    columns = vim.o.columns
+    root = vim.fn.tempname()
+    checkout(root .. "/widget/.worktrees/helpful-teal", {
+      repo = "widget",
+      branch = "rkk/feature-cache-test-2",
+      git_dir = "/r/.git/worktrees/helpful-teal",
+      common_dir = "/r/.git",
+    })
+    vim.cmd("tabnew")
+    checkout(
+      root .. "/.dotfiles",
+      { repo = ".dotfiles", branch = "main", git_dir = "/d/.git", common_dir = "/d/.git" }
+    )
+  end)
+
+  after_each(function()
+    vim.o.columns = columns
+    ws.setup({ agent_worktrees = false })
+    package.loaded["config.greeter"] = saved.greeter
+    package.loaded["fishmonger"] = saved.fishmonger
+    pcall(vim.cmd, "tabonly")
+    vim.fn.delete(root, "rf")
+  end)
+
+  it("keeps the repo on every tab when they all fit", function()
+    assert.same(
+      { "1 widget · helpful-teal · rkk/feature-cache-test-2", "2 .dotfiles - main" },
+      labels_at(76)
+    )
+  end)
+
+  it("drops the repo from every tab when they don't, and keeps the rest", function()
+    assert.same({ "1 helpful-teal · rkk/feature-cache-test-2", "2 main" }, labels_at(75))
+  end)
+
+  it("drops nothing more when they still don't fit without the repo", function()
+    assert.same({ "1 helpful-teal · rkk/feature-cache-test-2", "2 main" }, labels_at(30))
+  end)
+
+  it("gives the repo back once the screen widens again", function()
+    labels_at(30)
+    assert.same(
+      { "1 widget · helpful-teal · rkk/feature-cache-test-2", "2 .dotfiles - main" },
+      labels_at(200)
+    )
   end)
 end)
 
@@ -356,7 +435,7 @@ describe("workspace.open in the background", function()
     package.loaded["fishmonger"] = { show = function(_, _) end }
     package.loaded["config.workspace"] = nil
     ws = require("config.workspace")
-    ws.set_label = function() end -- the tab label reads fishmonger and bufferline
+    ws.set_labels = function() end -- the tab label reads fishmonger and bufferline
     ws.assign_slot()
     dir = vim.fn.tempname()
     vim.fn.mkdir(dir, "p")
