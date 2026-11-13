@@ -467,10 +467,7 @@ end
 --- session still can't accumulate an inotify watch per project ever visited.
 --- Called from the TabClosed reap in setup().
 function M.unwatch_closed()
-  local live = {}
-  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
-    live[vim.fs.normalize(require("config.workspace").cwd(tab))] = true
-  end
+  local live = M.live_roots()
   for root, handles in pairs(watchers) do
     if not live[root] then
       for _, handle in ipairs(handles) do
@@ -480,6 +477,17 @@ function M.unwatch_closed()
       watchers[root] = nil
     end
   end
+end
+
+--- The workspace roots some tabpage is rooted at: a root's greeter, watchers
+--- and fetches live as long as one is.
+---@return table<string, true> normalized root -> true
+function M.live_roots()
+  local live = {}
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    live[vim.fs.normalize(require("config.workspace").cwd(tab))] = true
+  end
+  return live
 end
 
 --- Open a file from the overview in the main editor window (the greeter's own
@@ -1214,10 +1222,7 @@ function M.setup()
   vim.api.nvim_create_autocmd("TabClosed", {
     group = group,
     callback = function()
-      local live = {}
-      for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
-        live[vim.fs.normalize(require("config.workspace").cwd(tab))] = true
-      end
+      local live = M.live_roots()
       for root, buf in pairs(M.buffers) do
         if not live[root] then
           M.buffers[root] = nil
