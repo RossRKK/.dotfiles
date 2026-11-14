@@ -38,10 +38,10 @@ making any edits.
 
 # Environment
 
-This is nixos on WSL. That means you can install new tools using nix-shell on
-the fly. My editor is neovim, my neovim config is managed by home-manger in
-`~/.dotfiles`. If a tool is being used frequently suggest adding it to my
-environment.
+This is nixos (at work on WSL). That means you can install new tools using
+nix-shell on the fly. My editor is neovim, my neovim config is managed by
+home-manger in `~/.dotfiles`. If a tool is being used frequently suggest adding
+it to my environment.
 
 When I suggest invasive changes to how Claude Code behaves, prefer a mod (the
 plugin-authoring skill) over hooks or wrapper scripts.
