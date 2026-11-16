@@ -105,6 +105,8 @@ comment or a conversation -- add a one-line entry here with a short why.
 - Diagrams in docs aren't mermaid; hand-drawn SVG or none.
 - Identity from names. Don't work out what a resource is for (e.g. the default
   slot) by matching its name: expose a role or kind field and read that.
+- Specs that name their consumers. A spec states what the service promises any
+  client, not who calls it or why.
 
 # Code I do want
 
