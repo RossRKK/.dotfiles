@@ -19,11 +19,13 @@ let
         buildInputs = old.buildInputs ++ lib.optional (deps ? GHOSTTY_URL) libghostty-vt;
         # The tree-sitter functional tests take longer than the build.
         doCheck = false;
-        # nixpkgs' wrapper rewrites nvim.desktop, which master renamed.
-        postInstall = (old.postInstall or "") + ''
-          cd $out/share/applications
-          [ -e nvim.desktop ] || ln -s org.neovim.nvim.desktop nvim.desktop
-        '';
+        # nixpkgs' wrapper rewrites nvim.desktop (Linux only; upstream skips it on Apple), which master renamed.
+        postInstall =
+          (old.postInstall or "")
+          + lib.optionalString prev.stdenv.hostPlatform.isLinux ''
+            cd $out/share/applications
+            [ -e nvim.desktop ] || ln -s org.neovim.nvim.desktop nvim.desktop
+          '';
       });
 
   deps = parseDeps (builtins.readFile "${src}/cmake.deps/deps.txt");
