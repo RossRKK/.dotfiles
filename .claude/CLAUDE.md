@@ -103,6 +103,8 @@ comment or a conversation -- add a one-line entry here with a short why.
 - Don't re-check what another component already guarantees.
 - No sleeps or timing races in tests.
 - Diagrams in docs aren't mermaid; hand-drawn SVG or none.
+- Identity from names. Don't work out what a resource is for (e.g. the default
+  slot) by matching its name: expose a role or kind field and read that.
 
 # Code I do want
 
