@@ -56,6 +56,25 @@ function M.statusline()
   return { rows = rows, bottom = vim.o.lines - vim.o.cmdheight }
 end
 
+--- The current tab's file tree, once it has drawn the node for `path`.
+---@param path string
+---@return neotree.State?
+function M.tree_with(path)
+  local state = require("neo-tree.sources.manager").get_state("filesystem")
+  if state.tree and state.tree:get_node(path) then
+    return state
+  end
+end
+
+--- Open `path` as <CR> on its node in the tree does, from wherever focus is now.
+---@param path string
+function M.open_from_tree(path)
+  local state = assert(M.tree_with(path))
+  vim.api.nvim_set_current_win(state.winid)
+  require("neo-tree.ui.renderer").focus_node(state, path)
+  require("neo-tree.sources.filesystem.commands").open(state)
+end
+
 --- The workspace tabs, by workspace number.
 ---@return integer[]
 function M.workspaces()

@@ -143,6 +143,35 @@ describe("a workspace tab", function()
   end)
 
   it(
+    "has its greeter and todo split replaced by a file opened from neo-tree after visiting the split",
+    function()
+      local dir = repo("files")
+      local readme = dir .. "/README.md"
+      vim.fn.writefile({ "hello" }, readme)
+      start()
+      open_from_start_screen(dir)
+      visit(1)
+      child(
+        "local todo = require('config.todo'); vim.api.nvim_set_current_win(todo.window(0, todo.FILE))"
+      )
+      assert.is_true(vim.wait(5000, function()
+        return child("return P.tree_with(...) ~= nil", readme)
+      end, 50))
+      child("P.open_from_tree(...)", readme)
+      local file_only = want.shape:gsub("col%[snacks_dashboard, markdown%]", "markdown")
+      vim.wait(5000, function()
+        return child("return P.shape(0)") == file_only
+      end, 50)
+      assert.same(
+        { shape = file_only, main = readme },
+        child(
+          "return { shape = P.shape(0), main = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(require('config.windows').main_window())) }"
+        )
+      )
+    end
+  )
+
+  it(
     "restored with the start screen's s, its tab and the background ones, is laid out as by hand",
     function()
       save({ repo("one"), repo("two"), repo("three") })

@@ -8,9 +8,9 @@ local PLACEHOLDER = "main_placeholder"
 -- Window role: a split beside the main window that a file puts away (the todo list); holds the buffer it was opened for.
 local COMPANION = "main_companion"
 
-local is_file
+local is_file, move_file
 
---- Put a tab's companion windows away whenever a file opens in its main window.
+--- Replace the main area with any file that opens in its main window or a companion.
 function M.setup()
   vim.api.nvim_create_autocmd("BufWinEnter", {
     group = vim.api.nvim_create_augroup("main_companions", { clear = true }),
@@ -26,11 +26,24 @@ function M.setup()
   })
 end
 
---- If `win` holds a file and is its tab's main window, close the tab's companions.
+--- A file now in `win`, the main window or a companion, takes the main window and the tab's companions close.
 ---@param win integer
 function M.replace_placeholders(win)
   local tab = vim.api.nvim_win_get_tabpage(win)
-  if not is_file(vim.api.nvim_win_get_buf(win)) or win ~= M.main_window(tab) then
+  local buf = vim.api.nvim_win_get_buf(win)
+  local own = vim.w[win][COMPANION]
+  if not is_file(buf) or own == buf then
+    return
+  end
+  local main = M.main_window(tab)
+  if own ~= nil then
+    if not main then
+      -- The companion is all the main area this tab has, so it becomes the main window.
+      vim.w[win][COMPANION] = nil
+      return
+    end
+    move_file(win, main)
+  elseif win ~= main then
     return
   end
   for _, companion in ipairs(M.companions(tab)) do
@@ -126,6 +139,20 @@ function M.goto_main_window()
   end
   vim.cmd("stopinsert") -- no-op unless we're in terminal insert mode
   vim.api.nvim_set_current_win(win)
+end
+
+--- Show `from`'s buffer in `to` where `from` had it scrolled, taking focus along if `from` had it.
+---@param from integer
+---@param to integer
+function move_file(from, to)
+  local view = vim.api.nvim_win_call(from, vim.fn.winsaveview)
+  vim.api.nvim_win_set_buf(to, vim.api.nvim_win_get_buf(from))
+  vim.api.nvim_win_call(to, function()
+    vim.fn.winrestview(view)
+  end)
+  if vim.api.nvim_get_current_win() == from then
+    vim.api.nvim_set_current_win(to)
+  end
 end
 
 --- An ordinary, listed file buffer.

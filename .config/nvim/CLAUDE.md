@@ -33,12 +33,12 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `diffsize_spec.lua` | PR diff size without generated files (`git check-attr` parsing, lockfiles) |
 | `background_spec.lua` | side-terminal shells wrapped into systemd's `background.slice` only when a user manager is running |
 | `sidebar_reveal_spec.lua` | `<leader>v` reveals in the tree without re-rooting it or `:tcd`-ing the tab; files outside the workspace float at their project root. Loads real neo-tree |
-| `workspace_tabs_spec.lua` | workspace tabs opened from the start screen, restored (`s`, `:WorkspaceRestore`) or opened in one burst each get the hand-opened layout (winlayout + filetypes) and one statusline at the screen bottom. Drives a child nvim with the full config on a pty, terminal 1 running sh |
+| `workspace_tabs_spec.lua` | workspace tabs opened from the start screen, restored (`s`, `:WorkspaceRestore`) or opened in one burst each get the hand-opened layout (winlayout + filetypes) and one statusline at the screen bottom; a file opened from neo-tree after visiting the todo split replaces the greeter and the split. Drives a child nvim with the full config on a pty, terminal 1 running sh |
 | `buffers_spec.lua` | the current buffer stays on the bar beside the workspace tabs: their labels shorten a step at a time (repo, then branch) only once strip and tile no longer fit. Loads real bufferline |
 | `edgy_spec.lua` | edgy views sized by another plugin's windows: fishmonger's task list takes the height fishmonger asks for |
 | `api_linter_spec.lua` | api-linter JSON to diagnostics; proto root (buf module, else git checkout, else the file's dir); the real api-linter (on PATH, common protos linked by home-manager) flags a camelCase field, resolves `google/api` imports, ignores a repo's opt-outs, skips the Java-option rules |
 | `options_spec.lua` | the mouse starts off (`<leader>um` turns it on) |
-| `todo_spec.lua` | the todo toggle opens below the main window (else the current non-panel window) and focuses it; the split closes when a file opens in the main window, not for a terminal, an unlisted buffer, or a float |
+| `todo_spec.lua` | the todo toggle opens below the main window (else the current non-panel window) and focuses it; the split closes when a file opens in the main window, not for a terminal, an unlisted buffer, or a float; a file opened in the split itself (`:e`, a set buffer) moves to the greeter's window and the split closes, reloading the list doesn't |
 | `windows_spec.lua` | main-window routing: a file window first, else a terminal in the main area (never the side panel or a float) |
 | `neotree_leak_spec.lua` | the pinned neo-tree doesn't leak timers/process handles across renders. Loads the real plugin (and its git status): it guards the lazy pin, not our code. `NEOTREE_PATH=<checkout>` tests another build |
 

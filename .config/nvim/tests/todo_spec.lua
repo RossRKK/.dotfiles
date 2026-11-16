@@ -67,6 +67,40 @@ describe("todo split closing", function()
     assert.equals(todo_win, todo.window(0, todo_file))
   end)
 
+  -- Every opener ends in one of these: neo-tree and :e edit the window they land in, others set its buffer.
+  for route, open in pairs({
+    [":edit in the split"] = function(split, path)
+      vim.api.nvim_set_current_win(split)
+      vim.cmd.edit(vim.fn.fnameescape(path))
+    end,
+    ["the split's buffer set"] = function(split, path)
+      vim.api.nvim_win_set_buf(split, vim.fn.bufadd(path))
+      vim.bo[vim.fn.bufnr(path)].buflisted = true
+    end,
+  }) do
+    it(
+      "hands a file opened in the split (" .. route .. ") to the greeter's window and closes",
+      function()
+        local greeter = vim.api.nvim_create_buf(true, true)
+        windows.mark_placeholder(greeter)
+        vim.api.nvim_win_set_buf(main, greeter)
+        flush()
+        local path = vim.fn.tempname()
+        open(todo_win, path)
+        flush()
+        assert.same({ main }, vim.api.nvim_tabpage_list_wins(0))
+        assert.equals(vim.fn.bufnr(path), vim.api.nvim_win_get_buf(main))
+      end
+    )
+  end
+
+  it("stays when the list is reloaded in its own split", function()
+    vim.api.nvim_set_current_win(todo_win)
+    vim.cmd.edit()
+    flush()
+    assert.equals(todo_win, todo.window(0, todo_file))
+  end)
+
   it("stays for a file opened in a float", function()
     local float = vim.api.nvim_open_win(file_buf(), true, { relative = "editor", row = 1, col = 1, width = 20, height = 5 })
     flush()

@@ -67,12 +67,10 @@ return {
         Snacks.rename.on_rename_file(args.source, args.destination)
       end
 
-      -- neo-tree won't replace a terminal (the list below), so with a <C-b>t
-      -- terminal as the main window it would split; open over that terminal.
+      -- neo-tree targets the last window used (the todo split, say) and splits beside a <C-b>t terminal; config.windows decides instead.
       local function on_file_open_requested(args)
-        local windows = require("config.windows")
-        local win = windows.main_window()
-        if args.open_cmd ~= "edit" or not win or not windows.is_main_terminal(win) then
+        local win = require("config.windows").target_window(require("neo-tree").get_prior_window())
+        if args.open_cmd ~= "edit" or not win then
           return
         end
         vim.api.nvim_set_current_win(win)
