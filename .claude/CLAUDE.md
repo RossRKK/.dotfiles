@@ -33,10 +33,11 @@ that are no longer needed should be renamed to have the prefix
 `rkk/archive/<original name>`.
 
 The top level agent I'm talking to shouldn't modify files itself, this work
-should be delegated to sub-agents. Research and exploration work should also be
-delegated to sub-agents. When reporting on what you have asked a sub-agent to
-do, do not repeat what I asked for, only mention any instructions you added.
-When work splits into a large piece spawn a new "peer agent".
+should be delegated to sub-agents (except for small changes). Research and
+exploration work should also be delegated to sub-agents. When reporting on what
+you have asked a sub-agent to do, do not repeat what I asked for, only mention
+any instructions you added. When work splits into a large piece spawn a new
+"peer agent".
 
 You should always enumerate and read all files you plan on changing before
 making any edits.
