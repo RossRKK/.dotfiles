@@ -594,6 +594,51 @@ describe("worktree.remove", function()
     assert.equals(repo, vim.fn.getcwd(-1, -1))
     assert.is_true(gone())
   end)
+
+  -- Deleting the tree before its tab makes neo-tree `:bdelete` the landed tab's buffer.
+  it("leaves plugin scratch buffers to close with the tab, sparing the tab it lands in", function()
+    local lazy = vim.fn.stdpath("data") .. "/lazy/"
+    for _, plugin in ipairs({ "nui.nvim", "plenary.nvim", "neo-tree.nvim" }) do
+      vim.opt.runtimepath:prepend(lazy .. plugin)
+    end
+    require("neo-tree").setup({
+      log_to_file = false,
+      enable_git_status = false,
+      filesystem = { bind_to_cwd = false, use_libuv_file_watcher = false },
+    })
+    vim.cmd.edit(vim.fn.fnameescape(repo .. "/README"))
+    local landed = vim.api.nvim_get_current_buf()
+    open_tab(wt)
+    vim.cmd("enew")
+    require("neo-tree.command").execute({
+      action = "show",
+      source = "filesystem",
+      position = "left",
+      dir = wt,
+    })
+    local tree
+    vim.wait(3000, function()
+      tree = vim.iter(vim.api.nvim_list_bufs()):find(function(buf)
+        return vim.bo[buf].filetype == "neo-tree"
+      end)
+      return tree ~= nil
+    end)
+    assert.is_not_nil(tree, "neo-tree never opened")
+    assert.is_true(vim.startswith(vim.api.nvim_buf_get_name(tree), wt .. "/"))
+
+    worktree.remove()
+    local drained = false -- queued behind anything remove() scheduled, such as the guard's :bdelete
+    vim.schedule(function()
+      drained = true
+    end)
+    assert.is_true(vim.wait(1000, function()
+      return drained
+    end))
+
+    assert.is_true(gone())
+    assert.equals(landed, vim.api.nvim_get_current_buf())
+    assert.is_true(vim.bo[landed].buflisted, "the landed tab's buffer was deleted")
+  end)
 end)
 
 -- Every kind of <M-b>w row through snacks' real git_branch formatter, which

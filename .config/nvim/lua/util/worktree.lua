@@ -619,12 +619,14 @@ function M.inside(path, dir)
   return path == dir or vim.startswith(path, dir .. "/")
 end
 
+--- Files and terminals in `dir`; a plugin scratch buffer named there closes with its tab.
 ---@param dir string
 ---@return integer[]
 local function buffers_inside(dir)
   return vim.tbl_filter(function(buf)
     local name = vim.api.nvim_buf_get_name(buf)
-    return name ~= "" and M.inside(M.buf_path(name), dir)
+    local lives_on_disk = vim.bo[buf].buftype == "" or vim.bo[buf].buftype == "terminal"
+    return lives_on_disk and name ~= "" and M.inside(M.buf_path(name), dir)
   end, vim.api.nvim_list_bufs())
 end
 
