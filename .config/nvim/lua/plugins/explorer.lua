@@ -142,6 +142,8 @@ return {
           follow_current_file = { enabled = true },
           -- The tree is the workspace's: navigating it must not :tcd the tab.
           bind_to_cwd = false,
+          -- Agents, git and shells change files behind nvim's back; without it only a write in nvim refreshes.
+          use_libuv_file_watcher = true,
           -- Don't take over the window when nvim opens on a directory; the
           -- VimEnter handler below arranges the panel explicitly.
           hijack_netrw_behavior = "disabled",
