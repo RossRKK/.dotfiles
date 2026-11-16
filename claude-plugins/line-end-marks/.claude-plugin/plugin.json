@@ -1,5 +1,5 @@
 {
   "name": "line-end-marks",
   "version": "0.1.0",
-  "description": "Ends every real line of Claude's replies with a pilcrow (¶), so fishmonger's yank can tell Claude's wraps from real newlines"
+  "description": "Ends every real line of Claude's replies with a return arrow (↵), so fishmonger's yank can tell Claude's wraps from real newlines"
 }

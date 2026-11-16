@@ -1,7 +1,7 @@
 import type { Register } from 'claude-code'
 
-// A plain pilcrow: a zero-width mark spoils the glyph before it, and the renderer refuses SGR to dim one.
-export const MARK = '\u00B6'
+// A plain return arrow (U+21B5): a zero-width mark spoils the glyph before it, and the renderer refuses SGR to dim one.
+export const MARK = '\u21B5'
 
 export const register: Register = (on) => {
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {

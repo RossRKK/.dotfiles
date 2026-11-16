@@ -10,7 +10,7 @@ const cases: [string, string, string][] = [
   ['leaves table rows alone', '| a | b |\n|---|---|', '| a | b |\n|---|---|'],
   ['leaves horizontal rules alone', 'a\n---\n* * *', `a${MARK}\n---\n* * *`],
   ['marks a heading', '## Title', `## Title${MARK}`],
-  ['marks a line that already ends in a pilcrow', 'see ¶', `see ¶${MARK}`],
+  ['marks a line that already ends in a return arrow', 'see ↵', `see ↵${MARK}`],
 ]
 
 for (const [name, input, want] of cases) {
