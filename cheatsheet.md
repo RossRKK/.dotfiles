@@ -6,7 +6,7 @@
 - [Workspaces](#workspaces) — one project per tab · `Space+t`
 - [Navigation](#navigation) — `g` go-to · `]`/`[` next/prev · Flash jumps
 - [Find and lists](#find-and-lists) — `Space+f` find · `Space+l` Trouble
-- [Code and diagnostics](#code-and-diagnostics) — `Space+c` action · `Space+rn` rename · `Space+d` diagnostics · `Space+u` undo
+- [Code and diagnostics](#code-and-diagnostics) — `Space+c` action · `Space+rn` rename · `Space+d` diagnostics · `Space+u` undo · `:Videre`
 - [Tests and debugging](#tests-and-debugging) — `Space+T` neotest · dap debug
 - [Git](#git) — `Space+g` hunks · merge conflicts
 - [Branch review](#branch-review) — review mode · review queue · my PRs · PR comments
@@ -521,6 +521,13 @@ the LSP formatter.
 | `Space+u` | Toggle the undo-tree panel (branching history)  |
 
 Undo is persisted to disk (`undofile`), so the tree survives restarts.
+
+### :Videre — Data as a graph
+
+`:Videre` in a JSON, YAML or TOML buffer opens [videre](https://github.com/Owen-Dechow/videre.nvim)
+in a split: nested tables drawn as linked boxes, editable in place. `g?` lists
+its keys (`L`/`H` follow a link / back, `E` expand, `R` re-root), `q` closes.
+Helm chart templates (filetype `helm`) aren't picked up.
 
 ---
 
