@@ -9,13 +9,9 @@
 -- LSP navigation pickers (gd/gi/gr) live in lua/plugins/lsp.lua (they attach
 -- per-buffer on LspAttach). TODO search is TodoTrouble; see todo-comments.lua.
 
--- Snacks only opens over file windows, and with none it takes any split (the
--- side panel, say); a <C-b>t terminal as the main window should be the target.
+-- Snacks takes any file window (the todo split, say), else any split (the side panel); config.windows says which is the target.
 local function target_main_window(picker)
-  local windows = require("config.windows")
-  if not windows.is_editor_window(picker.main) then
-    picker.main = windows.main_window() or picker.main
-  end
+  picker.main = require("config.windows").target_window(picker.main) or picker.main
 end
 
 return {

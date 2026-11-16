@@ -1,6 +1,6 @@
 -- The personal todo list (plugins/checkmate.lua) as a split under a tab's main
 -- window: shown by the greeter (config/greeter.lua) or toggled by hand, and put
--- away when a file takes the main window over, as the greeter is.
+-- away when a file takes the main window over (a companion, config/windows.lua).
 local M = {}
 
 -- Outside the dotfiles: the repo is public.
@@ -23,33 +23,6 @@ function M.toggle(path)
   vim.api.nvim_set_current_win(M.open_below(anchor, path))
 end
 
---- Close the todo split whenever a file opens in a tab's main window; it stays
---- away until toggled back or the greeter shows it again.
----@param path string the todo file
-function M.setup(path)
-  vim.api.nvim_create_autocmd("BufWinEnter", {
-    group = vim.api.nvim_create_augroup("todo_split", { clear = true }),
-    callback = function(ev)
-      local win = vim.api.nvim_get_current_win()
-      -- A main-area terminal is a main window too, and must not close the list.
-      if vim.bo[ev.buf].buftype ~= "" then
-        return
-      end
-      -- Deferred: closing a window mid-command pulls the layout from under it.
-      vim.schedule(function()
-        if not (vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == ev.buf) then
-          return
-        end
-        local tab = vim.api.nvim_win_get_tabpage(win)
-        local todo_win = M.window(tab, path)
-        if todo_win and win == require("config.windows").main_window(tab) then
-          vim.api.nvim_win_close(todo_win, false)
-        end
-      end)
-    end,
-  })
-end
-
 --- The window in `tab` showing the todo list, or nil.
 ---@param tab integer tabpage handle (0: current)
 ---@param path string the todo file
@@ -68,14 +41,14 @@ end
 ---@param path string the todo file
 ---@return integer the todo window
 function M.open_below(win, path)
-  -- Unlisted (bufadd's default), so config.windows never routes a file into
-  -- this split. A missing file is a new buffer that the first save creates.
+  -- A missing file is a new buffer that the first save creates.
   local todo_win = vim.api.nvim_open_win(vim.fn.bufadd(path), false, {
     split = "below",
     win = win,
     height = math.max(6, math.floor(vim.api.nvim_win_get_height(win) / 3)),
   })
   vim.wo[todo_win].winfixheight = true
+  require("config.windows").mark_companion(todo_win)
   return todo_win
 end
 

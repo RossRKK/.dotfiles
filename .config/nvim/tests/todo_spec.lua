@@ -3,6 +3,7 @@
 
 local assert = require("luassert")
 local todo = require("config.todo")
+local windows = require("config.windows")
 
 local todo_file = vim.fs.normalize(vim.fn.tempname() .. "-todo.md")
 
@@ -28,7 +29,7 @@ describe("todo split closing", function()
 
   before_each(function()
     vim.cmd("silent! only!")
-    todo.setup(todo_file)
+    windows.setup()
     main = vim.api.nvim_get_current_win()
     vim.api.nvim_win_set_buf(main, file_buf())
     flush()
@@ -37,7 +38,7 @@ describe("todo split closing", function()
   end)
 
   after_each(function()
-    vim.api.nvim_del_augroup_by_name("todo_split")
+    vim.api.nvim_del_augroup_by_name("main_companions")
   end)
 
   it("survives its own opening", function()

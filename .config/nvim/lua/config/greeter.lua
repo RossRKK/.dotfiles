@@ -1018,6 +1018,7 @@ function M.open(win)
   -- Tagged before open() so the bufferline's filter and sort see it on the very
   -- first redraw, rather than showing it as a stray "[No Name]" for a frame.
   vim.b[buf].greeter_root = root
+  require("config.windows").mark_placeholder(buf)
   M.buffers[root] = buf
 
   -- Retire an outgoing dashboard BEFORE opening ours, never during. Every snacks
