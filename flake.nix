@@ -11,7 +11,8 @@
     # and <script> blocks otherwise); take them from unstable until stable
     # catches up. Same for openspec: 26.05 ships 1.4.1, ten minor
     # releases behind upstream. And api-linter: 26.05 ships 2.3.1, behind
-    # the 2.4 line a work repo's pre-commit hook pins.
+    # the 2.4 line a work repo's pre-commit hook pins. And neovide: 26.05's
+    # 0.16.2 fails to parse the API info of the 0.13 neovim built here.
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
@@ -60,6 +61,7 @@
             svelte-language-server = pkgs-unstable.svelte-language-server;
             openspec = pkgs-unstable.openspec;
             api-linter = pkgs-unstable.api-linter;
+            neovide = pkgs-unstable.neovide;
             claude-code = claude-code.packages.${system}.default;
             kache = kache.packages.${system}.default;
           })
