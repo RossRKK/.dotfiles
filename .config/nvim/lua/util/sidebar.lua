@@ -36,10 +36,18 @@ function M.open()
   vim.cmd("Neotree filesystem show left")
 end
 
--- Re-read the tree from disk after files appeared under it outside nvim; a tree
--- in another tabpage re-reads when that tab is next entered.
+-- Re-read this tabpage's tree from disk; neo-tree only marks other tabs' trees dirty, so setup() re-reads each on entry.
 function M.refresh()
   require("neo-tree.sources.manager").refresh("filesystem")
+end
+
+--- Re-read a tab's tree whenever the tab is entered: neo-tree neither re-reads
+--- a dirty tree on return nor redoes a render it dropped because its tab was left.
+function M.setup()
+  vim.api.nvim_create_autocmd("TabEnter", {
+    group = vim.api.nvim_create_augroup("sidebar_refresh", { clear = true }),
+    callback = M.refresh,
+  })
 end
 
 -- Close the docked neo-tree window. The outline float is left alone -- it

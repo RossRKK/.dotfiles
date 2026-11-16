@@ -33,7 +33,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `diffsize_spec.lua` | PR diff size without generated files (`git check-attr` parsing, lockfiles) |
 | `background_spec.lua` | side-terminal shells wrapped into systemd's `background.slice` only when a user manager is running |
 | `sidebar_reveal_spec.lua` | `<leader>v` reveals in the tree without re-rooting it or `:tcd`-ing the tab; files outside the workspace float at their project root. Loads real neo-tree |
-| `sidebar_refresh_spec.lua` | the docked tree shows a file created outside nvim (libuv watcher). Runs the real `plugins/explorer.lua` config() against the installed neo-tree |
+| `sidebar_refresh_spec.lua` | the docked tree shows a file created outside nvim (libuv watcher), and re-reads on entering its tab: a refresh issued while the tab was in the background, or one whose render neo-tree dropped because the tab was left mid-refresh. Runs the real `plugins/explorer.lua` config() against the installed neo-tree |
 | `workspace_tabs_spec.lua` | workspace tabs opened from the start screen, restored (`s`, `:WorkspaceRestore`) or opened in one burst each get the hand-opened layout (winlayout + filetypes) and one statusline at the screen bottom; a file opened from neo-tree after visiting the todo split replaces the greeter and the split. Drives a child nvim with the full config on a pty, terminal 1 running sh |
 | `buffers_spec.lua` | the current buffer stays on the bar beside the workspace tabs: their labels shorten a step at a time (repo, then branch) only once strip and tile no longer fit. Loads real bufferline |
 | `edgy_spec.lua` | edgy views sized by another plugin's windows: fishmonger's task list takes the height fishmonger asks for |
