@@ -1,8 +1,7 @@
 import type { Register } from 'claude-code'
 
-// Zero-width non-joiner: Claude's renderer keeps it (it strips U+2060) and
-// nvim's terminal stores it without giving it a cell.
-export const MARK = '\u200C'
+// A plain pilcrow: a zero-width mark spoils the glyph before it, and the renderer refuses SGR to dim one.
+export const MARK = '\u00B6'
 
 export const register: Register = (on) => {
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {

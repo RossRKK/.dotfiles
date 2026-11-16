@@ -936,8 +936,8 @@ view or `Alt+N` does). Its next turn brings the tick back.
 
 **Yanking Claude's replies.** A yank from a terminal comes back as the lines
 Claude wrote, not the rows it wrapped them into: the `line-end-marks` plugin
-ends every real line of a reply with an invisible marker, and the yank joins
-the rows that lack one. Tool output and tables are left as they are.
+ends every real line of a reply with a pilcrow (¶), and the yank drops it and
+joins the rows that lack one. Tool output and tables are left as they are.
 
 **Background tasks.** When an agent starts background commands (Claude's
 `run_in_background` Bash), a list opens under its terminal with one line per
