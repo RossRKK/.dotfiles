@@ -27,6 +27,11 @@ When a prototype of a new feature has been built, never use it directly as a
 reference for the new build. The learnings from it can come from the user or
 from handover notes, specs and designs.
 
+Personal branches must begin with the prefix `rkk/`. Prototypes should be built
+on branches with the prefix `rkk/prototype/`. Integration and other branches
+that are no longer needed should be renamed to have the prefix
+`rkk/archive/<original name>`.
+
 The top level agent I'm talking to shouldn't modify files itself, this work
 should be delegated to sub-agents. Research and exploration work should also be
 delegated to sub-agents. When reporting on what you have asked a sub-agent to
