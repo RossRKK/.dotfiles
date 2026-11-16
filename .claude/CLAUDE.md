@@ -36,8 +36,7 @@ The top level agent I'm talking to shouldn't modify files itself, this work
 should be delegated to sub-agents (except for small changes). Research and
 exploration work should also be delegated to sub-agents. When reporting on what
 you have asked a sub-agent to do, do not repeat what I asked for, only mention
-any instructions you added. When work splits into a large piece spawn a new
-"peer agent".
+any instructions you added.
 
 You should always enumerate and read all files you plan on changing before
 making any edits.
@@ -60,12 +59,12 @@ My to do list is in `~/todo.md`.
 
 # Worktrees
 
-Inside nvim (`$NVIM` set), don't make worktrees yourself: no `git worktree add`,
-`EnterWorktree` or `isolation: "worktree"`. Run `worktree-tab <branch>` from the
-repo (in the background if the checkout is big). It opens the worktree as an
-nvim tab and prints the name of the Claude in it once that Claude is up.
-SendMessage the peer agent the task with everything it needs, since it has none
-of your context. Outside nvim, use worktrees as usual.
+Inside nvim (`$NVIM` set) if I ask you to send a task to a new peer agent: run
+`worktree-tab <branch>` from the repo. It opens the worktree as an nvim tab and
+prints the name of the new Claude instance in it once it has started.
+SendMessage the peer agent the task, since it has none of your context.
+
+Outside nvim, or for smaller tasks use worktrees as usual.
 
 # Attribution
 
