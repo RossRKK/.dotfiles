@@ -501,10 +501,10 @@ describe("workspace numbers", function()
     end
   )
 
-  it("closes a workspace without asking when no agent is live", function()
+  it("closes a workspace without asking, even with a live agent", function()
     package.loaded["fishmonger"] = {
       tabs = function(_)
-        return { { slot = 1 }, { slot = 2, agent = { state = "done" } } }
+        return { { slot = 1, agent = { state = "permission" } } }
       end,
     }
     local asked = false
@@ -519,26 +519,6 @@ describe("workspace numbers", function()
     package.loaded["fishmonger"] = nil
     assert.is_false(asked)
     assert.same({ 1 }, strip())
-  end)
-
-  it("asks before closing a workspace with a live agent, and cancel keeps it", function()
-    package.loaded["fishmonger"] = {
-      tabs = function(_)
-        return { { slot = 1, agent = { state = "permission" } } }
-      end,
-    }
-    local asked
-    local confirm = vim.fn.confirm
-    vim.fn.confirm = function(msg, choices, default) ---@diagnostic disable-line: duplicate-set-field, unused-local
-      asked = msg
-      return 2 -- Cancel
-    end
-    open_ws()
-    ws.close()
-    vim.fn.confirm = confirm
-    package.loaded["fishmonger"] = nil
-    assert.matches("1 agent is still working", asked)
-    assert.same({ 1, 2 }, strip())
   end)
 
   it("falls back to the lowest free number when the one asked for is taken", function()

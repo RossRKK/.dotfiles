@@ -233,8 +233,8 @@ renumbering the rest.
 | `Space+tn`  | New project tab — names one from zoxide's list             |
 | `Alt+1-9`   | Switch to workspace N (works in terminal mode too); an unused number opens the project picker, and the pick becomes workspace N |
 | `Space+tt`  | Switch to an open project (picker; matches number or name) |
-| `Space+tx`  | Close this project tab (its terminals shut down with it; asks first if an agent there is live) |
-| `Space+tX`  | Close this worktree tab and remove its worktree, keeping the branch (asks first if it has uncommitted or untracked files, unsaved buffers or a live agent; only then `--force`) |
+| `Space+tx`  | Close this project tab (its terminals and agents shut down with it, without asking) |
+| `Space+tX`  | Close this worktree tab and remove its worktree, keeping the branch (asks first if it has uncommitted or untracked files or unsaved buffers, only then `--force`; its agents end without asking) |
 | `gt` / `gT` | Next / prev tab                                            |
 
 `Alt+B` is the workspace prefix: the same keys as the terminal's `Ctrl+B`, with
@@ -245,7 +245,7 @@ Alt instead of Ctrl. It works from the terminal too (there it takes fish's
 | ------------- | ----------------------------------------------------------- |
 | `Alt+B 1-9`   | Switch to workspace N, or open one into N (same as `Alt+N`) |
 | `Alt+B c`     | Open a new workspace (project picker, lowest free number)   |
-| `Alt+B &`     | Close this workspace (asks first if an agent there is live) |
+| `Alt+B &`     | Close this workspace (its agents end without asking) |
 | `Alt+B . N`   | Renumber this workspace to N (`.` then `1-9`); swaps if N is taken |
 | `Alt+B w`     | Open a new workspace — a worktree of a branch here, found by branch or by the agent whose worktree has it (lowest free number) |
 | `Alt+B b`     | Open a new workspace — name a new branch, get its worktree (lowest free number) |

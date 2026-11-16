@@ -658,7 +658,7 @@ function M.remove()
     return status(err, vim.log.levels.ERROR)
   end
   local bufs = buffers_inside(wt.top)
-  if not M.confirm_remove(wt.top, changes ~= "", workspace.live_agents(tab), bufs) then
+  if not M.confirm_remove(wt.top, changes ~= "", bufs) then
     return
   end
 
@@ -699,16 +699,12 @@ end
 --- lost, else only once confirmed.
 ---@param top string
 ---@param dirty boolean uncommitted or untracked files
----@param live integer agents working or waiting there
 ---@param bufs integer[] buffers inside the worktree
 ---@return boolean
-function M.confirm_remove(top, dirty, live, bufs)
+function M.confirm_remove(top, dirty, bufs)
   local lost = {}
   if dirty then
     lost[#lost + 1] = "uncommitted changes"
-  end
-  if live > 0 then
-    lost[#lost + 1] = ("%d live agent%s"):format(live, live == 1 and "" or "s")
   end
   local unsaved = #vim.tbl_filter(function(buf)
     return vim.bo[buf].modified

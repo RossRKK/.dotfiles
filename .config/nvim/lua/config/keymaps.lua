@@ -184,7 +184,7 @@ map("n", "<leader>tt", function()
 end, { desc = "Switch to open project tab" })
 -- :tabclose, but named alongside the others. fishmonger shuts that tabpage's
 -- terminals down with it (nothing could reach them afterwards), so this ends the
--- workspace's shells too -- hence the confirm when an agent there is live.
+-- workspace's shells and agents too, without asking.
 -- Mirrors <leader>x for a buffer; <M-b>& is the same thing.
 map("n", "<leader>tx", function()
   require("config.workspace").close()

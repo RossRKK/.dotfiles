@@ -554,7 +554,7 @@ describe("worktree.remove", function()
     vim.cmd("enew")
     local chan = vim.fn.jobstart({ "sleep", "600" }, { term = true })
     local term, pid = vim.api.nvim_get_current_buf(), vim.fn.jobpid(chan)
-    confirm_with(1) -- asked only if something would be lost: it isn't
+    confirm_with(2) -- a running agent or shell is not asked about: a prompt here would cancel
 
     worktree.remove()
 

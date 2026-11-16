@@ -277,40 +277,12 @@ function M.renumber(n)
   vim.api.nvim_exec_autocmds("User", { pattern = "WorkspaceRenumbered" })
 end
 
---- Close the current workspace (<M-b>&, <leader>tx) and with it its
---- terminals. Asks first when one of them holds an agent that is working or
---- waiting on you -- the one case where a slip throws away work in flight.
---- A finished agent ("done") or a plain shell closes on the keypress.
+--- Close the current workspace (<M-b>&, <leader>tx); its terminals and agents end with it, unasked.
 function M.close()
-  local live = M.live_agents(vim.api.nvim_get_current_tabpage())
-  if live > 0 then
-    local msg = ("Close %s? %d agent%s still working or waiting."):format(
-      M.display_name(),
-      live,
-      live == 1 and " is" or "s are"
-    )
-    if vim.fn.confirm(msg, "&Close\n&Cancel", 2) ~= 1 then
-      return
-    end
-  end
   local ok = pcall(vim.cmd, "tabclose")
   if not ok then
     vim.notify("can't close the last workspace", vim.log.levels.WARN)
   end
-end
-
---- How many of a tabpage's terminals hold an agent that is working or waiting on you.
----@param tab integer tabpage handle
----@return integer
-function M.live_agents(tab)
-  local fishmonger = package.loaded["fishmonger"]
-  local live = 0
-  for _, term in ipairs(fishmonger and fishmonger.tabs(tab) or {}) do
-    if term.agent and term.agent.state ~= "done" then
-      live = live + 1
-    end
-  end
-  return live
 end
 
 --- <M-b>: the workspace prefix, fishmonger's <C-b> with a different modifier
