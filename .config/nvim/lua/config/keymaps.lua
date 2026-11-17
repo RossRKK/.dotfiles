@@ -198,7 +198,7 @@ end, { desc = "Close worktree tab and remove its worktree" })
 -- in a diff/log) and resolve it to a real file on disk. Best-effort: returns
 -- `path, line, col, bare` where `path` is the resolved absolute file (nil if
 -- nothing matched) and `bare` is the cleaned token for a fuzzy fallback. This is
--- the pattern-matching half shared by gy (yank), gp/gf (open) — gf = gy then gp.
+-- the pattern-matching half of <leader>o (goto_ref below).
 local function resolve_ref(ref)
   -- Strip surrounding brackets/quotes/backticks and trailing punctuation.
   ref = ref:gsub("^[%(%[`'\"]+", ""):gsub("[%)%]`'\",.]+$", "")
