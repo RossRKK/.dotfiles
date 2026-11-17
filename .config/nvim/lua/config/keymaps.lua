@@ -259,11 +259,7 @@ local function goto_ref(ref)
     vim.notify("no file resolved from: " .. ref, vim.log.levels.WARN)
     return
   end
-  goto_main_window()
-  vim.cmd("edit " .. vim.fn.fnameescape(path))
-  if line then
-    vim.api.nvim_win_set_cursor(0, { tonumber(line), (tonumber(col) or 1) - 1 })
-  end
+  require("config.windows").open(path, tonumber(line), tonumber(col))
 end
 
 -- gf/gF: the builtins, opened in the main editor window instead of the current

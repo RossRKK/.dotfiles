@@ -141,6 +141,19 @@ function M.goto_main_window()
   vim.api.nvim_set_current_win(win)
 end
 
+--- Edit `path` in the main window, with the cursor at `line` and `col` (both 1-based) when given.
+---@param path string
+---@param line? integer
+---@param col? integer
+function M.open(path, line, col)
+  M.goto_main_window()
+  vim.cmd.edit(vim.fn.fnameescape(path))
+  if line then
+    local last = vim.api.nvim_buf_line_count(0)
+    vim.api.nvim_win_set_cursor(0, { math.min(math.max(line, 1), last), math.max((col or 1) - 1, 0) })
+  end
+end
+
 --- Show `from`'s buffer in `to` where `from` had it scrolled, taking focus along if `from` had it.
 ---@param from integer
 ---@param to integer

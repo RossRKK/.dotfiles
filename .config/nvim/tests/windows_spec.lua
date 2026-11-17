@@ -56,4 +56,25 @@ describe("main window routing", function()
     assert.equals("", vim.bo[vim.api.nvim_win_get_buf(main)].buftype)
     assert.is_true(vim.api.nvim_buf_is_valid(term))
   end)
+
+  it("opens a file from the side panel in the main window, at a line and column", function()
+    local path = vim.fn.tempname()
+    vim.fn.writefile({ "one", "two", "three" }, path)
+    vim.api.nvim_set_current_win(side)
+
+    windows.open(path, 2, 3)
+
+    assert.equals(main, vim.api.nvim_get_current_win())
+    assert.equals(path, vim.api.nvim_buf_get_name(0))
+    assert.same({ 2, 2 }, vim.api.nvim_win_get_cursor(0))
+  end)
+
+  it("keeps a line past the end inside the file", function()
+    local path = vim.fn.tempname()
+    vim.fn.writefile({ "one", "two" }, path)
+
+    windows.open(path, 99)
+
+    assert.same({ 2, 0 }, vim.api.nvim_win_get_cursor(0))
+  end)
 end)
