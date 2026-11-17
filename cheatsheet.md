@@ -926,6 +926,7 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
 | `Ctrl+B m N`  | Move the current tab to workspace N (the number on its label; you follow it) |
 | `Ctrl+B a`    | Agent view: every agent across all workspaces, blocked first; the row's key jumps to it |
+| `Ctrl+B f`    | Referenced files: toggle a list under the terminal of the files its agent read, edited or named, newest first (see below) |
 | `Ctrl+B r`    | Mark this terminal's agent read: an empty circle, whatever its state, until it next reports one |
 | `Ctrl+B u`    | Mark it unread: a question mark until it next reports a status (or `Ctrl+B r`) |
 | `Ctrl+T`      | Toggle the side terminal (`Ctrl+N` first from a terminal) |
@@ -950,6 +951,17 @@ session ends or you dismiss them.
 | `Ctrl+J` / `Ctrl+K` | Into the list from the terminal / back up               |
 | `Enter`           | Open the task's output in a pane above: a normal buffer (search, yank, motions) that follows new output while the cursor is on the last line (`G`); `q` closes |
 | `x`               | Dismiss the task                                          |
+
+**Referenced files.** `Ctrl+B f` opens a list under the terminal of the files its
+agent's session has read, edited or pointed at (`path:line` in its replies),
+newest first and each once, at the line it last named. It follows the terminal's
+tab and catches up when the agent writes more. Agents open a file themselves
+with `nvim-open <path>[:line[:col]]`.
+
+| Key (in the list) | Action                                                    |
+| ----------------- | --------------------------------------------------------- |
+| `Enter`           | Open the file in the main window, at its line             |
+| `q`               | Close the list (as does `Ctrl+B f` again)                 |
 
 ---
 

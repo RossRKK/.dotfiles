@@ -2,29 +2,34 @@
 
 local assert = require("luassert")
 
---- The edgy view for fishmonger's background-task list.
-local function tasks_view()
-  for _, view in ipairs(require("plugins.edgy")[1].opts.right) do
-    if view.ft == "fishmonger-tasks" then
-      return view
+--- The edgy view for windows of filetype `ft`.
+local function view(ft)
+  for _, v in ipairs(require("plugins.edgy")[1].opts.right) do
+    if v.ft == ft then
+      return v
     end
   end
 end
 
-describe("edgy's task-list view", function()
-  before_each(function()
-    vim.cmd("silent only!")
-    vim.w.fishmonger_tasks_height = nil -- `only` keeps the window a spec marked
-  end)
+for _, list in ipairs({
+  { ft = "fishmonger-tasks", var = "fishmonger_tasks_height" },
+  { ft = "fishmonger-files", var = "fishmonger_files_height" },
+}) do
+  describe("edgy's " .. list.ft .. " view", function()
+    before_each(function()
+      vim.cmd("silent only!")
+      vim.w[list.var] = nil -- `only` keeps the window a spec marked
+    end)
 
-  it("takes the height fishmonger asks for, so edgy never undoes its resize", function()
-    vim.cmd("split")
-    vim.w.fishmonger_tasks_height = 3
+    it("takes the height fishmonger asks for, so edgy never undoes its resize", function()
+      vim.cmd("split")
+      vim.w[list.var] = 3
 
-    assert.equals(3, tasks_view().size.height())
-  end)
+      assert.equals(3, view(list.ft).size.height())
+    end)
 
-  it("is a single row before fishmonger has asked for any", function()
-    assert.equals(1, tasks_view().size.height())
+    it("is a single row before fishmonger has asked for any", function()
+      assert.equals(1, view(list.ft).size.height())
+    end)
   end)
-end)
+end

@@ -27,6 +27,10 @@ return {
         workspace = function(n)
           return require("config.workspace").tab(n)
         end,
+        -- <C-b>f's files land where every other opener puts them (config/windows.lua).
+        open_file = function(path, line)
+          require("config.windows").open(path, line)
+        end,
       })
       -- Tab keymaps for the side terminal (<C-b>{1-9}, etc).
       require("fishmonger").setup_keymaps()

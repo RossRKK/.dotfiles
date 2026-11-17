@@ -31,14 +31,18 @@ local function is_explorer(buf)
   return vim.b[buf].neo_tree_source == "filesystem"
 end
 
--- The rows fishmonger wants for this tabpage's task list (one per task).
-local function tasks_height()
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if vim.w[win].fishmonger_tasks_height then
-      return vim.w[win].fishmonger_tasks_height
+--- The height of this tabpage's fishmonger list that publishes it in window variable `var`.
+---@param var string
+---@return fun(): integer
+local function list_height(var)
+  return function()
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      if vim.w[win][var] then
+        return vim.w[win][var]
+      end
     end
+    return 1
   end
-  return 1
 end
 
 return {
@@ -137,7 +141,16 @@ return {
         {
           ft = "fishmonger-tasks",
           wo = { winbar = false },
-          size = { height = tasks_height },
+          size = { height = list_height("fishmonger_tasks_height") },
+          filter = function(_, win)
+            return vim.w[win].fishmonger_side
+          end,
+        },
+        -- fishmonger's referenced-files list (<C-b>f), sized the same way.
+        {
+          ft = "fishmonger-files",
+          wo = { winbar = false },
+          size = { height = list_height("fishmonger_files_height") },
           filter = function(_, win)
             return vim.w[win].fishmonger_side
           end,
