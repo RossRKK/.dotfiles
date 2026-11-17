@@ -209,6 +209,8 @@ in
         ".local/bin/git-worktree-clean"
         # Agents open their worktrees as nvim tabs with it (.claude/CLAUDE.md).
         ".local/bin/worktree-tab"
+        # Agents open files in the editor with it (.claude/CLAUDE.md).
+        ".local/bin/nvim-open"
         # Out-of-store so Claude can still append to it in place.
         ".claude/CLAUDE.md"
       ]

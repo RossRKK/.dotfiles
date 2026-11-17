@@ -57,6 +57,8 @@ files include these paths so it is easy for me to jump where you're referencing.
 
 My to do list is in `~/todo.md`.
 
+To show me a file inside nvim (`$NVIM` set), run `nvim-open <path>[:line[:col]]`.
+
 # Worktrees
 
 Inside nvim (`$NVIM` set) if I ask you to send a task to a new peer agent: run
