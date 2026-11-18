@@ -660,12 +660,19 @@ and hides the float.
 | `Space+rb` | Pick a commit range: top checked out, bottom as base |
 | `Space+rA` | Approve the commits under review (✓ in `Space+rb`) |
 | `Space+rd` | Toggle inline diff of current file vs base |
+| `Space+rD` | Toggle current file's diff: review base ↔ since your decision |
 | `Space+rR` | Refresh review status                      |
 
 `Space+rr` / `Space+rj` / `Space+ru` act on the node under the cursor in the
-explorer, otherwise the current buffer. An approved file flips back to "changed"
-if it's edited again; a rejected file becomes "revised" when edited (the flag
-was acted on — re-review the fix) rather than losing the flag.
+explorer, otherwise the current buffer. An approved file becomes "stale" if it's
+edited again, and a rejected one "revised" (the flag was acted on — re-review
+the fix); both keep the decision on record.
+
+`Space+rD` (`:ReviewSinceDecision`) re-bases just the current file's gutter on
+the content you last approved / rejected, so after asking an agent to change a
+file you see exactly what it changed (with `Space+rd` too, inline). Press again
+to go back to the review base. git only; marking stores the content as a blob
+git prunes after ~2 weeks, so re-mark if it says the content isn't stored.
 
 `Space+rd` overlays a combined inline diff on the file itself — deleted lines
 shown inline, added / changed lines highlighted — against the review base
@@ -867,13 +874,14 @@ the filter after selecting, `C-Enter` selects and clears it.
 | `✓`   | Approved and unchanged since                                              |
 | `✗`   | Rejected / flagged, unchanged since                                       |
 | `↻`   | Was rejected, then edited — re-review the fix                             |
+| `✎`   | Was approved, then edited — re-review it (`Space+rD` shows what changed)  |
 | 💬    | Has unsent drafts, or PR comments once shown (review mode on)             |
 
 Folders show the highest-priority child status, ordered by what needs *your*
-attention: revised > changed > rejected > approved. So a folder surfaces work
-still to do (won't read as done while it holds changed/revised files), an open
-flag (rejected) outranks a clean `✓`, and it only shows `✓` once every changed
-file under it is approved.
+attention: revised > stale > changed > rejected > approved. So a folder surfaces
+work still to do (won't read as done while it holds changed/stale/revised
+files), an open flag (rejected) outranks a clean `✓`, and it only shows `✓` once
+every changed file under it is approved.
 
 ---
 
