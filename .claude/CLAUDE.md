@@ -75,8 +75,6 @@ description above that. Always open PRs as draft first.
 
 When commenting on a PR on my behalf always begin the message with "claude 🤖".
 
-Also include your session name if you have one as a "by-line".
-
 # Code I don't want
 
 When I push back on something that is a class of problem -- in a review, a PR
