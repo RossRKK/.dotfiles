@@ -346,6 +346,49 @@ describe("greeter.size_line", function()
   end)
 end)
 
+describe("greeter.by_tier", function()
+  local function rels(files)
+    return vim.tbl_map(function(f)
+      return f.rel
+    end, files)
+  end
+
+  it("orders spec, proto, code, test, docs, generated, keeping the order within a tier", function()
+    local files = vim.tbl_map(function(rel)
+      return { rel = rel }
+    end, {
+      "Cargo.lock",
+      "README.md",
+      "src/b.rs",
+      "src/a_test.rs",
+      "api.proto",
+      "src/a.rs",
+      "SPEC.md",
+      "z/tests/x.lua",
+      "a/tests/y.lua",
+    })
+    assert.same({
+      "SPEC.md",
+      "api.proto",
+      "src/b.rs",
+      "src/a.rs",
+      "src/a_test.rs",
+      "z/tests/x.lua",
+      "a/tests/y.lua",
+      "README.md",
+      "Cargo.lock",
+    }, rels(greeter.by_tier(files, {})))
+  end)
+
+  it("tiers a file by its attributes", function()
+    local files = { { rel = "gen/a.rs" }, { rel = "b.rs" } }
+    assert.same(
+      { "b.rs", "gen/a.rs" },
+      rels(greeter.by_tier(files, { ["gen/a.rs"] = { generated = true } }))
+    )
+  end)
+end)
+
 describe("greeter.pr_status", function()
   local function text(pr)
     return table.concat(vim.tbl_map(function(c)

@@ -610,11 +610,13 @@ end
 --- The changed-file list: every file the branch is responsible for, marked with
 --- its triage glyph, each a keypress from opening. Long branches are cut to what
 --- the window can show, with the remainder counted -- the list is a way into the
---- files, not a report to scroll.
+--- files, not a report to scroll. Ordered by review tier, so what most needs a
+--- reviewer's eye is what survives the cut.
 ---@param report table? TriageReport
+---@param attrs table<string, diffsize.Attrs>
 ---@param buf integer the greeter's buffer
 ---@return table[]
-local function files(report, buf)
+local function files(report, attrs, buf)
   if not report then
     return {}
   end
@@ -634,7 +636,7 @@ local function files(report, buf)
   -- the window is the list's.
   local limit = math.max(5, height - 12)
   local items = {}
-  for i, file in ipairs(report.files) do
+  for i, file in ipairs(M.by_tier(report.files, attrs)) do
     if i > limit then
       local rest = #report.files - limit
       items[#items + 1] = {
@@ -665,6 +667,33 @@ local function files(report, buf)
     }
   end
   return items
+end
+
+--- `files` (TriageReport entries) ordered by review tier (util/diffsize),
+--- keeping their order within a tier.
+---@param files { rel: string }[]
+---@param attrs table<string, diffsize.Attrs>
+---@return { rel: string }[]
+function M.by_tier(files, attrs)
+  local diffsize = require("util.diffsize")
+  local rank = {}
+  for i, t in ipairs(diffsize.TIERS) do
+    rank[t.name] = i
+  end
+  local keyed = {}
+  for i, f in ipairs(files) do
+    keyed[i] = { file = f, rank = rank[diffsize.tier(f.rel, attrs[f.rel])], index = i }
+  end
+  -- table.sort isn't stable, so the original position breaks ties.
+  table.sort(keyed, function(a, b)
+    if a.rank ~= b.rank then
+      return a.rank < b.rank
+    end
+    return a.index < b.index
+  end)
+  return vim.tbl_map(function(k)
+    return k.file
+  end, keyed)
 end
 
 --- The agents section: every agent running in any workspace, not just this one,
@@ -995,7 +1024,7 @@ function M.sections(root, buf, tab, report)
       title = "Changed Files",
       indent = 2,
       function()
-        return files(report(), buf)
+        return files(report(), M.attrs[root] or {}, buf)
       end,
     },
     -- Not a git repo: there's no overview to show, so fall back to the

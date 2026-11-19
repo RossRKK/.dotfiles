@@ -164,8 +164,9 @@ the size of the branch's diff to that base (`+adds -dels`, a bar and a legend
 by review tier, as in [the review queue](#review-queue-spacerq) below; binary
 files count no lines), and the files this branch changes — the same
 merge-result diff and triage marks (`●` changed, `✓`
-approved, `✗` rejected, `↻` revised) review mode puts in the explorer. Each file
-has a key next to it; press it to open. `Space+X` is the quick way back to the
+approved, `✗` rejected, `↻` revised) review mode puts in the explorer, listed
+by review tier (spec, proto, code, test, docs, generated). Each file has a key
+next to it; press it to open. `Space+X` is the quick way back to the
 greeter. Outside a git repo there's no overview, so it falls back to the pickers
 (`f` find, `g` grep, `n` new file).
 
