@@ -686,9 +686,21 @@ that repo's buffers until toggled off.
 review, and `Enter` opens one as a worktree tab with review mode
 already on (fetched to the PR head, targeted at the PR's base). `Ctrl+o` (or `G` in normal mode, as in lazygit) opens
 it in the browser instead. Each tier lists the newest PR first. Each row shows
-the diff size (`+adds -dels`) without generated files: `linguist-generated` in
-`.gitattributes` (read from the base branch), plus lockfiles (`Cargo.lock`,
-`package-lock.json`, `uv.lock`, …) unless marked `linguist-generated=false`.
+the diff size (`+adds -dels`) summed over the files that need review. Every
+changed file falls in one review tier:
+
+| Tier        | Files                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------- |
+| `interface` | `*.proto`; `.md`/`.txt` files whose name contains `spec` or `intent`                            |
+| `code`      | anything not in another tier                                                                     |
+| `test`      | `*_spec.*`, `*_test.*`, `test_*.py`, `*.test.*`, `*.spec.*`, `*Test.*`, `tests/`, `__tests__/`, `spec/` |
+| `docs`      | `linguist-documentation`, or `.md`/`.markdown`/`.rst`/`.adoc`                                  |
+| `generated` | `linguist-generated`, or a lockfile (`Cargo.lock`, `uv.lock`, …); left out of `+adds -dels`      |
+
+Attributes come from `.gitattributes` on the base branch; `=false` on either
+linguist attribute keeps a file out of that tier, and `review-tier=<tier>`
+overrides everything. The preview reads `**+690 -100** · 120 interface · 410
+code · 260 test · 9.4k generated` (lines touched per tier, zero tiers left out).
 
 The queue refreshes in the background every 5 minutes for every repo with an
 open tab (and when you leave review mode), so the picker opens instantly from
@@ -697,7 +709,8 @@ refreshed behind it. Outside review mode the greeter shows the counts
 (`12 need you · 1 back to you · 3 for your team`), and under them the
 [my PRs](#my-prs-spacerm) counts. Whenever the branch has a
 PR — reviewing or your own — the greeter shows it too: number, title, state,
-review decision, checks, the diff size (generated files excluded, as above),
+review decision, checks, the diff size (as above, with a bar coloured by tier:
+reviewed tiers fill it, generated trails dimmed and capped at half its width),
 and the start of the description (fenced blocks collapsed to a placeholder).
 
 | Tier          | Means                                                              |

@@ -30,7 +30,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `term_caps_spec.lua` | inline-image capability (Ghostty yes, Neovide/other no) |
 | `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
 | `reviewqueue_spec.lua` | CODEOWNERS glob matching / last-match-wins, "does this PR need my review" tiers, "what's my PR waiting on" tiers |
-| `diffsize_spec.lua` | PR diff size without generated files (`git check-attr` parsing, lockfiles) |
+| `diffsize_spec.lua` | PR diff size by review tier: path rules, `git check-attr` parsing and overrides, headline sums without generated, bar widths and colours |
 | `background_spec.lua` | side-terminal shells wrapped into systemd's `background.slice` only when a user manager is running |
 | `sidebar_reveal_spec.lua` | `<leader>v` reveals in the tree without re-rooting it or `:tcd`-ing the tab; files outside the workspace float at their project root. Loads real neo-tree |
 | `sidebar_refresh_spec.lua` | the docked tree shows a file created outside nvim (libuv watcher), and re-reads on entering its tab: a refresh issued while the tab was in the background, or one whose render neo-tree dropped because the tab was left mid-refresh. Runs the real `plugins/explorer.lua` config() against the installed neo-tree |
