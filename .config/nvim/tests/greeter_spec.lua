@@ -308,9 +308,10 @@ describe("greeter.pr_items", function()
         { path = "Cargo.lock", additions = 900, deletions = 0 },
       }),
     })
+    local bar = ("\u{2588}"):rep(16) .. ("\u{2591}"):rep(8)
     local t = texts(greeter.pr_items(sized, 80, 10))
     assert.same(
-      { "open", "+12 -3  15 code \u{00b7} 900 generated", "<pad>", "## Why" },
+      { "open", "+12 -3  " .. bar .. "  15 code \u{00b7} 900 generated", "<pad>", "## Why" },
       vim.list_slice(t, 2, 5)
     )
   end)

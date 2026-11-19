@@ -161,3 +161,88 @@ describe("diffsize text", function()
     assert.equals("**+0 -0**", diffsize.markdown(diffsize.summarize({})))
   end)
 end)
+
+describe("diffsize.bar", function()
+  local function bar(changes)
+    return vim.tbl_map(function(s)
+      return { s.tier, s.text }
+    end, diffsize.bar(diffsize.summarize(changes), 16))
+  end
+
+  it(
+    "fills the bar with the reviewed tiers, in eighths of a cell, generated trailing at the same scale",
+    function()
+      -- 128 reviewed lines over 16 cells: a line is an eighth of a cell.
+      assert.same(
+        {
+          { "interface", "\u{2588}\u{258c}" },
+          { "code", ("\u{2588}"):rep(12) },
+          { "test", "\u{2588}\u{2588}\u{258c}" },
+          { "generated", ("\u{2591}"):rep(4) },
+        },
+        bar({
+          { path = "a.proto", additions = 12, deletions = 0 },
+          { path = "a.rs", additions = 92, deletions = 4 },
+          { path = "a_test.go", additions = 20, deletions = 0 },
+          { path = "Cargo.lock", additions = 16, deletions = 16 },
+        })
+      )
+    end
+  )
+
+  it("caps generated at half the bar, however much it outweighs the review", function()
+    assert.same(
+      { { "code", ("\u{2588}"):rep(16) }, { "generated", ("\u{2591}"):rep(8) } },
+      bar({
+        { path = "a.rs", additions = 10, deletions = 0 },
+        { path = "Cargo.lock", additions = 100000, deletions = 0 },
+      })
+    )
+    assert.same(
+      { { "generated", ("\u{2591}"):rep(8) } },
+      bar({ { path = "go.sum", additions = 5, deletions = 0 } })
+    )
+  end)
+
+  it("never shrinks a touched tier below its narrowest glyph", function()
+    assert.same(
+      { { "code", ("\u{2588}"):rep(16) }, { "test", "\u{258f}" }, { "generated", "\u{2591}" } },
+      bar({
+        { path = "a.rs", additions = 100000, deletions = 0 },
+        { path = "a_test.go", additions = 1, deletions = 0 },
+        { path = "go.sum", additions = 1, deletions = 0 },
+      })
+    )
+  end)
+
+  it("is empty for an empty diff", function()
+    assert.same({}, bar({}))
+  end)
+end)
+
+describe("diffsize.chunks", function()
+  it("draws counts, bar and legend, each tier in its own highlight", function()
+    local size = diffsize.summarize({
+      { path = "a.rs", additions = 64, deletions = 0 },
+      { path = "Cargo.lock", additions = 64, deletions = 0 },
+    })
+    assert.same({
+      { "+64", "Added" },
+      { " " },
+      { "-0", "Removed" },
+      { "  " },
+      { ("\u{2588}"):rep(16), "DiffSizeCode" },
+      { ("\u{2591}"):rep(8), "DiffSizeGenerated" },
+      { "  ", "Dim" },
+      { "64 code", "DiffSizeCode" },
+      { " \u{00b7} ", "Dim" },
+      { "64 generated", "DiffSizeGenerated" },
+    }, diffsize.chunks(size, "Dim"))
+  end)
+
+  it("links each tier's group to a theme group, dimming generated", function()
+    diffsize.define_highlights()
+    assert.equals("Comment", vim.api.nvim_get_hl(0, { name = "DiffSizeGenerated" }).link)
+    assert.equals("Function", vim.api.nvim_get_hl(0, { name = "DiffSizeCode" }).link)
+  end)
+end)

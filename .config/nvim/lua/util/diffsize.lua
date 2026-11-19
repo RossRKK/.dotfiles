@@ -20,15 +20,35 @@ local M = {}
 ---@class diffsize.TierInfo
 ---@field name diffsize.Tier
 ---@field reviewed boolean counted in the headline
+---@field hl string its highlight group, linked to `link` so it follows the colourscheme
+---@field link string
+---@field glyphs string[] bar glyphs from the narrowest to a full cell
+
+-- Left eighth blocks, for a bar precise to an eighth of a cell.
+local EIGHTHS =
+  { "\u{258f}", "\u{258e}", "\u{258d}", "\u{258c}", "\u{258b}", "\u{258a}", "\u{2589}", "\u{2588}" }
 
 -- Drawing order too: what most needs a reviewer's eye comes first.
 ---@type diffsize.TierInfo[]
 M.TIERS = {
-  { name = "interface", reviewed = true },
-  { name = "code", reviewed = true },
-  { name = "test", reviewed = true },
-  { name = "docs", reviewed = true },
-  { name = "generated", reviewed = false },
+  {
+    name = "interface",
+    reviewed = true,
+    hl = "DiffSizeInterface",
+    link = "Special",
+    glyphs = EIGHTHS,
+  },
+  { name = "code", reviewed = true, hl = "DiffSizeCode", link = "Function", glyphs = EIGHTHS },
+  { name = "test", reviewed = true, hl = "DiffSizeTest", link = "String", glyphs = EIGHTHS },
+  { name = "docs", reviewed = true, hl = "DiffSizeDocs", link = "Constant", glyphs = EIGHTHS },
+  -- Shaded whole cells: dimmed, and set apart from the reviewed tiers by more than colour.
+  {
+    name = "generated",
+    reviewed = false,
+    hl = "DiffSizeGenerated",
+    link = "Comment",
+    glyphs = { "\u{2591}" },
+  },
 }
 
 -- Basenames counted as generated unless .gitattributes says otherwise.
@@ -326,18 +346,68 @@ function M.markdown(size)
   return table.concat(parts, SEP)
 end
 
---- Highlighted chunks, { text, hl } pairs: the counts, then the legend in `dim`.
+--- Highlighted chunks, { text, hl } pairs: the counts, the bar, then the
+--- legend in the bar's colours with `dim` between its entries.
 ---@param size diffsize.Size
 ---@param dim string the caller's subdued highlight
 ---@return { [1]: string, [2]: string? }[]
 function M.chunks(size, dim)
+  M.define_highlights()
+  local hl = {}
+  for _, t in ipairs(M.TIERS) do
+    hl[t.name] = t.hl
+  end
   local adds, dels = M.counts(size)
   local out = { { adds, "Added" }, { " " }, { dels, "Removed" } }
+  for i, segment in ipairs(M.bar(size, M.BAR_CELLS)) do
+    if i == 1 then
+      out[#out + 1] = { "  " }
+    end
+    out[#out + 1] = { segment.text, hl[segment.tier] }
+  end
   for i, entry in ipairs(M.legend(size)) do
     out[#out + 1] = { i == 1 and "  " or SEP, dim }
-    out[#out + 1] = { entry.text, dim }
+    out[#out + 1] = { entry.text, hl[entry.tier] }
   end
   return out
+end
+
+M.BAR_CELLS = 16
+
+--- The bar: the reviewed tiers fill `cells` in proportion to the lines each
+--- touches; unreviewed ones trail at the same scale, capped at half the bar so
+--- a lockfile can't squeeze the review out of it (the legend has its size).
+--- Each run is at its glyphs' precision and never less than its narrowest glyph.
+---@param size diffsize.Size
+---@param cells integer the width the reviewed lines fill
+---@return { tier: diffsize.Tier, text: string }[]
+function M.bar(size, cells)
+  local sum = M.headline(size)
+  local reviewed = sum.additions + sum.deletions
+  local out = {}
+  for _, t in ipairs(M.TIERS) do
+    local n = M.lines(size, t.name)
+    if n > 0 then
+      -- With nothing reviewed this is inf, which only an unreviewed tier can reach.
+      local width = n / reviewed * cells
+      if not t.reviewed then
+        width = math.min(width, cells / 2)
+      end
+      local steps = #t.glyphs
+      local units = math.max(1, math.floor(width * steps + 0.5))
+      local full, rest = math.floor(units / steps), units % steps
+      out[#out + 1] = { tier = t.name, text = t.glyphs[steps]:rep(full) .. (t.glyphs[rest] or "") }
+    end
+  end
+  return out
+end
+
+--- Link each tier's group to its theme group, leaving one the colourscheme or
+--- user set alone; cheap enough to run per render, so no ColorScheme autocmd.
+function M.define_highlights()
+  for _, t in ipairs(M.TIERS) do
+    vim.api.nvim_set_hl(0, t.hl, { link = t.link, default = true })
+  end
 end
 
 return M
