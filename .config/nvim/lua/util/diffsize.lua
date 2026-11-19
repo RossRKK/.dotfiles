@@ -15,7 +15,7 @@
 
 local M = {}
 
----@alias diffsize.Tier "interface"|"code"|"test"|"docs"|"generated"
+---@alias diffsize.Tier "spec"|"proto"|"code"|"test"|"docs"|"generated"
 
 ---@class diffsize.TierInfo
 ---@field name diffsize.Tier
@@ -31,13 +31,8 @@ local EIGHTHS =
 -- Drawing order too: what most needs a reviewer's eye comes first.
 ---@type diffsize.TierInfo[]
 M.TIERS = {
-  {
-    name = "interface",
-    reviewed = true,
-    hl = "DiffSizeInterface",
-    link = "Special",
-    glyphs = EIGHTHS,
-  },
+  { name = "spec", reviewed = true, hl = "DiffSizeSpec", link = "Special", glyphs = EIGHTHS },
+  { name = "proto", reviewed = true, hl = "DiffSizeProto", link = "Type", glyphs = EIGHTHS },
   { name = "code", reviewed = true, hl = "DiffSizeCode", link = "Function", glyphs = EIGHTHS },
   { name = "test", reviewed = true, hl = "DiffSizeTest", link = "String", glyphs = EIGHTHS },
   { name = "docs", reviewed = true, hl = "DiffSizeDocs", link = "Constant", glyphs = EIGHTHS },
@@ -90,9 +85,9 @@ M.TEST_PATTERNS = {
 -- Prose extensions counted as docs when no attribute says otherwise.
 M.DOC_EXTENSIONS = { md = true, markdown = true, rst = true, adoc = true }
 
--- Prose files that state what a change promises (specs, intents) are interface.
-local INTERFACE_PROSE = { md = true, txt = true }
-local INTERFACE_WORDS = { "spec", "intent" }
+-- Prose files that state what a change promises: specs and intents.
+local SPEC_EXTENSIONS = { md = true, txt = true }
+local SPEC_WORDS = { "spec", "intent" }
 
 ---@class diffsize.Attrs
 ---@field tier diffsize.Tier? review-tier, when it names a tier
@@ -165,9 +160,15 @@ local RULES = {
     end,
   },
   {
-    tier = "interface",
+    tier = "spec",
     matches = function(path)
-      return M.is_interface(path)
+      return M.is_spec(path)
+    end,
+  },
+  {
+    tier = "proto",
+    matches = function(path)
+      return M.extension(path) == "proto"
     end,
   },
   {
@@ -213,16 +214,12 @@ end
 
 ---@param path string
 ---@return boolean
-function M.is_interface(path)
-  local ext = M.extension(path)
-  if ext == "proto" then
-    return true
-  end
-  if not INTERFACE_PROSE[ext] then
+function M.is_spec(path)
+  if not SPEC_EXTENSIONS[M.extension(path)] then
     return false
   end
   local name = vim.fs.basename(path):lower()
-  for _, word in ipairs(INTERFACE_WORDS) do
+  for _, word in ipairs(SPEC_WORDS) do
     if name:find(word, 1, true) then
       return true
     end
@@ -318,7 +315,7 @@ function M.abbrev(n)
   return tostring(n)
 end
 
---- The legend, one entry per touched tier: "120 interface", "9.4k generated".
+--- The legend, one entry per touched tier: "120 spec", "9.4k generated".
 ---@param size diffsize.Size
 ---@return { tier: diffsize.Tier, text: string }[]
 function M.legend(size)

@@ -9,11 +9,11 @@ describe("diffsize.parse_attrs", function()
       "a.rs\0review-tier\0unspecified\0",
       "gen/x y.py\0linguist-generated\0true\0",
       "gen/x y.py\0linguist-documentation\0unset\0",
-      "gen/x y.py\0review-tier\0interface\0",
+      "gen/x y.py\0review-tier\0proto\0",
     })
     assert.same({
       ["a.rs"] = {},
-      ["gen/x y.py"] = { generated = true, documentation = false, tier = "interface" },
+      ["gen/x y.py"] = { generated = true, documentation = false, tier = "proto" },
     }, diffsize.parse_attrs(out))
   end)
 
@@ -48,10 +48,11 @@ end)
 
 describe("diffsize.tier", function()
   local cases = {
-    { "api/v1/service.proto", "interface" },
-    { "docs/foo-spec.md", "interface" },
-    { "INTENT.txt", "interface" },
-    { "openspec/specs/queue/spec.md", "interface" },
+    { "api/v1/service.proto", "proto" },
+    { "docs/foo-spec.md", "spec" },
+    { "INTENT.txt", "spec" },
+    { "openspec/specs/queue/spec.md", "spec" },
+    { "specs/schema.proto", "proto" },
     { "lua/foo_spec.lua", "test" },
     { "tests/helpers.lua", "test" },
     { "pkg/server_test.go", "test" },
@@ -75,7 +76,7 @@ describe("diffsize.tier", function()
   it("follows linguist-generated when it is set either way", function()
     assert.equals("generated", diffsize.tier("infra/_generated/a.yaml", { generated = true }))
     assert.equals("code", diffsize.tier("Cargo.lock", { generated = false }))
-    assert.equals("interface", diffsize.tier("gen/a.proto", { generated = false }))
+    assert.equals("proto", diffsize.tier("gen/a.proto", { generated = false }))
   end)
 
   it("follows linguist-documentation when it is set either way", function()
@@ -89,13 +90,14 @@ describe("diffsize.tier", function()
       "generated",
       diffsize.tier("src/main.rs", { tier = "generated", generated = false })
     )
-    assert.equals("interface", diffsize.tier("schema/openapi.yaml", { tier = "interface" }))
+    assert.equals("spec", diffsize.tier("schema/openapi.yaml", { tier = "spec" }))
   end)
 end)
 
 describe("diffsize.summarize", function()
   local changes = {
     { path = "api.proto", additions = 100, deletions = 20 },
+    { path = "SPEC.md", additions = 30, deletions = 5 },
     { path = "src/a.rs", additions = 300, deletions = 60 },
     { path = "src/b.rs", additions = 40, deletions = 10 },
     { path = "src/a_test.rs", additions = 250, deletions = 10 },
@@ -106,14 +108,15 @@ describe("diffsize.summarize", function()
   it("sums each tier, untouched tiers zero", function()
     local size = diffsize.summarize(changes)
     assert.same({
-      interface = { additions = 100, deletions = 20 },
+      spec = { additions = 30, deletions = 5 },
+      proto = { additions = 100, deletions = 20 },
       code = { additions = 340, deletions = 70 },
       test = { additions = 250, deletions = 10 },
       docs = { additions = 9, deletions = 0 },
       generated = { additions = 9000, deletions = 400 },
     }, size.tiers)
     assert.same(
-      { "interface", "code", "test", "docs", "generated" },
+      { "spec", "proto", "code", "test", "docs", "generated" },
       vim.tbl_map(function(t)
         return t.name
       end, diffsize.TIERS)
@@ -122,14 +125,14 @@ describe("diffsize.summarize", function()
 
   it("headlines the reviewed tiers' plain sum, generated excluded", function()
     local size = diffsize.summarize(changes)
-    assert.same({ additions = 699, deletions = 100 }, diffsize.headline(size))
-    assert.same({ "+699", "-100" }, { diffsize.counts(size) })
+    assert.same({ additions = 729, deletions = 105 }, diffsize.headline(size))
+    assert.same({ "+729", "-105" }, { diffsize.counts(size) })
   end)
 
   it("moves a file between tiers by its attributes", function()
     local size = diffsize.summarize(changes, { ["Cargo.lock"] = { generated = false } })
     assert.same({ additions = 0, deletions = 0 }, size.tiers.generated)
-    assert.same({ additions = 9699, deletions = 500 }, diffsize.headline(size))
+    assert.same({ additions = 9729, deletions = 505 }, diffsize.headline(size))
   end)
 end)
 
@@ -145,6 +148,7 @@ end)
 
 describe("diffsize text", function()
   local size = diffsize.summarize({
+    { path = "spec.md", additions = 5, deletions = 0 },
     { path = "api.proto", additions = 100, deletions = 20 },
     { path = "src/a.rs", additions = 400, deletions = 10 },
     { path = "Cargo.lock", additions = 9000, deletions = 400 },
@@ -152,7 +156,7 @@ describe("diffsize text", function()
 
   it("legends only the touched tiers, in tier order", function()
     assert.equals(
-      "**+500 -30** \u{00b7} 120 interface \u{00b7} 410 code \u{00b7} 9.4k generated",
+      "**+505 -30** \u{00b7} 5 spec \u{00b7} 120 proto \u{00b7} 410 code \u{00b7} 9.4k generated",
       diffsize.markdown(size)
     )
   end)
@@ -175,7 +179,7 @@ describe("diffsize.bar", function()
       -- 128 reviewed lines over 16 cells: a line is an eighth of a cell.
       assert.same(
         {
-          { "interface", "\u{2588}\u{258c}" },
+          { "proto", "\u{2588}\u{258c}" },
           { "code", ("\u{2588}"):rep(12) },
           { "test", "\u{2588}\u{2588}\u{258c}" },
           { "generated", ("\u{2591}"):rep(4) },
@@ -244,5 +248,7 @@ describe("diffsize.chunks", function()
     diffsize.define_highlights()
     assert.equals("Comment", vim.api.nvim_get_hl(0, { name = "DiffSizeGenerated" }).link)
     assert.equals("Function", vim.api.nvim_get_hl(0, { name = "DiffSizeCode" }).link)
+    assert.equals("Special", vim.api.nvim_get_hl(0, { name = "DiffSizeSpec" }).link)
+    assert.equals("Type", vim.api.nvim_get_hl(0, { name = "DiffSizeProto" }).link)
   end)
 end)

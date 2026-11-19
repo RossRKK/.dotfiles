@@ -691,7 +691,8 @@ changed file falls in one review tier:
 
 | Tier        | Files                                                                                           |
 | ----------- | ----------------------------------------------------------------------------------------------- |
-| `interface` | `*.proto`; `.md`/`.txt` files whose name contains `spec` or `intent`                            |
+| `spec`      | `.md`/`.txt` files whose name contains `spec` or `intent`                                       |
+| `proto`     | `*.proto`                                                                                        |
 | `code`      | anything not in another tier                                                                     |
 | `test`      | `*_spec.*`, `*_test.*`, `test_*.py`, `*.test.*`, `*.spec.*`, `*Test.*`, `tests/`, `__tests__/`, `spec/` |
 | `docs`      | `linguist-documentation`, or `.md`/`.markdown`/`.rst`/`.adoc`                                  |
@@ -699,8 +700,8 @@ changed file falls in one review tier:
 
 Attributes come from `.gitattributes` on the base branch; `=false` on either
 linguist attribute keeps a file out of that tier, and `review-tier=<tier>`
-overrides everything. The preview reads `**+690 -100** · 120 interface · 410
-code · 260 test · 9.4k generated` (lines touched per tier, zero tiers left out).
+overrides everything. The preview reads `**+690 -100** · 20 spec · 100 proto ·
+410 code · 260 test · 9.4k generated` (lines touched per tier, zero tiers left out).
 
 The queue refreshes in the background every 5 minutes for every repo with an
 open tab (and when you leave review mode), so the picker opens instantly from
