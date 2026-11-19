@@ -283,3 +283,76 @@ describe("diffsize.by_tier", function()
     assert.same({}, diffsize.by_tier({}, path))
   end)
 end)
+
+describe("diffsize.pr_block", function()
+  it("is the size line, then the files by tier in a collapsed list, between markers", function()
+    local block = diffsize.pr_block({
+      { path = "Cargo.lock", additions = 9000, deletions = 400 },
+      { path = "src/b.rs", additions = 40, deletions = 10 },
+      { path = "logo.png" },
+      { path = "SPEC.md", additions = 30, deletions = 5 },
+      { path = "src/a.rs", additions = 300, deletions = 60 },
+    }, { ["logo.png"] = { tier = "docs" } })
+    assert.equals(
+      table.concat({
+        "<!-- diff-size -->",
+        "**+370 -75** \u{00b7} 35 spec \u{00b7} 410 code \u{00b7} 9.4k generated",
+        "",
+        "<details><summary>Files by review tier</summary>",
+        "",
+        "**spec**",
+        "",
+        "- `SPEC.md` +30 -5",
+        "",
+        "**code**",
+        "",
+        "- `src/b.rs` +40 -10",
+        "- `src/a.rs` +300 -60",
+        "",
+        "**docs**",
+        "",
+        "- `logo.png` binary",
+        "",
+        "**generated**",
+        "",
+        "- `Cargo.lock` +9000 -400",
+        "",
+        "</details>",
+        "<!-- /diff-size -->",
+      }, "\n"),
+      block
+    )
+  end)
+
+  it("is the bare counts for an empty diff", function()
+    assert.equals("<!-- diff-size -->\n**+0 -0**\n<!-- /diff-size -->", diffsize.pr_block({}))
+  end)
+end)
+
+describe("diffsize.replace_block", function()
+  local block = "<!-- diff-size -->\nnew\n<!-- /diff-size -->"
+
+  it("replaces the marked section, keeping the text around it", function()
+    local body = "My intro.\r\n\r\n<!-- diff-size -->\nold\n\nlines\n<!-- /diff-size -->\n\nFooter."
+    assert.equals(
+      "My intro.\r\n\r\n<!-- diff-size -->\nnew\n<!-- /diff-size -->\n\nFooter.",
+      diffsize.replace_block(body, block)
+    )
+  end)
+
+  it("appends the section below the description when there is none", function()
+    assert.equals("My intro.\n\n" .. block, diffsize.replace_block("My intro.\n\n", block))
+    assert.equals(block, diffsize.replace_block("", block))
+  end)
+
+  it("is idempotent", function()
+    local once = diffsize.replace_block("Intro.", block)
+    assert.equals(once, diffsize.replace_block(once, block))
+  end)
+
+  it("refuses a section opened but never closed, rather than guess where it ends", function()
+    local body, err = diffsize.replace_block("Intro.\n<!-- diff-size -->\nold", block)
+    assert.is_nil(body)
+    assert.matches("without closing it", err)
+  end)
+end)

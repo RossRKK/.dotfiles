@@ -368,6 +368,53 @@ function M.markdown(size)
   return table.concat(parts, SEP)
 end
 
+-- Around the size section of a PR body, so a refresh can find and replace it.
+M.BLOCK_START = "<!-- diff-size -->"
+M.BLOCK_END = "<!-- /diff-size -->"
+
+--- A PR body's size section: the size line, then its files by tier in a
+--- collapsed list, between BLOCK_START and BLOCK_END.
+---@param changes { path: string, additions: integer?, deletions: integer? }[] counts nil for a binary file
+---@param attrs table<string, diffsize.Attrs>? from parse_attrs
+---@return string
+function M.pr_block(changes, attrs)
+  local lines = { M.BLOCK_START, M.markdown(M.summarize(changes, attrs)) }
+  local groups = M.by_tier(changes, function(c)
+    return c.path
+  end, attrs)
+  if #groups > 0 then
+    vim.list_extend(lines, { "", "<details><summary>Files by review tier</summary>" })
+    for _, group in ipairs(groups) do
+      vim.list_extend(lines, { "", ("**%s**"):format(group.tier), "" })
+      for _, c in ipairs(group.items) do
+        local count = c.additions and ("+%d -%d"):format(c.additions, c.deletions) or "binary"
+        lines[#lines + 1] = ("- `%s` %s"):format(c.path, count)
+      end
+    end
+    vim.list_extend(lines, { "", "</details>" })
+  end
+  lines[#lines + 1] = M.BLOCK_END
+  return table.concat(lines, "\n")
+end
+
+--- `body` with its size section replaced by `block`, or `block` appended when
+--- it has none; everything outside the markers is kept as it was.
+---@param body string
+---@param block string from pr_block
+---@return string? body, string? err an opened section never closed
+function M.replace_block(body, block)
+  local start = body:find(M.BLOCK_START, 1, true)
+  if not start then
+    local kept = body:gsub("%s+$", "")
+    return kept == "" and block or kept .. "\n\n" .. block
+  end
+  local _, finish = body:find(M.BLOCK_END, start, true)
+  if not finish then
+    return nil, ("the body opens %s without closing it"):format(M.BLOCK_START)
+  end
+  return body:sub(1, start - 1) .. block .. body:sub(finish + 1)
+end
+
 --- Highlighted chunks, { text, hl } pairs: the counts, the bar, then the
 --- legend in the bar's colours with `dim` between its entries.
 ---@param size diffsize.Size
