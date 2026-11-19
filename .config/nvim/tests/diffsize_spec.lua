@@ -2,9 +2,24 @@ local assert = require("luassert")
 local diffsize = require("util.diffsize")
 
 describe("diffsize.parse_attrs", function()
-  it("reads path/attr/value triples from check-attr -z output", function()
-    local out = "a.rs\0linguist-generated\0unspecified\0gen/x y.py\0linguist-generated\0true\0"
-    assert.same({ ["a.rs"] = "unspecified", ["gen/x y.py"] = "true" }, diffsize.parse_attrs(out))
+  it("parses each path's attributes into flags and a tier", function()
+    local out = table.concat({
+      "a.rs\0linguist-generated\0unspecified\0",
+      "a.rs\0linguist-documentation\0unspecified\0",
+      "a.rs\0review-tier\0unspecified\0",
+      "gen/x y.py\0linguist-generated\0true\0",
+      "gen/x y.py\0linguist-documentation\0unset\0",
+      "gen/x y.py\0review-tier\0interface\0",
+    })
+    assert.same({
+      ["a.rs"] = {},
+      ["gen/x y.py"] = { generated = true, documentation = false, tier = "interface" },
+    }, diffsize.parse_attrs(out))
+  end)
+
+  it("drops a review-tier that names no tier", function()
+    local out = "a.rs\0review-tier\0important\0"
+    assert.same({ ["a.rs"] = {} }, diffsize.parse_attrs(out))
   end)
 
   it("is empty for empty output", function()
@@ -18,76 +33,131 @@ describe("diffsize.attr_input / attr_cmd", function()
     assert.equals("", diffsize.attr_input({}))
   end)
 
-  it("reads attributes from a tree only when given one", function()
-    assert.same({ "git", "check-attr", "-z", "--stdin", "linguist-generated" }, diffsize.attr_cmd())
+  it("asks for every attribute tier() reads, from a tree only when given one", function()
+    local attrs = { "linguist-generated", "linguist-documentation", "review-tier" }
     assert.same(
-      { "git", "check-attr", "-z", "--stdin", "--source", "origin/main", "linguist-generated" },
+      vim.list_extend({ "git", "check-attr", "-z", "--stdin" }, attrs),
+      diffsize.attr_cmd()
+    )
+    assert.same(
+      vim.list_extend({ "git", "check-attr", "-z", "--stdin", "--source", "origin/main" }, attrs),
       diffsize.attr_cmd("origin/main")
     )
   end)
 end)
 
-describe("diffsize.is_generated", function()
+describe("diffsize.tier", function()
+  local cases = {
+    { "api/v1/service.proto", "interface" },
+    { "docs/foo-spec.md", "interface" },
+    { "INTENT.txt", "interface" },
+    { "openspec/specs/queue/spec.md", "interface" },
+    { "lua/foo_spec.lua", "test" },
+    { "tests/helpers.lua", "test" },
+    { "pkg/server_test.go", "test" },
+    { "app/test_views.py", "test" },
+    { "web/src/__tests__/a.tsx", "test" },
+    { "web/src/a.test.ts", "test" },
+    { "README.md", "docs" },
+    { "notes.txt", "code" },
+    { "src/main.rs", "code" },
+    { "testing/main.rs", "code" },
+    { "Cargo.lock", "generated" },
+    { "projects/web/package-lock.json", "generated" },
+    { "src/Cargo.lock.rs", "code" },
+  }
+  for _, case in ipairs(cases) do
+    it(("puts %s in %s by its path"):format(case[1], case[2]), function()
+      assert.equals(case[2], diffsize.tier(case[1], nil))
+    end)
+  end
+
   it("follows linguist-generated when it is set either way", function()
-    assert.is_true(diffsize.is_generated("infra/_generated/a.yaml", "true"))
-    assert.is_true(diffsize.is_generated("x", "set"))
-    assert.is_false(diffsize.is_generated("Cargo.lock", "false"))
-    assert.is_false(diffsize.is_generated("Cargo.lock", "unset"))
+    assert.equals("generated", diffsize.tier("infra/_generated/a.yaml", { generated = true }))
+    assert.equals("code", diffsize.tier("Cargo.lock", { generated = false }))
+    assert.equals("interface", diffsize.tier("gen/a.proto", { generated = false }))
   end)
 
-  it("counts lockfiles as generated at any depth unless told otherwise", function()
-    assert.is_true(diffsize.is_generated("Cargo.lock", "unspecified"))
-    assert.is_true(diffsize.is_generated("projects/web/package-lock.json", nil))
-    assert.is_false(diffsize.is_generated("src/Cargo.lock.rs", nil))
-    assert.is_false(diffsize.is_generated("src/main.rs", "unspecified"))
+  it("follows linguist-documentation when it is set either way", function()
+    assert.equals("docs", diffsize.tier("site/guide.html", { documentation = true }))
+    assert.equals("code", diffsize.tier("templates/email.md", { documentation = false }))
+  end)
+
+  it("takes review-tier over every other rule", function()
+    assert.equals("code", diffsize.tier("Cargo.lock", { tier = "code" }))
+    assert.equals(
+      "generated",
+      diffsize.tier("src/main.rs", { tier = "generated", generated = false })
+    )
+    assert.equals("interface", diffsize.tier("schema/openapi.yaml", { tier = "interface" }))
   end)
 end)
 
 describe("diffsize.summarize", function()
   local changes = {
-    { path = "src/a.rs", additions = 10, deletions = 2 },
-    { path = "src/b.rs", additions = 5, deletions = 0 },
-    { path = "Cargo.lock", additions = 3000, deletions = 40 },
-    { path = "gen/schema.json", additions = 200, deletions = 100 },
+    { path = "api.proto", additions = 100, deletions = 20 },
+    { path = "src/a.rs", additions = 300, deletions = 60 },
+    { path = "src/b.rs", additions = 40, deletions = 10 },
+    { path = "src/a_test.rs", additions = 250, deletions = 10 },
+    { path = "README.md", additions = 9, deletions = 0 },
+    { path = "Cargo.lock", additions = 9000, deletions = 400 },
   }
 
-  it("keeps generated files out of the totals, counted apart", function()
-    local size = diffsize.summarize(changes, { ["gen/schema.json"] = "true" })
+  it("sums each tier, untouched tiers zero", function()
+    local size = diffsize.summarize(changes)
     assert.same({
-      additions = 15,
-      deletions = 2,
-      files = 2,
-      generated = { additions = 3200, deletions = 140, files = 2 },
-    }, size)
+      interface = { additions = 100, deletions = 20 },
+      code = { additions = 340, deletions = 70 },
+      test = { additions = 250, deletions = 10 },
+      docs = { additions = 9, deletions = 0 },
+      generated = { additions = 9000, deletions = 400 },
+    }, size.tiers)
+    assert.same(
+      { "interface", "code", "test", "docs", "generated" },
+      vim.tbl_map(function(t)
+        return t.name
+      end, diffsize.TIERS)
+    )
   end)
 
-  it("still knows lockfiles without any attributes", function()
+  it("headlines the reviewed tiers' plain sum, generated excluded", function()
     local size = diffsize.summarize(changes)
-    assert.equals(3, size.files)
-    assert.equals(1, size.generated.files)
+    assert.same({ additions = 699, deletions = 100 }, diffsize.headline(size))
+    assert.same({ "+699", "-100" }, { diffsize.counts(size) })
+  end)
+
+  it("moves a file between tiers by its attributes", function()
+    local size = diffsize.summarize(changes, { ["Cargo.lock"] = { generated = false } })
+    assert.same({ additions = 0, deletions = 0 }, size.tiers.generated)
+    assert.same({ additions = 9699, deletions = 500 }, diffsize.headline(size))
   end)
 end)
 
-describe("diffsize.chunks", function()
-  local function text(size)
-    return table.concat(vim.tbl_map(function(c)
-      return c[1]
-    end, diffsize.chunks(size, "Dim")))
-  end
-  local none = { additions = 0, deletions = 0, files = 0 }
+describe("diffsize.abbrev", function()
+  it("shortens large counts", function()
+    assert.equals("950", diffsize.abbrev(950))
+    assert.equals("1k", diffsize.abbrev(1000))
+    assert.equals("9.4k", diffsize.abbrev(9400))
+    assert.equals("12k", diffsize.abbrev(12345))
+    assert.equals("1.3M", diffsize.abbrev(1300000))
+  end)
+end)
 
-  it("reads +adds -dels in N files", function()
+describe("diffsize text", function()
+  local size = diffsize.summarize({
+    { path = "api.proto", additions = 100, deletions = 20 },
+    { path = "src/a.rs", additions = 400, deletions = 10 },
+    { path = "Cargo.lock", additions = 9000, deletions = 400 },
+  })
+
+  it("legends only the touched tiers, in tier order", function()
     assert.equals(
-      "+12 -3 in 1 file",
-      text({ additions = 12, deletions = 3, files = 1, generated = none })
+      "**+500 -30** \u{00b7} 120 interface \u{00b7} 410 code \u{00b7} 9.4k generated",
+      diffsize.markdown(size)
     )
   end)
 
-  it("says how many generated files it left out", function()
-    local gen = { additions = 9, deletions = 9, files = 2 }
-    assert.equals(
-      "+12 -3 in 4 files \u{00b7} 2 generated excluded",
-      text({ additions = 12, deletions = 3, files = 4, generated = gen })
-    )
+  it("is the bare counts for an empty diff", function()
+    assert.equals("**+0 -0**", diffsize.markdown(diffsize.summarize({})))
   end)
 end)

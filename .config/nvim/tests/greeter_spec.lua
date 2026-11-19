@@ -303,15 +303,16 @@ describe("greeter.pr_items", function()
 
   it("adds the diff size under the status once it has landed", function()
     local sized = vim.tbl_extend("force", pr, {
-      size = {
-        additions = 12,
-        deletions = 3,
-        files = 2,
-        generated = { additions = 0, deletions = 0, files = 0 },
-      },
+      size = require("util.diffsize").summarize({
+        { path = "src/a.rs", additions = 12, deletions = 3 },
+        { path = "Cargo.lock", additions = 900, deletions = 0 },
+      }),
     })
     local t = texts(greeter.pr_items(sized, 80, 10))
-    assert.same({ "open", "+12 -3 in 2 files", "<pad>", "## Why" }, vim.list_slice(t, 2, 5))
+    assert.same(
+      { "open", "+12 -3  15 code \u{00b7} 900 generated", "<pad>", "## Why" },
+      vim.list_slice(t, 2, 5)
+    )
   end)
 
   it("says so when there is no description", function()

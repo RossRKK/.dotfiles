@@ -1114,14 +1114,14 @@ local function excluded(dir)
   return set
 end
 
---- linguist-generated for `paths`, as the base branch's .gitattributes say
+--- The review-tier attributes of `paths`, as the base branch's .gitattributes say
 --- (the local remote-tracking ref: attributes rarely move, so a stale fetch is
 --- fine). Falls back to the checkout's own attributes when that ref isn't
---- here, and to none (lockfiles only, see util/diffsize) outside a git repo.
+--- here, and to none (path rules only, see util/diffsize) outside a git repo.
 ---@param dir string
 ---@param base string
 ---@param paths string[]
----@return table<string, string>
+---@return table<string, diffsize.Attrs>
 local function attributes(dir, base, paths)
   local opts = { cwd = dir, stdin = diffsize.attr_input(paths) }
   local res = run(diffsize.attr_cmd("refs/remotes/origin/" .. base), opts)
@@ -1625,15 +1625,14 @@ function M.setup()
   timer:start(M.INTERVAL_MS, M.INTERVAL_MS, vim.schedule_wrap(M.refresh_open))
 end
 
---- The preview's size line, markdown: "**+12 -3** in 4 files · …".
+--- The preview's size line, markdown: "**+12 -3** · 10 code · 5 test · …".
 ---@param size diffsize.Size?
 ---@return string
 local function size_line(size)
   if not size then
     return ""
   end
-  local adds, dels = diffsize.counts(size)
-  return ("**%s %s**%s"):format(adds, dels, diffsize.detail(size))
+  return diffsize.markdown(size)
 end
 
 ---@param ms integer
