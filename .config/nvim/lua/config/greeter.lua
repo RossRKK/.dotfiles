@@ -675,25 +675,15 @@ end
 ---@param attrs table<string, diffsize.Attrs>
 ---@return { rel: string }[]
 function M.by_tier(files, attrs)
-  local diffsize = require("util.diffsize")
-  local rank = {}
-  for i, t in ipairs(diffsize.TIERS) do
-    rank[t.name] = i
+  local ordered = {}
+  for _, group in
+    ipairs(require("util.diffsize").by_tier(files, function(f)
+      return f.rel
+    end, attrs))
+  do
+    vim.list_extend(ordered, group.items)
   end
-  local keyed = {}
-  for i, f in ipairs(files) do
-    keyed[i] = { file = f, rank = rank[diffsize.tier(f.rel, attrs[f.rel])], index = i }
-  end
-  -- table.sort isn't stable, so the original position breaks ties.
-  table.sort(keyed, function(a, b)
-    if a.rank ~= b.rank then
-      return a.rank < b.rank
-    end
-    return a.index < b.index
-  end)
-  return vim.tbl_map(function(k)
-    return k.file
-  end, keyed)
+  return ordered
 end
 
 --- The agents section: every agent running in any workspace, not just this one,

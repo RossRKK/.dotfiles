@@ -246,6 +246,31 @@ function M.extension(path)
   return ext and ext:lower()
 end
 
+--- `items` grouped by the review tier of each one's path: touched tiers only,
+--- in tier order, each keeping its items in the order given.
+---@generic T
+---@param items T[]
+---@param path_of fun(item: T): string
+---@param attrs table<string, diffsize.Attrs>? from parse_attrs
+---@return { tier: diffsize.Tier, items: T[] }[]
+function M.by_tier(items, path_of, attrs)
+  attrs = attrs or {}
+  local grouped = {}
+  for _, item in ipairs(items) do
+    local path = path_of(item)
+    local tier = M.tier(path, attrs[path])
+    grouped[tier] = grouped[tier] or {}
+    table.insert(grouped[tier], item)
+  end
+  local out = {}
+  for _, t in ipairs(M.TIERS) do
+    if grouped[t.name] then
+      out[#out + 1] = { tier = t.name, items = grouped[t.name] }
+    end
+  end
+  return out
+end
+
 ---@class diffsize.Count
 ---@field additions integer
 ---@field deletions integer

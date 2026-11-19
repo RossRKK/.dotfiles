@@ -252,3 +252,34 @@ describe("diffsize.chunks", function()
     assert.equals("Type", vim.api.nvim_get_hl(0, { name = "DiffSizeProto" }).link)
   end)
 end)
+
+describe("diffsize.by_tier", function()
+  local function path(c)
+    return c.path
+  end
+
+  it("groups touched tiers in tier order, files keeping their order within one", function()
+    local groups = diffsize.by_tier({
+      { path = "src/b.rs" },
+      { path = "Cargo.lock" },
+      { path = "api.proto" },
+      { path = "src/a.rs" },
+      { path = "src/a_test.rs" },
+    }, path)
+    assert.same({
+      { tier = "proto", items = { { path = "api.proto" } } },
+      { tier = "code", items = { { path = "src/b.rs" }, { path = "src/a.rs" } } },
+      { tier = "test", items = { { path = "src/a_test.rs" } } },
+      { tier = "generated", items = { { path = "Cargo.lock" } } },
+    }, groups)
+  end)
+
+  it("tiers each file by its attributes", function()
+    local groups = diffsize.by_tier({ { path = "a.rs" } }, path, { ["a.rs"] = { tier = "spec" } })
+    assert.same({ { tier = "spec", items = { { path = "a.rs" } } } }, groups)
+  end)
+
+  it("is empty for no files", function()
+    assert.same({}, diffsize.by_tier({}, path))
+  end)
+end)
