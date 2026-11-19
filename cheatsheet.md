@@ -289,6 +289,10 @@ background, leaving you on your tab, and prints the name of the Claude that
 starts there once it can take messages, so the agent knows who to hand the work
 to.
 
+The PRs agents open end with `diff-size` output: the greeter's size line, and the
+files by review tier in a collapsed list. They refresh it with
+`diff-size --update-pr` after each push, measured against the PR's own base.
+
 Buffers are global in Vim, but the bufferline shows only those under the current
 tab's project, and `Shift+L`/`Shift+H` cycle that filtered list.
 
