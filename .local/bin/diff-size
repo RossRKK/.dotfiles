@@ -1,0 +1,130 @@
+#!/usr/bin/env -S nvim -l
+-- Prints a PR body's size section: the branch's diff by review tier, its files
+-- grouped by tier, between markers a refresh replaces (util/diffsize.lua).
+--
+--   diff-size [<base>]     against <base>, by default the greeter's review base
+--   diff-size --update-pr  against the current branch's PR base, written into
+--                          that PR's body in place of its old one
+--
+-- Counts come from `git diff --numstat <base>...HEAD`, GitHub's own PR diff,
+-- rather than triage's report: that drops deleted and linguist-generated files
+-- and folds in uncommitted work, none of which a PR body should.
+
+local cli = {}
+
+-- triage.nvim where lazy's dev path finds it, else lazy's own copy.
+local triage_dir = vim.fn.expand("~/dev/triage.nvim")
+if vim.fn.isdirectory(triage_dir) == 0 then
+  triage_dir = vim.fn.stdpath("data") .. "/lazy/triage.nvim"
+end
+vim.opt.runtimepath:prepend(triage_dir)
+
+local diffsize = require("util.diffsize")
+
+function cli.main(args)
+  local root = vim.trim(cli.run({ "git", "rev-parse", "--show-toplevel" }))
+  -- numstat paths are from the root, and check-attr reads paths from the cwd.
+  vim.fn.chdir(root)
+  if args[1] == "--update-pr" and #args == 1 then
+    return cli.update_pr()
+  end
+  if #args > 1 or (args[1] or ""):match("^%-") then
+    cli.fail("usage: diff-size [<base>] | diff-size --update-pr")
+  end
+  io.write(cli.block(args[1] or cli.review_base(root)), "\n")
+end
+
+--- Replace the size section of the current branch's PR, measured against the
+--- PR's own base: a stacked PR's parent, whatever the review base would be.
+function cli.update_pr()
+  local pr = vim.json.decode(cli.run({ "gh", "pr", "view", "--json", "body,baseRefName" }))
+  local block = cli.block("origin/" .. pr.baseRefName)
+  local body, err = diffsize.replace_block(pr.body, block)
+  if not body then
+    cli.fail(err)
+  end
+  if body ~= pr.body then
+    cli.run({ "gh", "pr", "edit", "--body-file", "-" }, body)
+  end
+  io.write(block, "\n")
+end
+
+--- The size section of HEAD's diff to `base`, tiered by HEAD's .gitattributes.
+---@param base string
+---@return string
+function cli.block(base)
+  local numstat = cli.run({ "git", "diff", "--numstat", "-z", base .. "...HEAD" })
+  local changes = {}
+  for path, change in pairs(require("triage.vcs.git").parse_numstat(numstat)) do
+    local lines = change.lines or {}
+    changes[#changes + 1] =
+      { path = path, additions = lines.additions, deletions = lines.deletions }
+  end
+  table.sort(changes, function(a, b)
+    return a.path < b.path
+  end)
+  local paths = vim.tbl_map(function(c)
+    return c.path
+  end, changes)
+  local attrs = cli.run(diffsize.attr_cmd("HEAD"), diffsize.attr_input(paths))
+  return diffsize.pr_block(changes, diffsize.parse_attrs(attrs))
+end
+
+--- The base the greeter reviews this branch against: triage's, with the
+--- branch's open PR base first, as plugins/review.lua wires it.
+---@param root string
+---@return string
+function cli.review_base(root)
+  local triage = require("triage")
+  triage.setup({ resolve_base = cli.open_pr_base })
+  local report
+  triage.report({ root = root }, function(r)
+    report = r or false
+  end)
+  vim.wait(60000, function()
+    return report ~= nil
+  end)
+  if not (report and report.base) then
+    cli.fail("no review base found; pass one")
+  end
+  return report.base
+end
+
+--- The base of `branch`'s open PR from this repo, nil when it has none.
+---@param _ string root
+---@param branch string?
+---@return string?
+function cli.open_pr_base(_, branch)
+  if not branch then
+    return nil
+  end
+  local res = vim
+    .system(
+      { "gh", "pr", "view", branch, "--json", "state,baseRefName,isCrossRepository" },
+      { text = true }
+    )
+    :wait()
+  local ok, pr = pcall(vim.json.decode, res.stdout or "")
+  if res.code ~= 0 or not ok or pr.state ~= "OPEN" or pr.isCrossRepository then
+    return nil
+  end
+  return pr.baseRefName
+end
+
+---@param cmd string[]
+---@param stdin string?
+---@return string stdout
+function cli.run(cmd, stdin)
+  local res = vim.system(cmd, { text = true, stdin = stdin }):wait()
+  if res.code ~= 0 then
+    cli.fail(("%s failed: %s"):format(table.concat(cmd, " "), vim.trim(res.stderr or "")))
+  end
+  return res.stdout or ""
+end
+
+function cli.fail(msg)
+  io.stderr:write("diff-size: ", msg, "\n")
+  os.exit(1)
+end
+
+cli.main(arg)

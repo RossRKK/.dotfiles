@@ -211,6 +211,8 @@ in
         ".local/bin/worktree-tab"
         # Agents open files in the editor with it (.claude/CLAUDE.md).
         ".local/bin/nvim-open"
+        # Agents keep their PRs' size section current with it (.claude/CLAUDE.md).
+        ".local/bin/diff-size"
         # Out-of-store so Claude can still append to it in place.
         ".claude/CLAUDE.md"
       ]
