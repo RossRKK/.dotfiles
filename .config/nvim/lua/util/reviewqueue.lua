@@ -1168,28 +1168,6 @@ local function repo_of(dir)
   return { owner = info.owner.login, name = info.name }
 end
 
---- The diff size of one PR (the greeter's PR under review), or nil if it
---- couldn't be had. Its own fetch rather than `gh pr view --json files`,
---- which stops at 100 files without saying so.
----@param dir string
----@param number integer
----@param cb fun(size: diffsize.Size?)
-function M.size(dir, number, cb)
-  coroutine.wrap(function()
-    local ok, size = pcall(function()
-      local repo = repo_of(dir)
-      local node = details(repo, { number })[1]
-      if not node then
-        return nil
-      end
-      local pr = M.from_node(node, false, repo)
-      sizes(dir, { pr })
-      return pr.size
-    end)
-    cb(ok and size or nil)
-  end)()
-end
-
 --- The checks on one PR's head (the greeter's PR), read as the queue reads
 --- them, or nil if they couldn't be had. GraphQL rather than `gh pr view`,
 --- whose rollup has no app slug to tell a merge gate by.

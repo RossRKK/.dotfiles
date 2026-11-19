@@ -4,9 +4,10 @@
 -- workspace.open() used to leave a plain empty buffer there, which told you
 -- nothing and did nothing. Instead the window gets a snacks dashboard scoped to
 -- THIS workspace, showing where the branch stands: repo and branch, its position
--- against the remote and the review base, and the files it changes. It comes
--- back whenever the buffer list empties out again (<leader>X, or closing the
--- last buffer), so "no buffers open" is a status screen rather than a dead end.
+-- against the remote and the review base, the size of its diff, and the files
+-- it changes. It comes back whenever the buffer list empties out again
+-- (<leader>X, or closing the last buffer), so "no buffers open" is a status
+-- screen rather than a dead end.
 --
 -- The numbers and the file list come from triage.report (plugins/review.lua) --
 -- the same merge-result diff and triage ledger review mode marks the explorer
@@ -161,10 +162,13 @@ function M.fetch(root)
     return
   end
   fetching[root] = true
+  -- The tab or its checkout can go while the report is in flight (<leader>tX).
+  local function gone()
+    return not M.live_roots()[root] or not vim.uv.fs_stat(root)
+  end
   triage.report({ root = root }, function(report)
-    fetching[root] = nil
-    -- The tab or its checkout can go while the report is in flight (<leader>tX).
-    if not M.live_roots()[root] or not vim.uv.fs_stat(root) then
+    if gone() then
+      fetching[root] = nil
       return
     end
     if report then
@@ -173,20 +177,33 @@ function M.fetch(root)
         M.fetch_pr(root, report.branch)
       end
     end
-    M.cache_report(root, report or false)
+    M.read_attrs(root, report and report.files or {}, function(attrs)
+      fetching[root] = nil
+      if not gone() then
+        M.cache_report(root, report or false, attrs)
+      end
+    end)
   end)
 end
+
+-- The review-tier attributes of each root's changed files (util/diffsize),
+-- read alongside its report so the size line and the file list's order land
+-- with the files they describe.
+---@type table<string, table<string, diffsize.Attrs>>
+M.attrs = {}
 
 --- Store `report` as `root`'s overview and repaint everything drawing off it.
 ---@param root string workspace cwd
 ---@param report table|false
-function M.cache_report(root, report)
+---@param attrs table<string, diffsize.Attrs>
+function M.cache_report(root, report, attrs)
   -- Only redraw on an actual change: re-rendering an identical dashboard
   -- fights the cursor for no benefit.
-  if vim.deep_equal(reports[root], report) then
+  if vim.deep_equal(reports[root], report) and vim.deep_equal(M.attrs[root], attrs) then
     return
   end
   reports[root] = report
+  M.attrs[root] = attrs
   -- Re-resolves every open dashboard's sections, which is how the overview
   -- appears without reopening the greeter.
   M.update_dashboards()
@@ -198,6 +215,32 @@ function M.cache_report(root, report)
   -- its repaints hang off fishmonger and tabpage events, none of which fire
   -- for a checkout. Announce the fresh report so it can repaint too.
   vim.api.nvim_exec_autocmds("User", { pattern = "GreeterReportChanged" })
+end
+
+--- The review-tier attributes of `files` (TriageReport entries), from the
+--- checkout's own .gitattributes: the branch is checked out, so its attributes
+--- are the ones that apply, a change it makes to them included. None (path
+--- rules only) where git can't answer, such as a jj-only workspace.
+---@param root string
+---@param files { rel: string }[]
+---@param cb fun(attrs: table<string, diffsize.Attrs>)
+function M.read_attrs(root, files, cb)
+  if #files == 0 then
+    return cb({})
+  end
+  local diffsize = require("util.diffsize")
+  local paths = vim.tbl_map(function(f)
+    return f.rel
+  end, files)
+  vim.system(
+    diffsize.attr_cmd(),
+    { cwd = root, text = true, stdin = diffsize.attr_input(paths) },
+    function(res)
+      vim.schedule(function()
+        cb(res.code == 0 and diffsize.parse_attrs(res.stdout or "") or {})
+      end)
+    end
+  )
 end
 
 -- The PR for the workspace's branch, per workspace root: { branch, at, pr }
@@ -237,13 +280,10 @@ function M.fetch_pr(root, branch, force)
             pcall(vim.json.decode, res.stdout or "", { luanil = { object = true, array = true } })
           pr = ok and type(decoded) == "table" and decoded or false
         end
-        -- The diff size is a fetch of its own (every file, for the generated
-        -- ones), so it's kept until the head moves rather than redone per TTL.
         local old = cached and cached.pr
-        local same_head = pr and old and old.number == pr.number and old.headRefOid == pr.headRefOid
-        if same_head then
+        if pr and old and old.number == pr.number and old.headRefOid == pr.headRefOid then
           -- Last round's checks stand in until this round's land (below).
-          pr.size, pr.checks = old.size, old.checks
+          pr.checks = old.checks
         end
         local changed = not (cached and vim.deep_equal(cached.pr, pr))
         local was = cached and cached.branch == branch and M.pr_base(root, branch)
@@ -259,19 +299,10 @@ function M.fetch_pr(root, branch, force)
         if M.pr_base(root, branch) ~= was and triage.is_enabled(root) then
           triage.refresh()
         end
-        local rq = require("util.reviewqueue")
         if pr then
-          rq.checks(root, pr.number, function(checks)
+          require("util.reviewqueue").checks(root, pr.number, function(checks)
             if checks and M.prs[root] == entry and not vim.deep_equal(pr.checks, checks) then
               pr.checks = checks
-              M.update_dashboards()
-            end
-          end)
-        end
-        if pr and not same_head then
-          rq.size(root, pr.number, function(size)
-            if size and M.prs[root] == entry then
-              pr.size = size
               M.update_dashboards()
             end
           end)
@@ -501,12 +532,13 @@ local function line(chunks)
   return { text = chunks, align = "center" }
 end
 
---- The two-line summary under the header: where the branch sits against its
---- remote, and against the base it's reviewed into. Nil when there's nothing
---- meaningful to say (no report yet, or not a repo).
+--- The summary under the header: where the branch sits against its remote,
+--- against the base it's reviewed into, and how big its diff to that base is.
+--- Nil when there's nothing meaningful to say (no report yet, or not a repo).
 ---@param report table? TriageReport
+---@param attrs table<string, diffsize.Attrs>
 ---@return table[]?
-local function overview(report)
+local function overview(report, attrs)
   if not report then
     return nil
   end
@@ -545,7 +577,34 @@ local function overview(report)
   if #base > 0 then
     items[#items + 1] = line(base)
   end
+  items[#items + 1] = M.size_line(report, attrs)
   return items
+end
+
+--- The diff size by review tier (util/diffsize) of the files the report lists,
+--- the same diff as the changed-file list below it. Nil when nothing changed.
+---
+--- The one size line, PR or not: a PR's block only shows while its branch is
+--- checked out, where this diff is the PR's against the same base plus any
+--- work not pushed yet -- GitHub's count would only lag behind it.
+---@param report table TriageReport
+---@param attrs table<string, diffsize.Attrs>
+---@return table? item
+function M.size_line(report, attrs)
+  if #report.files == 0 then
+    return nil
+  end
+  local diffsize = require("util.diffsize")
+  local changes = vim.tbl_map(function(f)
+    -- A binary file has no lines to weigh.
+    local lines = f.lines or { additions = 0, deletions = 0 }
+    return { path = f.rel, additions = lines.additions, deletions = lines.deletions }
+  end, report.files)
+  local chunks = {}
+  for i, c in ipairs(diffsize.chunks(diffsize.summarize(changes, attrs), "SnacksDashboardDesc")) do
+    chunks[i] = { c[1], hl = c[2] }
+  end
+  return line(chunks)
 end
 
 --- The changed-file list: every file the branch is responsible for, marked with
@@ -728,8 +787,7 @@ function M.pr_status(pr)
   return chunks
 end
 
---- The PR block: "#N title", the status line, the diff size, then the
---- description, wrapped to `width` and cut to `max_lines` (the file list wants
+--- The PR block: "#N title", the status line, then the description, wrapped to `width` and cut to `max_lines` (the file list wants
 --- the room more -- the whole body is a <C-o> away in the browser, or
 --- nitpick's overview).
 ---@param pr table `gh pr view` JSON
@@ -744,16 +802,8 @@ function M.pr_items(pr, width, max_lines)
       { pr.title or "", hl = "SnacksDashboardHeader" },
     }),
     line(M.pr_status(pr)),
+    { padding = 1 },
   }
-  -- Set by fetch_pr once its own fetch lands; no line until then.
-  if pr.size then
-    local chunks = {}
-    for i, c in ipairs(require("util.diffsize").chunks(pr.size, dim)) do
-      chunks[i] = { c[1], hl = c[2] }
-    end
-    items[#items + 1] = line(chunks)
-  end
-  items[#items + 1] = { padding = 1 }
 
   -- PR templates leave HTML comments behind; they're instructions to the
   -- author, not description. Then collapse blank runs to one.
@@ -935,9 +985,9 @@ function M.sections(root, buf, tab, report)
       end
       return #items > 0 and items or nil
     end,
-    -- The two-line ahead/behind summary.
+    -- The ahead/behind summary and the diff size.
     function()
-      local items = overview(report())
+      local items = overview(report(), M.attrs[root] or {})
       return items and vim.list_extend(items, { { padding = 1 } }) or nil
     end,
     {

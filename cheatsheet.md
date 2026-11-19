@@ -160,7 +160,10 @@ off the left end. It's also what the main window falls back to when the last
 buffer closes, rather than a blank `[No Name]`. It shows a branch overview:
 `repo - branch` (a worktree reads as its repo, not its checkout directory), how
 far ahead/behind its remote it is, the review base and commits on top of it,
-and the files this branch changes — the same merge-result diff and triage marks (`●` changed, `✓`
+the size of the branch's diff to that base (`+adds -dels`, a bar and a legend
+by review tier, as in [the review queue](#review-queue-spacerq) below; binary
+files count no lines), and the files this branch changes — the same
+merge-result diff and triage marks (`●` changed, `✓`
 approved, `✗` rejected, `↻` revised) review mode puts in the explorer. Each file
 has a key next to it; press it to open. `Space+X` is the quick way back to the
 greeter. Outside a git repo there's no overview, so it falls back to the pickers
@@ -701,7 +704,12 @@ changed file falls in one review tier:
 Attributes come from `.gitattributes` on the base branch; `=false` on either
 linguist attribute keeps a file out of that tier, and `review-tier=<tier>`
 overrides everything. The preview reads `**+690 -100** · 20 spec · 100 proto ·
-410 code · 260 test · 9.4k generated` (lines touched per tier, zero tiers left out).
+410 code · 260 test · 9.4k generated` (lines touched per tier, zero tiers left
+out). The greeter draws the same line for the checked-out branch, with
+attributes from the checkout itself and a bar coloured by tier: reviewed tiers
+fill it, generated trails dimmed and capped at half its width. triage leaves
+`linguist-generated` files out of the branch's file list, so there generated is
+the lockfiles only.
 
 The queue refreshes in the background every 5 minutes for every repo with an
 open tab (and when you leave review mode), so the picker opens instantly from
@@ -710,9 +718,7 @@ refreshed behind it. Outside review mode the greeter shows the counts
 (`12 need you · 1 back to you · 3 for your team`), and under them the
 [my PRs](#my-prs-spacerm) counts. Whenever the branch has a
 PR — reviewing or your own — the greeter shows it too: number, title, state,
-review decision, checks, the diff size (as above, with a bar coloured by tier:
-reviewed tiers fill it, generated trails dimmed and capped at half its width),
-and the start of the description (fenced blocks collapsed to a placeholder).
+review decision, checks, and the start of the description (fenced blocks collapsed to a placeholder).
 
 | Tier          | Means                                                              |
 | ------------- | ------------------------------------------------------------------ |

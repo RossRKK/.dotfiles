@@ -301,24 +301,48 @@ describe("greeter.pr_items", function()
     assert.same({ "Intro", "[mermaid block]", "Outro", "[code block]" }, vim.list_slice(t, 4))
   end)
 
-  it("adds the diff size under the status once it has landed", function()
-    local sized = vim.tbl_extend("force", pr, {
-      size = require("util.diffsize").summarize({
-        { path = "src/a.rs", additions = 12, deletions = 3 },
-        { path = "Cargo.lock", additions = 900, deletions = 0 },
-      }),
-    })
-    local bar = ("\u{2588}"):rep(16) .. ("\u{2591}"):rep(8)
-    local t = texts(greeter.pr_items(sized, 80, 10))
-    assert.same(
-      { "open", "+12 -3  " .. bar .. "  15 code \u{00b7} 900 generated", "<pad>", "## Why" },
-      vim.list_slice(t, 2, 5)
-    )
-  end)
-
   it("says so when there is no description", function()
     local t = texts(greeter.pr_items(vim.tbl_extend("force", pr, { body = "" }), 80, 5))
     assert.equals("no description", t[4])
+  end)
+end)
+
+describe("greeter.size_line", function()
+  local function text(item)
+    return table.concat(vim.tbl_map(function(c)
+      return c[1]
+    end, item.text))
+  end
+
+  local function file(rel, lines)
+    return { path = "/repo/" .. rel, rel = rel, status = "changed", lines = lines }
+  end
+
+  it("sizes the report's files by tier, a binary file weighing nothing", function()
+    local report = {
+      files = {
+        file("src/a.rs", { additions = 12, deletions = 3 }),
+        file("logo.png", nil),
+        file("Cargo.lock", { additions = 900, deletions = 0 }),
+      },
+    }
+    local bar = ("\u{2588}"):rep(16) .. ("\u{2591}"):rep(8)
+    assert.equals(
+      "+12 -3  " .. bar .. "  15 code \u{00b7} 900 generated",
+      text(greeter.size_line(report, {}))
+    )
+  end)
+
+  it("moves a file between tiers by its attributes", function()
+    local report = { files = { file("gen/api.rs", { additions = 4, deletions = 0 }) } }
+    assert.equals(
+      "+0 -0  " .. ("\u{2591}"):rep(8) .. "  4 generated",
+      text(greeter.size_line(report, { ["gen/api.rs"] = { generated = true } }))
+    )
+  end)
+
+  it("is absent when nothing changed", function()
+    assert.is_nil(greeter.size_line({ files = {} }, {}))
   end)
 end)
 
@@ -500,6 +524,7 @@ describe("greeter.fetch", function()
       fetch_pr = greeter.fetch_pr,
       watch = greeter.watch,
       cache_report = greeter.cache_report,
+      read_attrs = greeter.read_attrs,
     }
     calls = {}
     package.loaded.triage = {
@@ -512,14 +537,18 @@ describe("greeter.fetch", function()
         calls[#calls + 1] = name
       end
     end
+    greeter.read_attrs = function(_, _, cb)
+      calls[#calls + 1] = "read_attrs"
+      cb({})
+    end
     dir = vim.fs.normalize(vim.fn.tempname())
     vim.fn.mkdir(dir, "p")
   end)
 
   after_each(function()
     package.loaded.triage = saved.triage
-    greeter.fetch_pr, greeter.watch, greeter.cache_report =
-      saved.fetch_pr, saved.watch, saved.cache_report
+    greeter.fetch_pr, greeter.watch, greeter.cache_report, greeter.read_attrs =
+      saved.fetch_pr, saved.watch, saved.cache_report, saved.read_attrs
     vim.cmd("silent! tabonly!")
     vim.fn.delete(dir, "rf")
   end)
@@ -536,7 +565,7 @@ describe("greeter.fetch", function()
     {
       "acts on a report for a live tab's checkout",
       open_tab,
-      { "watch", "fetch_pr", "cache_report" },
+      { "watch", "fetch_pr", "read_attrs", "cache_report" },
     },
     { "drops a report whose tab has closed", function() end, {} },
     {
