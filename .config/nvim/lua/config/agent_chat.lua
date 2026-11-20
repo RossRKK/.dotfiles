@@ -8,8 +8,10 @@ local claude_session = require("util.claude_session")
 
 ---@class agent_chat.Options
 ---@field claude_sessions string Claude's live-session records (util/claude_session.lua)
+---@field claude_projects string Claude's projects directory, holding each session's transcript
 local options = {
   claude_sessions = vim.fn.expand("~/.claude/sessions"),
+  claude_projects = vim.fn.expand("~/.claude/projects"),
 }
 
 ---@param opts agent_chat.Options
@@ -17,7 +19,7 @@ function M.setup(opts)
   options = vim.tbl_extend("force", options, opts)
 end
 
-local paint, repaint_all, title_hl, set_title_hl -- defined below their callers
+local host, host_first, newest, start_spec, paint, repaint_all, title_hl, set_title_hl -- defined below their callers
 
 -- A session's name and colour arrive as agent-status and Claude report them.
 vim.api.nvim_create_autocmd("User", {
@@ -32,16 +34,102 @@ vim.api.nvim_create_autocmd("User", {
 -- directory fishmonger gives the tabpage rather than the focused window's.
 function M.new(tab)
   local fishmonger = require("fishmonger")
+  host(start_spec(fishmonger.dir(tab)), fishmonger.new)
+end
+
+--- Terminal 1's agent chat in `tab`: back in session `session_id` when given, else
+--- in the directory's newest conversation, or a new one when it has none, as
+--- `claude --continue; or claude` does for a terminal.
+---@param tab integer
+---@param session_id? string a session whose transcript exists
+function M.start(tab, session_id)
+  local dir = require("fishmonger").dir(tab)
+  if session_id then
+    return host_first(tab, start_spec(claude_session.cwd(options.claude_projects, session_id) or dir, session_id))
+  end
+  newest(dir, function(id)
+    host_first(tab, start_spec(dir, id))
+  end)
+end
+
+--- Whether an agent chat runs Claude session `id`.
+---@param id string
+---@return boolean
+function M.hosts(id)
+  -- No chat exists before agentic loads, and asking mustn't load it.
+  local registry = package.loaded["agentic.session_registry"]
+  return registry ~= nil and vim.iter(registry.list()):any(function(session)
+    return session.session_id == id
+  end)
+end
+
+--- agentic's start spec: session `session_id` loaded, else a new one, in `cwd`.
+---@param cwd string
+---@param session_id? string
+---@return agentic.SessionStartSpec
+function start_spec(cwd, session_id)
+  local function in_cwd()
+    return cwd
+  end
+  if session_id then
+    return { kind = "load", session_id = session_id, cwd = in_cwd }
+  end
+  return { kind = "new", cwd = in_cwd }
+end
+
+--- Host the session `spec` starts in slot 1 of `tab`, leaving focus where it is.
+---@param tab integer
+---@param spec agentic.SessionStartSpec
+function host_first(tab, spec)
+  local fishmonger = require("fishmonger")
+  -- Finding the newest session takes a round trip, in which the tab may have closed or slot 1 filled.
+  if
+    not vim.api.nvim_tabpage_is_valid(tab)
+    or vim.iter(fishmonger.tabs(tab)):any(function(term)
+      return term.slot == 1
+    end)
+  then
+    return
+  end
+  local focus = vim.api.nvim_get_current_win()
+  host(spec, function(opts)
+    fishmonger.show(1, vim.tbl_extend("force", opts, { tab = tab, insert = false }))
+    return true
+  end)
+  if vim.api.nvim_win_is_valid(focus) then
+    vim.api.nvim_set_current_win(focus)
+  end
+end
+
+--- Calls `found` with the id of the newest session the provider lists for `dir`, or nil for none.
+---@param dir string
+---@param found fun(session_id: string?)
+function newest(dir, found)
+  local agent = require("agentic.acp.agent_instance").get_instance(require("agentic.config").provider)
+  if not agent then
+    return found(nil)
+  end
+  agent:when_ready(function()
+    agent:list_sessions(dir, function(result)
+      vim.schedule(function()
+        local latest = result and result.sessions[1]
+        found(latest and latest.sessionId)
+      end)
+    end)
+  end, function()
+    found(nil)
+  end)
+end
+
+--- Start a session from `spec` and give its chat to fishmonger through `place`,
+--- which takes fishmonger.show's hosting options and says whether it found a slot.
+---@param spec agentic.SessionStartSpec
+---@param place fun(opts: table): boolean
+function host(spec, place)
   -- agentic's public new_session asks what to do with the current session and
   -- keeps the new one's key to itself; every agent tab keeps its own session.
   local registry = require("agentic.session_registry")
-  local dir = fishmonger.dir(tab)
-  local session = registry.create(nil, {
-    kind = "new",
-    cwd = function()
-      return dir
-    end,
-  })
+  local session = registry.create(nil, spec)
   if not session then
     return
   end
@@ -75,7 +163,7 @@ function M.new(tab)
     end),
   })
 
-  local hosted = fishmonger.new({
+  local hosted = place({
     buf = buf,
     on_show = function(win)
       registry.show_session(key, { win = win })

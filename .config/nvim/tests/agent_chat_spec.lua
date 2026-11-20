@@ -35,7 +35,12 @@ local function fake_registry()
   return {
     create = function(provider, spec) ---@diagnostic disable-line: unused-local
       local session = fake_session(#created + 1)
-      created[#created + 1] = { session = session, cwd = spec.cwd(vim.fn.getcwd()) }
+      created[#created + 1] = {
+        session = session,
+        kind = spec.kind,
+        session_id = spec.session_id,
+        cwd = spec.cwd(vim.fn.getcwd()),
+      }
       sessions[session.session_key] = session
       return session
     end,
@@ -66,31 +71,35 @@ local function fake_registry()
   }
 end
 
+local jobstart = vim.fn.jobstart
+
+--- A fresh real fishmonger, its shells faked, and agent_chat over the fake registry.
+local function fresh()
+  pcall(vim.cmd, "tabonly!")
+  pcall(vim.cmd, "only!")
+  vim.w.fishmonger_side = nil
+  created, shown, hidden, destroyed, rendered = {}, {}, {}, {}, {}
+  -- Keep jobstart's real arity, as fishmonger's own suite does.
+  vim.fn.jobstart = function(cmd, opts) ---@diagnostic disable-line: duplicate-set-field, unused-local
+    return 1
+  end
+  package.loaded["fishmonger"] = nil
+  fishmonger = require("fishmonger")
+  fishmonger.setup_exit()
+  package.loaded["agentic.session_registry"] = fake_registry()
+  package.loaded["config.agent_chat"] = nil
+  agent_chat = require("config.agent_chat")
+end
+
+local function unfake()
+  vim.fn.jobstart = jobstart
+  package.loaded["agentic.session_registry"] = nil
+  package.loaded["fishmonger"] = nil
+end
+
 describe("agent_chat.new", function()
-  local jobstart = vim.fn.jobstart
-
-  before_each(function()
-    pcall(vim.cmd, "tabonly!")
-    pcall(vim.cmd, "only!")
-    vim.w.fishmonger_side = nil
-    created, shown, hidden, destroyed, rendered = {}, {}, {}, {}, {}
-    -- Keep jobstart's real arity, as fishmonger's own suite does.
-    vim.fn.jobstart = function(cmd, opts) ---@diagnostic disable-line: duplicate-set-field, unused-local
-      return 1
-    end
-    package.loaded["fishmonger"] = nil
-    fishmonger = require("fishmonger")
-    fishmonger.setup_exit()
-    package.loaded["agentic.session_registry"] = fake_registry()
-    package.loaded["config.agent_chat"] = nil
-    agent_chat = require("config.agent_chat")
-  end)
-
-  after_each(function()
-    vim.fn.jobstart = jobstart
-    package.loaded["agentic.session_registry"] = nil
-    package.loaded["fishmonger"] = nil
-  end)
+  before_each(fresh)
+  after_each(unfake)
 
   local function new()
     agent_chat.new(vim.api.nvim_get_current_tabpage())
@@ -303,6 +312,125 @@ describe("agent_chat.new", function()
 
     assert.equals(1, #created)
     vim.cmd("stopinsert")
+  end)
+end)
+
+-- Terminal 1's agent chat, as a workspace opens or restores it.
+describe("agent_chat.start", function()
+  local A = "5acea7d5-42e4-48ab-bae8-c06adaa57027"
+  local projects, listed_in, saved_sessions
+
+  before_each(function()
+    fresh()
+    projects = vim.fn.tempname()
+    agent_chat.setup({ claude_projects = projects })
+    listed_in, saved_sessions = {}, {}
+    package.loaded["agentic.config"] = { provider = "claude-agent-acp" }
+    -- The provider's session/list: the directory's sessions, newest first.
+    local agent = {
+      when_ready = function(self, ready)
+        ready(self)
+      end,
+      list_sessions = function(_, cwd, callback)
+        listed_in[#listed_in + 1] = cwd
+        callback({ sessions = saved_sessions }, nil)
+      end,
+    }
+    package.loaded["agentic.acp.agent_instance"] = {
+      get_instance = function()
+        return agent
+      end,
+    }
+  end)
+
+  after_each(function()
+    unfake()
+    package.loaded["agentic.config"] = nil
+    package.loaded["agentic.acp.agent_instance"] = nil
+    vim.fn.delete(projects, "rf")
+  end)
+
+  --- Start terminal 1's chat in a new tabpage on a directory of its own; waits for it to be hosted.
+  local function start(session_id)
+    vim.cmd("tabnew")
+    vim.cmd.tcd(vim.fn.fnameescape(vim.fn.fnamemodify(vim.fn.tempname(), ":h")))
+    local tab = vim.api.nvim_get_current_tabpage()
+    agent_chat.start(tab, session_id)
+    vim.wait(1000, function()
+      return #created > 0
+    end)
+    return tab
+  end
+
+  it("resumes the session it is given in terminal 1, in the directory its transcript records", function()
+    vim.fn.mkdir(projects .. "/-elsewhere", "p")
+    vim.fn.writefile({ vim.json.encode({ type = "user", cwd = "/elsewhere" }) }, projects .. "/-elsewhere/" .. A .. ".jsonl")
+
+    local tab = start(A)
+
+    assert.same({ kind = "load", session_id = A, cwd = "/elsewhere" }, {
+      kind = created[1].kind,
+      session_id = created[1].session_id,
+      cwd = created[1].cwd,
+    })
+    assert.same({ 1 }, vim.tbl_map(function(t)
+      return t.slot
+    end, fishmonger.tabs(tab)))
+    assert.equals(created[1].session.widget.buf_nrs.chat, vim.api.nvim_win_get_buf(fishmonger.win))
+  end)
+
+  it("resumes in the tabpage's directory a session whose transcript records none", function()
+    start(A)
+
+    assert.equals("load", created[1].kind)
+    assert.equals(vim.fn.getcwd(), created[1].cwd)
+  end)
+
+  it("without a session, resumes the newest in the tabpage's directory, as claude --continue", function()
+    saved_sessions = { { sessionId = A, cwd = "/x" }, { sessionId = "older", cwd = "/x" } }
+
+    start()
+
+    assert.same({ vim.fn.getcwd() }, listed_in)
+    assert.same({ kind = "load", session_id = A, cwd = vim.fn.getcwd() }, {
+      kind = created[1].kind,
+      session_id = created[1].session_id,
+      cwd = created[1].cwd,
+    })
+  end)
+
+  it("starts a new session when the directory has none", function()
+    start()
+
+    assert.equals("new", created[1].kind)
+    assert.equals(vim.fn.getcwd(), created[1].cwd)
+  end)
+
+  it("leaves terminal 1 alone when something already took it", function()
+    vim.cmd("tabnew")
+    local tab = vim.api.nvim_get_current_tabpage()
+    fishmonger.show(1)
+
+    agent_chat.start(tab, A)
+
+    assert.same({}, created)
+  end)
+
+  it("leaves focus in the window it was in", function()
+    vim.cmd("tabnew")
+    local editor = vim.api.nvim_get_current_win()
+
+    agent_chat.start(vim.api.nvim_get_current_tabpage(), A)
+
+    assert.equals(1, #created)
+    assert.equals(editor, vim.api.nvim_get_current_win())
+  end)
+
+  it("knows the sessions its chats run, and no others", function()
+    start(A)
+
+    assert.is_true(agent_chat.hosts(created[1].session.session_id))
+    assert.is_false(agent_chat.hosts(A))
   end)
 end)
 
