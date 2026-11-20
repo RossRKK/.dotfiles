@@ -5,7 +5,7 @@
 local assert = require("luassert")
 
 local agent_chat, fishmonger
-local created, shown, hidden, destroyed, rendered
+local created, shown, hidden, destroyed, rendered, stopped
 
 --- A fake agentic session whose chat buffer has agentic's filetype, its prompt
 --- opened under the chat on show as agentic's is.
@@ -14,7 +14,7 @@ local function fake_session(key)
   vim.bo[buf].filetype = "AgenticChat"
   local widget
   widget = {
-    buf_nrs = { chat = buf, input = vim.api.nvim_create_buf(false, true) },
+    buf_nrs = { chat = buf, input = vim.api.nvim_create_buf(false, true), todos = vim.api.nvim_create_buf(false, true) },
     win_nrs = {},
     hide = function()
       hidden[#hidden + 1] = key
@@ -37,7 +37,25 @@ local function fake_session(key)
     end
     return false
   end
-  return { session_key = key, session_id = "acp-" .. key, session_state = {}, widget = widget, file_list = file_list }
+  local session = { session_key = key, session_id = "acp-" .. key, session_state = {}, widget = widget, file_list = file_list }
+  -- Records what stopping it asks of agentic's agent, permissions and spinner.
+  session.is_generating = false
+  session.agent = {
+    stop_generation = function(_, session_id)
+      stopped[#stopped + 1] = { "agent", session_id }
+    end,
+  }
+  session.permission_manager = {
+    clear = function()
+      stopped[#stopped + 1] = { "permissions", key }
+    end,
+  }
+  session.status_animation = {
+    stop = function()
+      stopped[#stopped + 1] = { "spinner", key }
+    end,
+  }
+  return session
 end
 
 local function fake_registry()
@@ -89,7 +107,7 @@ local function fresh()
   pcall(vim.cmd, "tabonly!")
   pcall(vim.cmd, "only!")
   vim.w.fishmonger_side = nil
-  created, shown, hidden, destroyed, rendered = {}, {}, {}, {}, {}
+  created, shown, hidden, destroyed, rendered, stopped = {}, {}, {}, {}, {}, {}
   -- Keep jobstart's real arity, as fishmonger's own suite does.
   vim.fn.jobstart = function(cmd, opts) ---@diagnostic disable-line: duplicate-set-field, unused-local
     return 1
@@ -313,6 +331,62 @@ describe("agent_chat.new", function()
     vim.api.nvim_feedkeys(vim.keycode("ihello<C-n>x"), "x", false)
 
     assert.same({ "hell" }, vim.api.nvim_buf_get_lines(input, 0, -1, true))
+  end)
+
+  describe("Ctrl+C", function()
+    local function generating(n)
+      created[n].session.is_generating = true
+    end
+
+    it("stops its agent's reply from the prompt in insert mode, keeping what was typed", function()
+      new()
+      generating(1)
+      vim.api.nvim_set_current_win(created[1].session.widget.win_nrs.input)
+
+      vim.api.nvim_feedkeys(vim.keycode("ihello<C-c> world<Esc>"), "x", false)
+
+      assert.same({ { "agent", "acp-1" }, { "permissions", 1 }, { "spinner", 1 } }, stopped)
+      assert.is_false(created[1].session.is_generating)
+      assert.same({ "hello world" }, vim.api.nvim_buf_get_lines(created[1].session.widget.buf_nrs.input, 0, -1, true))
+    end)
+
+    it("stops it in normal mode from the chat and from a side panel", function()
+      new()
+      local widget = created[1].session.widget
+      for _, buf in ipairs({ widget.buf_nrs.chat, widget.buf_nrs.todos }) do
+        generating(1)
+        stopped = {}
+        vim.api.nvim_win_set_buf(0, buf)
+
+        vim.api.nvim_feedkeys(vim.keycode("<C-c>"), "x", false)
+
+        assert.same({ "agent", "acp-1" }, stopped[1])
+      end
+    end)
+
+    it("stops the chat it is pressed in, not another one generating", function()
+      new()
+      new()
+      generating(1)
+      generating(2)
+      vim.api.nvim_set_current_win(created[1].session.widget.win_nrs.input or fishmonger.win)
+      vim.api.nvim_win_set_buf(0, created[1].session.widget.buf_nrs.chat)
+
+      vim.api.nvim_feedkeys(vim.keycode("<C-c>"), "x", false)
+
+      assert.same({ "agent", "acp-1" }, stopped[1])
+      assert.is_true(created[2].session.is_generating)
+    end)
+
+    it("does nothing when its agent isn't replying", function()
+      new()
+      vim.api.nvim_set_current_win(created[1].session.widget.win_nrs.input)
+
+      vim.api.nvim_feedkeys(vim.keycode("ihello<C-c><Esc>"), "x", false)
+
+      assert.same({}, stopped)
+      assert.same({ "hello" }, vim.api.nvim_buf_get_lines(created[1].session.widget.buf_nrs.input, 0, -1, true))
+    end)
   end)
 
   describe("pasting in its prompt", function()

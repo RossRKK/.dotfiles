@@ -19,7 +19,7 @@ function M.setup(opts)
   options = vim.tbl_extend("force", options, opts)
 end
 
-local host, host_first, newest, start_spec, paste, attach, paint, repaint_all, title_hl, set_title_hl -- defined below their callers
+local host, host_first, newest, start_spec, stop, paste, attach, paint, repaint_all, title_hl, set_title_hl -- defined below their callers
 
 -- A session's name and colour arrive as agent-status and Claude report them.
 vim.api.nvim_create_autocmd("User", {
@@ -171,6 +171,13 @@ function host(spec, place)
     end, { buffer = session.widget.buf_nrs.input, desc = "Agent prompt: put text, or attach an image or file" })
   end
 
+  -- Ctrl+C stops this chat's reply, as in Claude Code; agentic's stop_generation stops whichever session it thinks current.
+  for _, panel in pairs(session.widget.buf_nrs) do
+    vim.keymap.set({ "n", "i" }, "<C-c>", function()
+      stop(key)
+    end, { buffer = panel, desc = "Agent chat: stop the agent's reply" })
+  end
+
   -- The tab is the session: killing it (<C-b>&, closing the workspace) ends it.
   vim.api.nvim_create_autocmd("BufWipeout", {
     buffer = buf,
@@ -205,6 +212,21 @@ function host(spec, place)
   if not hosted then
     registry.destroy(key)
   end
+end
+
+--- Stop session `key`'s reply as agentic's stop_generation does, keeping the session.
+---@param key integer
+function stop(key)
+  local live = require("agentic.session_registry").get(key)
+  if not (live and live.is_generating) then
+    return
+  end
+  if live.session_id then
+    live.agent:stop_generation(live.session_id)
+  end
+  live.permission_manager:clear()
+  live.is_generating = false
+  live.status_animation:stop()
 end
 
 --- Paste the clipboard into session `key`'s prompt: text goes in by `put_text`, unless it is only a
