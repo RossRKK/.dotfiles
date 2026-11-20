@@ -13,6 +13,7 @@ local function fake_session(key)
   vim.bo[buf].filetype = "AgenticChat"
   return {
     session_key = key,
+    session_id = "acp-" .. key,
     widget = {
       buf_nrs = { chat = buf },
       hide = function()
@@ -141,6 +142,47 @@ describe("agent_chat.new", function()
     vim.notify = notify
 
     assert.same({ 1 }, destroyed)
+  end)
+
+  describe("its tab", function()
+    local root
+
+    before_each(function()
+      root = vim.fn.tempname()
+      vim.fn.mkdir(root .. "/agents", "p")
+      vim.fn.mkdir(root .. "/sessions", "p")
+      fishmonger.setup({ agent = { dir = root .. "/agents" } })
+      agent_chat.setup({ claude_sessions = root .. "/sessions" })
+    end)
+
+    --- Report ACP session `id` as agent-status and Claude would: its status, and its name.
+    local function report(id, name)
+      local pid = vim.fn.getpid() -- alive, so the record survives the liveness check
+      vim.fn.writefile({ vim.json.encode({ session = id, state = "done", agent_pid = pid, pids = { pid } }) }, root .. "/agents/" .. id .. ".json")
+      vim.fn.writefile({ vim.json.encode({ pid = pid, name = name }) }, root .. "/sessions/" .. pid .. ".json")
+      require("fishmonger").refresh_agents()
+    end
+
+    local function strip()
+      vim.g.statusline_winid = fishmonger.win
+      local out = fishmonger.winbar()
+      vim.g.statusline_winid = nil
+      return (out:gsub("%%%d+@[^@]*@", ""):gsub("%%#[^#]*#", ""):gsub("%%X", ""))
+    end
+
+    it("shows its session's status icon, then its Claude's name", function()
+      new()
+      report("acp-1", "calm-otter")
+
+      local done = require("fishmonger.agent").states.done.icon
+      assert.equals(" 1:" .. require("fishmonger.agent").glyph_cell(done) .. "calm-otter ", strip())
+    end)
+
+    it("says agent until its Claude has a name", function()
+      new()
+
+      assert.equals(" 1:agent ", strip())
+    end)
   end)
 
   it("is what fishmonger's <C-b>A makes, as this config sets fishmonger up", function()
