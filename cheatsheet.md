@@ -968,8 +968,8 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B &`    | Kill the current tab                              |
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
 | `Ctrl+B m N`  | Move the current tab to workspace N (the number on its label; you follow it) |
-| `Ctrl+B a`    | Agent view: every agent across all workspaces, blocked first; the row's key jumps to it |
-| `Ctrl+B A`    | New agent chat (agentic.nvim) as a tab in the next free slot, started in the workspace's directory, its prompt under the chat; killing the tab (`Ctrl+B &`) ends the session |
+| `Ctrl+B a`    | New agent chat (agentic.nvim) as a tab in the next free slot, started in the workspace's directory, its prompt under the chat; killing the tab (`Ctrl+B &`) ends the session |
+| `Ctrl+B A`    | Agent view: every agent across all workspaces, blocked first; the row's key jumps to it |
 | `Ctrl+B f`    | Referenced files: toggle a list under the terminal of the files its agent read, edited or named, newest first (see below) |
 | `Ctrl+B r`    | Mark this terminal's agent read: an empty circle, whatever its state, until it next reports one |
 | `Ctrl+B u`    | Mark it unread: a question mark until it next reports a status (or `Ctrl+B r`) |

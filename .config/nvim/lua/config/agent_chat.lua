@@ -28,7 +28,7 @@ vim.api.nvim_create_autocmd("User", {
   end,
 })
 
--- <C-b>A: a new agent tab in the lowest free slot, its session started in the
+-- <C-b>a: a new agent tab in the lowest free slot, its session started in the
 -- directory fishmonger gives the tabpage rather than the focused window's.
 function M.new(tab)
   local fishmonger = require("fishmonger")

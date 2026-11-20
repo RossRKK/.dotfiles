@@ -295,11 +295,11 @@ describe("agent_chat.new", function()
     assert.same({ "hell" }, vim.api.nvim_buf_get_lines(input, 0, -1, true))
   end)
 
-  it("is what fishmonger's <C-b>A makes, as this config sets fishmonger up", function()
+  it("is what fishmonger's <C-b>a makes, as this config sets fishmonger up", function()
     require("plugins.fishmonger")[1].config()
     vim.cmd("stopinsert")
 
-    vim.api.nvim_feedkeys(vim.keycode("<C-b>A"), "x", false)
+    vim.api.nvim_feedkeys(vim.keycode("<C-b>a"), "x", false)
 
     assert.equals(1, #created)
     vim.cmd("stopinsert")

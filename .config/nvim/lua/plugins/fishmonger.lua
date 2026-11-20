@@ -31,7 +31,7 @@ return {
         open_file = function(path, line)
           require("config.windows").open(path, line)
         end,
-        -- <C-b>A makes an agent chat tab (config/agent_chat.lua).
+        -- <C-b>a makes an agent chat tab (config/agent_chat.lua).
         new_agent = function(tab)
           require("config.agent_chat").new(tab)
         end,

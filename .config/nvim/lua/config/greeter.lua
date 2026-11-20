@@ -695,7 +695,7 @@ end
 --- The agents section: every agent running in any workspace, not just this one,
 --- each a letter away from being jumped to (switch tabpage + surface its
 --- terminal). The rows and the jumping are fishmonger's (fishmonger.view), so
---- the same list is one keystroke away from anywhere as a popup (<C-b>a) and
+--- the same list is one keystroke away from anywhere as a popup (<C-b>A) and
 --- there is one definition of what an agent row says.
 ---
 --- Cross-workspace on purpose, and above the branch overview: the branch is
