@@ -42,7 +42,7 @@ end
 
 --- Start a child nvim on its start screen, with no Claude in its terminals.
 local function start()
-  local sock = root .. "/nvim.sock"
+  local sock, listening = root .. "/nvim.sock", root .. "/listening"
   job = vim.fn.jobstart({
     "env",
     "-u",
@@ -56,9 +56,12 @@ local function start()
     "nvim",
     "--listen",
     sock,
+    -- The socket file exists from bind(), before listen(); --cmd runs only once the server accepts.
+    "--cmd",
+    "call writefile([], " .. vim.fn.string(listening) .. ")",
   }, { pty = true, width = 160, height = 48, cwd = root, env = { TERM = "xterm-256color" } })
   assert.is_true(vim.wait(10000, function()
-    return vim.uv.fs_stat(sock) ~= nil
+    return vim.uv.fs_stat(listening) ~= nil
   end, 20))
   ch = vim.fn.sockconnect("pipe", sock, { rpc = true })
   assert.is_true(vim.wait(10000, function()
