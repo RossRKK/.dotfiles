@@ -26,7 +26,15 @@ return {
       -- A sub-agent's work shows as a running summary on its Agent call, not as calls of its own.
       tool_calls = { subagent_activity = "summary" },
       -- The prompt's title is a function, so its buffer name (in the statusline) is set here.
-      windows = { input = { buffer_name = "Prompt" } },
+      -- No wrap marker in the chat's prose; agentic sets these :setlocal, so a host window's other tabs keep theirs.
+      windows = {
+        chat = { win_opts = { showbreak = "NONE" } },
+        input = { buffer_name = "Prompt", win_opts = { showbreak = "NONE" } },
+        code = { win_opts = { showbreak = "NONE" } },
+        files = { win_opts = { showbreak = "NONE" } },
+        diagnostics = { win_opts = { showbreak = "NONE" } },
+        todos = { win_opts = { showbreak = "NONE" } },
+      },
       -- Unbound: in a fishmonger tab agentic's close hid the prompt and left the chat behind.
       keymaps = { widget = { close = {} } },
       headers = {

@@ -37,3 +37,47 @@ describe("agentic chat buffers", function()
     assert.is_true(vim.tbl_contains(normal_keys(widget.buf_nrs.input), "<CR>"))
   end)
 end)
+
+describe("agentic chat windows", function()
+  local widget, owner
+
+  --- `win`'s showbreak as drawn: its local value, else the global one.
+  local function showbreak(win)
+    return vim.api.nvim_get_option_value("showbreak", { win = win })
+  end
+
+  before_each(function()
+    pcall(vim.cmd, "only!")
+    vim.o.showbreak = "↪ "
+    owner = vim.api.nvim_create_buf(false, true)
+    require("agentic").setup(require("plugins.agentic")[1].opts)
+    widget = require("agentic.ui.chat_widget"):new(function()
+      return true
+    end)
+  end)
+
+  after_each(function()
+    widget:destroy()
+  end)
+
+  it("draw no wrap marker in agentic's own windows", function()
+    widget:show({ focus_prompt = false })
+    for name, win in pairs(widget.win_nrs) do
+      assert.are.equal("NONE", showbreak(win), name)
+    end
+  end)
+
+  it("draw no wrap marker in a host window, and leave its other buffers the global one", function()
+    local host = vim.api.nvim_open_win(owner, false, { split = "right", win = -1 })
+    widget:show({ win = host, focus_prompt = false })
+    assert.are.equal("NONE", showbreak(host))
+    assert.are.equal("NONE", showbreak(widget.win_nrs.input))
+
+    -- As fishmonger switches tabs: the chat told it is leaving, then another tab's buffer into the window.
+    widget:hide()
+    vim.api.nvim_win_set_buf(host, vim.api.nvim_create_buf(false, true))
+    assert.are.equal("↪ ", showbreak(host))
+    vim.api.nvim_win_set_buf(host, owner)
+    assert.are.equal("↪ ", showbreak(host))
+  end)
+end)
