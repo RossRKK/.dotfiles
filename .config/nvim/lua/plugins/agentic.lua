@@ -4,6 +4,7 @@
 return {
   {
     "carlos-algms/agentic.nvim",
+    dev = true,
     lazy = true,
     keys = {
       -- i for AI: Space+a is already treesitter's swap-parameter.
