@@ -27,7 +27,17 @@ local function fake_session(key)
       rendered[#rendered + 1] = { key = key, window = window_name }
     end,
   }
-  return { session_key = key, session_id = "acp-" .. key, session_state = {}, widget = widget }
+  -- As agentic's: takes a path only to a file that exists.
+  local file_list = { files = {} }
+  function file_list:add(path)
+    local stat = vim.uv.fs_stat(path)
+    if stat and stat.type == "file" then
+      self.files[#self.files + 1] = path
+      return true
+    end
+    return false
+  end
+  return { session_key = key, session_id = "acp-" .. key, session_state = {}, widget = widget, file_list = file_list }
 end
 
 local function fake_registry()
@@ -303,6 +313,93 @@ describe("agent_chat.new", function()
     vim.api.nvim_feedkeys(vim.keycode("ihello<C-n>x"), "x", false)
 
     assert.same({ "hell" }, vim.api.nvim_buf_get_lines(input, 0, -1, true))
+  end)
+
+  describe("Ctrl+V in its prompt", function()
+    local clipboard = require("util.clipboard")
+    local text, read_windows = clipboard.text, clipboard.read_windows
+    local held_text, held_windows, session
+
+    before_each(function()
+      held_text, held_windows = nil, nil
+      clipboard.text = function()
+        return held_text
+      end
+      clipboard.read_windows = function(on_read)
+        on_read(held_windows)
+      end
+      new()
+      session = created[1].session
+      vim.api.nvim_set_current_win(session.widget.win_nrs.input)
+    end)
+
+    after_each(function()
+      clipboard.text, clipboard.read_windows = text, read_windows
+    end)
+
+    local function paste()
+      vim.api.nvim_feedkeys(vim.keycode("i<C-v><Esc>"), "x", false)
+    end
+
+    local function typed()
+      return vim.api.nvim_buf_get_lines(session.widget.buf_nrs.input, 0, -1, true)
+    end
+
+    it("attaches an image copied on Windows as a PNG file of it", function()
+      held_windows = { kind = "image", png = "\137PNG\r\n\26\nbytes" }
+
+      paste()
+
+      assert.equals(1, #session.file_list.files)
+      local file = assert(io.open(session.file_list.files[1], "rb"))
+      assert.equals("\137PNG\r\n\26\nbytes", file:read("*a"))
+      file:close()
+      assert.same({ "" }, typed())
+    end)
+
+    it("attaches files copied in Explorer", function()
+      local a, b = vim.fn.tempname(), vim.fn.tempname()
+      vim.fn.writefile({}, a)
+      vim.fn.writefile({}, b)
+      held_windows = { kind = "files", paths = { a, b } }
+
+      paste()
+
+      assert.same({ a, b }, session.file_list.files)
+    end)
+
+    it("attaches the file a copied path names, rather than typing it", function()
+      local shot = vim.fn.tempname()
+      vim.fn.writefile({}, shot)
+      held_text = shot
+
+      paste()
+
+      assert.same({ shot }, session.file_list.files)
+      assert.same({ "" }, typed())
+    end)
+
+    it("types text", function()
+      held_text = "hello /no/such/file"
+
+      paste()
+
+      assert.same({ "hello /no/such/file" }, typed())
+      assert.same({}, session.file_list.files)
+    end)
+
+    it("says so when there is nothing to paste", function()
+      local said
+      local notify = vim.notify
+      vim.notify = function(msg, level, opts) ---@diagnostic disable-line: duplicate-set-field, unused-local
+        said = msg
+      end
+      paste()
+      vim.notify = notify
+
+      assert.is_not_nil(said)
+      assert.same({}, session.file_list.files)
+    end)
   end)
 
   it("is what fishmonger's <C-b>a makes, as this config sets fishmonger up", function()

@@ -19,7 +19,7 @@ function M.setup(opts)
   options = vim.tbl_extend("force", options, opts)
 end
 
-local host, host_first, newest, start_spec, paint, repaint_all, title_hl, set_title_hl -- defined below their callers
+local host, host_first, newest, start_spec, paste, attach, paint, repaint_all, title_hl, set_title_hl -- defined below their callers
 
 -- A session's name and colour arrive as agent-status and Claude report them.
 vim.api.nvim_create_autocmd("User", {
@@ -152,6 +152,10 @@ function host(spec, place)
 
   -- Ctrl+N leaves insert mode in the prompt as it leaves terminal mode in a side terminal (config/keymaps.lua).
   vim.keymap.set("i", "<C-n>", "<Esc>", { buffer = session.widget.buf_nrs.input, desc = "Agent prompt: normal mode" })
+  -- Replaces agentic's Ctrl+V to share the clipboard reads of every other Ctrl+V (config/keymaps.lua).
+  vim.keymap.set("i", "<C-v>", function()
+    paste(key)
+  end, { buffer = session.widget.buf_nrs.input, desc = "Agent prompt: paste text, or attach an image or file" })
 
   -- The tab is the session: killing it (<C-b>&, closing the workspace) ends it.
   vim.api.nvim_create_autocmd("BufWipeout", {
@@ -187,6 +191,48 @@ function host(spec, place)
   if not hosted then
     registry.destroy(key)
   end
+end
+
+--- Ctrl+V in session `key`'s prompt: text is typed, unless it is only a path to a file, which is
+--- attached, as are an image and files copied on Windows.
+---@param key integer
+function paste(key)
+  local clipboard = require("util.clipboard")
+  local text = clipboard.text()
+  if text then
+    local path = clipboard.path_in(text)
+    if not (path and attach(key, { path })) then
+      vim.api.nvim_paste(text, true, -1)
+    end
+    return
+  end
+  clipboard.read_windows(function(content)
+    if not content then
+      vim.notify("Nothing to paste: the clipboard holds no text, image or file", vim.log.levels.INFO)
+    elseif content.kind == "files" then
+      attach(key, content.paths)
+    else
+      -- agentic attaches files, read when the prompt is sent; nvim's temp dir goes when it exits.
+      local file = vim.fn.tempname() .. ".png"
+      local out = assert(io.open(file, "wb"))
+      out:write(content.png)
+      out:close()
+      attach(key, { file })
+    end
+  end)
+end
+
+--- Attach `paths` to session `key`'s next prompt, saying whether it took any.
+---@param key integer
+---@param paths string[]
+---@return boolean
+function attach(key, paths)
+  local live = require("agentic.session_registry").get(key)
+  local took = false
+  for _, path in ipairs(paths) do
+    took = (live and live.file_list:add(path)) or took
+  end
+  return took
 end
 
 --- The name the Claude behind ACP session `session_id` goes by, or nil before it has one.
