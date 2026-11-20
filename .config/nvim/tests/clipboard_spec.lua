@@ -126,3 +126,34 @@ describe("clipboard.path_in", function()
     assert.equals(file, clipboard.path_in('"' .. windows .. '"'))
   end)
 end)
+
+describe("clipboard.neovide_provider", function()
+  local requests
+
+  --- A provider over Neovide's RPC, its clipboard read failing with `err` or holding `lines`.
+  local function provider(lines, err)
+    requests = {}
+    return clipboard.neovide_provider(function(method, ...)
+      requests[#requests + 1] = { method, ... }
+      if err then
+        error(err)
+      end
+      return lines
+    end)
+  end
+
+  it("reads the clipboard through Neovide", function()
+    assert.same({ "hi" }, provider({ "hi" }).paste["+"]())
+    assert.same({ { "neovide.get_clipboard", "+" } }, requests)
+  end)
+
+  -- Empty, so a put says E353 rather than dumping Neovide's error.
+  it("reads a clipboard Neovide can't (an image) as empty", function()
+    assert.same({}, provider(nil, "cannot get clipboard contents").paste["*"]())
+  end)
+
+  it("copies through Neovide", function()
+    provider().copy["+"]({ "a", "b" }, "v")
+    assert.same({ { "neovide.set_clipboard", { "a", "b" }, "+" } }, requests)
+  end)
+end)

@@ -62,6 +62,30 @@ function M.text()
   return nil
 end
 
+--- A g:clipboard over Neovide's clipboard RPC, as Neovide's own, except that a clipboard it
+--- can't read (an image) reads as empty: a put then says E353 instead of raising its error.
+--- @param request fun(method: string, ...): any an RPC request to Neovide
+--- @return table
+function M.neovide_provider(request)
+  local function get(register)
+    return function()
+      local ok, lines = pcall(request, "neovide.get_clipboard", register)
+      return ok and lines or {}
+    end
+  end
+  local function set(register)
+    return function(lines)
+      request("neovide.set_clipboard", lines, register)
+    end
+  end
+  return {
+    name = "neovide",
+    copy = { ["+"] = set("+"), ["*"] = set("*") },
+    paste = { ["+"] = get("+"), ["*"] = get("*") },
+    cache_enabled = false,
+  }
+end
+
 -- Read through interop rather than WSLg's bridge, which offers images only as
 -- image/bmp and has segfaulted weston on image transfers.
 local READ_WINDOWS = table.concat({
