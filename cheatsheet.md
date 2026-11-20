@@ -727,6 +727,12 @@ refreshed behind it. Outside review mode the greeter shows the counts
 [my PRs](#my-prs-spacerm) counts. Whenever the branch has a
 PR — reviewing or your own — the greeter shows it too: number, title, state,
 review decision, checks, and the start of the description (fenced blocks collapsed to a placeholder).
+When that PR is one of yours stacked with others (PRs targeting each other's
+branches), a **Stack** section lists the whole stack top first, down to the
+branch the bottom one targets: `◉` marks the checked-out branch's PR, each row
+shows its [my PRs](#my-prs-spacerm) tier (or `draft`) and checks (`✓` `●` `✗`),
+and a PR forked off one lower down says `on <branch>`. It reads the same
+background fetch, so it is as fresh as `Space+rm`.
 
 | Tier          | Means                                                              |
 | ------------- | ------------------------------------------------------------------ |

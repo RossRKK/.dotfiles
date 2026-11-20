@@ -948,6 +948,79 @@ function M.mine_line(counts)
   }, "Space rm")
 end
 
+-- A PR's checks as one glyph, by statusCheckRollup state.
+local CHECK_GLYPHS = {
+  SUCCESS = { "\u{2713}", "Added" },
+  FAILURE = { "\u{2717}", "Removed" },
+  ERROR = { "\u{2717}", "Removed" },
+  PENDING = { "\u{25cf}", "DiagnosticWarn" },
+  EXPECTED = { "\u{25cf}", "DiagnosticWarn" },
+}
+
+--- `text` cut to `width` display columns, an ellipsis marking the cut.
+---@param text string
+---@param width integer
+---@return string
+local function fit(text, width)
+  if vim.fn.strdisplaywidth(text) <= width then
+    return text
+  end
+  return vim.fn.strcharpart(text, 0, math.max(0, width - 1)) .. "\u{2026}"
+end
+
+--- The stack section's rows, top of the stack first: the checked-out PR's
+--- marker filled, each with its <leader>rm tier (or "draft") and a checks
+--- glyph, then the trunk the bottom PR targets. A PR not stacked on the row
+--- under it (a fork) names what it is on.
+---@param stack pr_stack.Stack
+---@param width integer columns the rows may take
+---@return table[] items
+function M.stack_items(stack, width)
+  local dim = "SnacksDashboardDesc"
+  local tiers = require("util.reviewqueue").MINE_TIERS
+  local function status(row)
+    if row.pr.draft then
+      return "draft", dim
+    end
+    local tier = tiers[row.verdict.tier] or { label = "?", hl = dim }
+    return tier.label, tier.hl
+  end
+  local num_w, status_w = 0, 0
+  for _, row in ipairs(stack.rows) do
+    num_w = math.max(num_w, #tostring(row.pr.number))
+    status_w = math.max(status_w, vim.fn.strdisplaywidth((status(row))))
+  end
+
+  local items = {}
+  for i, row in ipairs(stack.rows) do
+    local below = stack.rows[i + 1]
+    local on = (below and below.pr.head or stack.trunk) ~= row.pr.base and ("  on " .. row.pr.base)
+      or ""
+    -- Everything but the title: "◉ ", "#N  ", "  ", the status and its "  ", the glyph.
+    local title_w = width - (2 + 1 + num_w + 2 + 2 + status_w + 2 + 1)
+    local title = fit(row.pr.title or "", title_w - vim.fn.strdisplaywidth(on))
+    local pad = (" "):rep(title_w - vim.fn.strdisplaywidth(title) - vim.fn.strdisplaywidth(on))
+    local label, label_hl = status(row)
+    local check = CHECK_GLYPHS[row.pr.checks or ""] or { " " }
+    items[#items + 1] = {
+      text = {
+        {
+          row.current and "\u{25c9} " or "\u{25cb} ",
+          hl = row.current and "SnacksDashboardKey" or dim,
+        },
+        { ("#%-" .. num_w .. "d  "):format(row.pr.number), hl = "SnacksDashboardKey" },
+        { title, hl = row.current and "SnacksDashboardHeader" or "Normal" },
+        { on, hl = dim },
+        { pad .. "  " },
+        { label .. (" "):rep(status_w - vim.fn.strdisplaywidth(label)) .. "  ", hl = label_hl },
+        { check[1], hl = check[2] },
+      },
+    }
+  end
+  items[#items + 1] = { text = { { "\u{2570} " .. stack.trunk, hl = dim } } }
+  return items
+end
+
 --- The greeter's sections, top to bottom. Split out of open() so a test can
 --- check the layout without a live snacks dashboard.
 ---@param root string normalized workspace root
@@ -1002,6 +1075,24 @@ function M.sections(root, buf, tab, report)
         end
       end
       return #items > 0 and items or nil
+    end,
+    -- The stack the branch's PR is in, from the review queue's list of my
+    -- open PRs (its background refresh; no fetch of its own).
+    function()
+      local rep = report()
+      local rq = require("util.reviewqueue")
+      local key = rep and rq.key(root)
+      local mine = key and rq.cache[key] and rq.cache[key].mine
+      local stack = mine and require("util.pr_stack").of(mine, rep.branch)
+      if not stack then
+        return nil
+      end
+      local _, width = pane_size(buf)
+      -- The section indent's two columns come off the rows' width.
+      return vim.list_extend(
+        { icon = " ", title = "Stack", indent = 2, padding = 1 },
+        M.stack_items(stack, width - 2)
+      )
     end,
     -- The ahead/behind summary and the diff size.
     function()

@@ -1469,6 +1469,7 @@ local MINE_TIERS = {
   { label = "queued", hl = "Special" },
   { label = "waiting", hl = "Comment" },
 }
+M.MINE_TIERS = MINE_TIERS
 
 -- ---------------------------------------------------------------------------
 -- Cache: the queue is refreshed in the background (setup()), so the picker

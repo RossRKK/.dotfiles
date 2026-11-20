@@ -627,3 +627,103 @@ describe("greeter.fetch", function()
     end)
   end
 end)
+
+describe("greeter.stack_items", function()
+  local function texts(items)
+    return vim.tbl_map(function(item)
+      return table.concat(vim.tbl_map(function(c)
+        return c[1]
+      end, item.text))
+    end, items)
+  end
+
+  --- A stack row: `pr` over a plain waiting PR, `extra` over the row.
+  local function row(pr, extra)
+    return vim.tbl_extend("force", {
+      pr = vim.tbl_extend("force", { title = "PR " .. pr.number, draft = false }, pr),
+      verdict = { tier = 5 },
+      current = false,
+    }, extra or {})
+  end
+
+  local stack = {
+    rows = {
+      row({ number = 30, title = "Top", head = "c", base = "b", draft = true }),
+      row({ number = 20, head = "b", base = "a" }, { current = true, verdict = { tier = 1 } }),
+      row({ number = 10, title = "Bottom", head = "a", base = "main", checks = "SUCCESS" }),
+    },
+    trunk = "main",
+  }
+
+  it("lists the stack top first, fills the checked-out PR's marker, ends at the trunk", function()
+    local t = texts(greeter.stack_items(stack, 50))
+    assert.matches("^\u{25cb} #30  Top +draft", t[1])
+    assert.matches("^\u{25c9} #20  PR 20 +to fix", t[2])
+    assert.matches("^\u{25cb} #10  Bottom +waiting +\u{2713}$", t[3])
+    assert.equals("\u{2570} main", t[4])
+  end)
+
+  it("pads every row to the width, cutting a long title", function()
+    local long = vim.deepcopy(stack)
+    long.rows[1].pr.title = ("word "):rep(30)
+    local t = texts(greeter.stack_items(long, 50))
+    for i = 1, 3 do
+      assert.equals(50, vim.fn.strdisplaywidth(t[i]))
+    end
+    assert.matches("\u{2026}", t[1])
+  end)
+
+  it("names the base of a PR not stacked on the row below it", function()
+    local fork = {
+      rows = {
+        row({ number = 3, head = "c", base = "a" }),
+        row({ number = 2, head = "b", base = "a" }),
+        row({ number = 1, head = "a", base = "main" }),
+      },
+      trunk = "main",
+    }
+    local t = texts(greeter.stack_items(fork, 50))
+    assert.matches("PR 3  on a", t[1])
+    assert.is_nil(t[2]:find(" on ", 1, true))
+    assert.is_nil(t[3]:find(" on ", 1, true))
+  end)
+end)
+
+describe("greeter.sections' stack", function()
+  local rq = require("util.reviewqueue")
+  local saved_key
+  before_each(function()
+    saved_key = rq.key
+    rq.key = function()
+      return "/repo"
+    end
+  end)
+  after_each(function()
+    rq.cache = {}
+    rq.key = saved_key
+  end)
+
+  local function stack_section(branch)
+    return greeter
+      .sections("/repo", 0, 0, function()
+        return { branch = branch }
+      end)
+      [5]()
+  end
+  local function mine(number, head, base)
+    return { pr = { number = number, title = "", head = head, base = base }, verdict = { tier = 5 } }
+  end
+
+  it("shows the stack the branch's PR is in under a Stack title", function()
+    rq.cache["/repo"] = { mine = { mine(1, "a", "main"), mine(2, "b", "a") } }
+    local section = stack_section("b")
+    assert.equals("Stack", section.title)
+    assert.equals(3, #section)
+  end)
+
+  it("is absent before the queue has listed my PRs, or for a lone PR", function()
+    assert.is_nil(stack_section("b"))
+    rq.cache["/repo"] = { mine = { mine(1, "a", "main") } }
+    assert.is_nil(stack_section("a"))
+  end)
+end)
