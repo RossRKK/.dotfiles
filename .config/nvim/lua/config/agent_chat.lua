@@ -138,7 +138,7 @@ function M.agent_colour(session_id)
     return nil
   end
   return record.colour
-    or (record.transcript and require("util.worktree").recorded_colours({ record.transcript })[record.transcript])
+    or (record.transcript and claude_session.recorded_colours({ record.transcript })[record.transcript])
 end
 
 -- Every session's titles, for when names or colours may have changed.

@@ -1,5 +1,5 @@
 -- Claude Code's record of each live session, <config dir>/sessions/<pid>.json, read for the name it goes by,
--- and of each session's transcript, read for the directory it ran in.
+-- and of each session's transcript, read for the directory it ran in and the colour it last had.
 
 local M = {}
 
@@ -59,6 +59,27 @@ function M.cwd(projects, id)
       return row.cwd
     end
   end
+end
+
+--- The colour each transcript's last agent-color row names, from one grep over
+--- them all: transcripts run to megabytes and the picker shouldn't wait on Lua
+--- reading them.
+---@param transcripts string[]
+---@return table<string, string> transcript -> colour
+function M.recorded_colours(transcripts)
+  if #transcripts == 0 then
+    return {}
+  end
+  local cmd = { "grep", "--null", "-HF", '"type":"agent-color"', "--", unpack(transcripts) }
+  local out = {}
+  for line in vim.gsplit(vim.system(cmd, { text = true }):wait().stdout or "", "\n") do
+    local nul = line:find("\0", 1, true)
+    local ok, row = pcall(vim.json.decode, nul and line:sub(nul + 1) or "")
+    if ok and type(row) == "table" and type(row.agentColor) == "string" then
+      out[line:sub(1, nul - 1)] = row.agentColor
+    end
+  end
+  return out
 end
 
 return M
