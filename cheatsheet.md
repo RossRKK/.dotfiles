@@ -267,9 +267,9 @@ worktree's directory name until its Claude is up. A session in its standing
 role from `~/.config/claude-roles` is the whole label (`dotty`). (The
 OS window title still tracks the workspace you're _in_.)
 
-Opening a workspace starts **Claude in terminal 1**, continuing that directory's
-last conversation (`claude --continue`), or a new one if there is none; quitting
-it leaves a fish prompt. Once a session starts, the `claude-plugins/session-identity`
+Opening a workspace starts **an agent chat in terminal 1**, continuing that
+directory's newest conversation (as `claude --continue` would), or a new one if
+there is none. Once a session starts, the `claude-plugins/session-identity`
 mod gives it a **name** derived from its id (`/rename`, e.g. `calm-otter`) and
 the `/color` fewest live sessions are using. A session that already has a name
 (resumed, or after `/clear`) keeps it and only gets its colour back -- on resume
@@ -278,7 +278,7 @@ fresh name of its own. The name is what
 other sessions address it by (`ListAgents` / `SendMessage`), and fishmonger draws
 that terminal's tab and agent-view row in the same colour as its prompt bar.
 
-Terminal 1's Claude runs with `WORKSPACE_TERMINAL=1`, and in the checkouts
+Terminal 1's Claude, chat or TUI, runs with `WORKSPACE_TERMINAL=1`, and in the checkouts
 listed in `~/.config/claude-roles` (`<checkout> <role>` per line, kept out of
 this repo) it gets a fixed name: in `~/.dotfiles` it is **dotty**. Everywhere
 else, worktrees included, it keeps its pet name.
@@ -360,14 +360,17 @@ still gets its own tab.
 
 **Resuming workspaces after a restart.** Every nvim keeps its open workspaces in
 `~/.local/state/nvim/workspaces.json`: each project's directory, its number and
-terminal 1's Claude session. Neovide and terminal nvim share the file without
+terminal 1's Claude session, and whether it ran as an agent chat or the Claude
+TUI. Neovide and terminal nvim share the file without
 wiping each other's projects. A project leaves it only when you close its tab
 (`Space+tx`, `Space+tX`); quitting nvim, a crash or a WSL shutdown keep them all.
 On the start screen of a bare `nvim`, **`s` Resume** (or `:WorkspaceRestore`
 from anywhere) reopens every saved project not already open here, under its old
-number where that is free, and terminal 1 resumes its Claude session with
-`claude --resume <id>`. Its name and colour come back with it. A session whose
-transcript is gone falls back to `claude --continue`, and a project whose
+number where that is free, and terminal 1 resumes its Claude session as it ran:
+an agent chat loads it, history and all, in the directory the session started
+in; a TUI session runs `claude --resume <id>`. Its name and colour come back
+with it. A session whose transcript is gone falls back to the directory's newest
+conversation, and a project whose
 directory is gone (a removed worktree) is skipped and forgotten. Nothing resumes
 on its own, so a second or nested nvim never starts duplicate agents. Only
 terminal 1 comes back: other terminals' jobs and the open files don't.
