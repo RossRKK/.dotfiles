@@ -40,15 +40,25 @@ end
 --- Terminal 1's agent chat in `tab`: back in session `session_id` when given, else
 --- in the directory's newest conversation, or a new one when it has none, as
 --- `claude --continue; or claude` does for a terminal.
+--- Its Claude is told what terminal 1's is (see workspace.agent_shell), so the
+--- session-identity mod gives it a standing role or `agent_name`.
 ---@param tab integer
 ---@param session_id? string a session whose transcript exists
-function M.start(tab, session_id)
+---@param agent_name? string
+function M.start(tab, session_id, agent_name)
   local dir = require("fishmonger").dir(tab)
+  local env = { WORKSPACE_TERMINAL = "1", CLAUDE_AGENT_NAME = agent_name }
+  local function first(cwd, id)
+    local spec = start_spec(cwd, id)
+    -- Claude Agent ACP's per-session environment for that session's Claude.
+    spec.meta = { claudeCode = { options = { env = env } } }
+    host_first(tab, spec)
+  end
   if session_id then
-    return host_first(tab, start_spec(claude_session.cwd(options.claude_projects, session_id) or dir, session_id))
+    return first(claude_session.cwd(options.claude_projects, session_id) or dir, session_id)
   end
   newest(dir, function(id)
-    host_first(tab, start_spec(dir, id))
+    first(dir, id)
   end)
 end
 

@@ -40,6 +40,7 @@ local function fake_registry()
         kind = spec.kind,
         session_id = spec.session_id,
         cwd = spec.cwd(vim.fn.getcwd()),
+        meta = spec.meta,
       }
       sessions[session.session_key] = session
       return session
@@ -351,11 +352,11 @@ describe("agent_chat.start", function()
   end)
 
   --- Start terminal 1's chat in a new tabpage on a directory of its own; waits for it to be hosted.
-  local function start(session_id)
+  local function start(session_id, agent_name)
     vim.cmd("tabnew")
     vim.cmd.tcd(vim.fn.fnameescape(vim.fn.fnamemodify(vim.fn.tempname(), ":h")))
     local tab = vim.api.nvim_get_current_tabpage()
-    agent_chat.start(tab, session_id)
+    agent_chat.start(tab, session_id, agent_name)
     vim.wait(1000, function()
       return #created > 0
     end)
@@ -424,6 +425,25 @@ describe("agent_chat.start", function()
 
     assert.equals(1, #created)
     assert.equals(editor, vim.api.nvim_get_current_win())
+  end)
+
+  -- What the session-identity mod reads to give terminal 1's Claude its role or agent name.
+  for _, case in ipairs({ { session_id = A, kind = "load" }, { kind = "new" } }) do
+    it("tells a " .. case.kind .. " session's Claude it is terminal 1's, and the name to take", function()
+      start(case.session_id, "keen-heron")
+
+      assert.equals(case.kind, created[1].kind)
+      assert.same(
+        { claudeCode = { options = { env = { WORKSPACE_TERMINAL = "1", CLAUDE_AGENT_NAME = "keen-heron" } } } },
+        created[1].meta
+      )
+    end)
+  end
+
+  it("tells terminal 1's Claude no name when it has none to take", function()
+    start(A)
+
+    assert.same({ claudeCode = { options = { env = { WORKSPACE_TERMINAL = "1" } } } }, created[1].meta)
   end)
 
   it("knows the sessions its chats run, and no others", function()
