@@ -23,6 +23,8 @@ return {
         thinking = { "·", "✢", "✳", "∗", "✻", "✽" },
         searching = { "·", "✢", "✳", "∗", "✻", "✽" },
       },
+      -- A sub-agent's work shows as a running summary on its Agent call, not as calls of its own.
+      tool_calls = { subagent_activity = "summary" },
       -- The prompt's title is a function, so its buffer name (in the statusline) is set here.
       windows = { input = { buffer_name = "Prompt" } },
       headers = {

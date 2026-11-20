@@ -341,4 +341,11 @@ describe("the agentic config", function()
 
     assert.same({}, vim.tbl_filter(pictographic, shown))
   end)
+
+  it("summarises a sub-agent's activity on its Agent call rather than listing its calls", function()
+    vim.opt.runtimepath:prepend(vim.fn.expand("~/dev/agentic.nvim"))
+    local config = vim.tbl_deep_extend("force", require("agentic.config_default"), require("plugins.agentic")[1].opts)
+
+    assert.equals("summary", config.tool_calls.subagent_activity)
+  end)
 end)
