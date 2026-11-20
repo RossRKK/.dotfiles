@@ -900,7 +900,7 @@ function commits(root, shas)
 end
 
 -- Defined below M.pick, which uses them.
-local agent_worktrees, live_colours, latest_transcript, recorded_colours
+local agent_worktrees, live_colours, latest_transcript
 
 --- <M-b>w: pick a branch, get its worktree as a tab. Recently opened
 --- worktrees float to the top (see M.order); typing a name that matches nothing
@@ -1027,7 +1027,7 @@ function M.agent_hls(paths, projects, live)
       transcripts[path] = latest_transcript(M.claude_project(projects, path))
     end
   end
-  local recorded = recorded_colours(vim.tbl_values(transcripts))
+  local recorded = M.recorded_colours(vim.tbl_values(transcripts))
   local colour_hl = require("fishmonger.agent").colour_hl
   local out = {}
   for _, path in ipairs(paths) do
@@ -1082,7 +1082,7 @@ end
 --- reading them.
 ---@param transcripts string[]
 ---@return table<string, string> transcript -> colour
-function recorded_colours(transcripts)
+function M.recorded_colours(transcripts)
   if #transcripts == 0 then
     return {}
   end
