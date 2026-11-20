@@ -6,9 +6,15 @@
 
 local M = {}
 
+---@alias workspace_state.Client "terminal" | "chat" what terminal 1 runs its Claude in: the TUI, or an agent chat
+
+---@class workspace_state.Session
+---@field id string Claude's session id
+---@field client workspace_state.Client
+
 ---@class workspace_state.Project
 ---@field slot? integer the workspace number it had, for a stable restore order
----@field session? string terminal 1's Claude session id
+---@field session? workspace_state.Session terminal 1's Claude session
 
 ---@alias workspace_state.Projects table<string, workspace_state.Project> project dir -> project
 
@@ -25,7 +31,7 @@ local mine = {}
 -- Set from VimLeavePre on: tabs and agents vanishing during exit aren't closes.
 local leaving = false
 
-local collect, load, write, forget, valid_session, real
+local collect, load, write, forget, parse_session, valid_session, real
 
 --- Set once at startup (init.lua): watch the workspaces and add :WorkspaceRestore.
 ---@param opts? workspace_state.Options
@@ -100,7 +106,7 @@ function M.restore(opts)
       drop_buf = drop_buf,
       background = drop_buf == nil,
       slot = p.slot,
-      resume = M.resume_id(p.session, options.claude_projects),
+      resume = M.resumable(p.session, options.claude_projects),
     })
     drop_buf = nil
   end
@@ -160,15 +166,15 @@ function M.restorable(stored, is_open, is_dir)
 end
 
 --- `session` when Claude still has its transcript, so terminal 1 resumes it rather than failing to.
----@param session? string
+---@param session? workspace_state.Session
 ---@param projects string Claude's projects directory
----@return string?
-function M.resume_id(session, projects)
+---@return workspace_state.Session?
+function M.resumable(session, projects)
   if not session then
     return nil
   end
   -- Session ids are unique, so any project's directory may hold it.
-  local found = vim.fn.glob(projects .. "/*/" .. session .. ".jsonl", true, true)
+  local found = vim.fn.glob(projects .. "/*/" .. session.id .. ".jsonl", true, true)
   return #found > 0 and session or nil
 end
 
@@ -176,6 +182,7 @@ end
 ---@return workspace_state.Projects
 function collect()
   local workspace = require("config.workspace")
+  local agent_chat = require("config.agent_chat")
   local fishmonger = package.loaded["fishmonger"]
   local now = {}
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
@@ -183,8 +190,9 @@ function collect()
     if slot then
       local session
       for _, term in ipairs(fishmonger and fishmonger.tabs(tab) or {}) do
-        if term.slot == 1 and term.agent then
-          session = valid_session(term.agent.session)
+        local id = term.slot == 1 and term.agent and valid_session(term.agent.session)
+        if id then
+          session = { id = id, client = agent_chat.hosts(id) and "chat" or "terminal" }
         end
       end
       now[real(workspace.cwd(tab))] = { slot = slot, session = session }
@@ -207,7 +215,7 @@ function load()
     if type(dir) == "string" and type(p) == "table" then
       projects[dir] = {
         slot = type(p.slot) == "number" and p.slot % 1 == 0 and p.slot or nil,
-        session = valid_session(p.session),
+        session = parse_session(p.session),
       }
     end
   end
@@ -236,6 +244,20 @@ function forget(dirs)
     stored[dir] = nil
   end
   write(stored)
+end
+
+--- A stored session; a bare id is from before chats, when terminal 1 only ran the Claude TUI.
+---@param stored any
+---@return workspace_state.Session?
+function parse_session(stored)
+  if type(stored) == "string" then
+    stored = { id = stored, client = "terminal" }
+  end
+  if type(stored) ~= "table" or (stored.client ~= "terminal" and stored.client ~= "chat") then
+    return nil
+  end
+  local id = valid_session(stored.id)
+  return id and { id = id, client = stored.client }
 end
 
 --- `id` if it is a session id, which also makes it safe to put in a shell command.

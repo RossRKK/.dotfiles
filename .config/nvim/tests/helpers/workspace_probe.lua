@@ -2,12 +2,15 @@
 
 local M = {}
 
---- Terminal 1 runs sh rather than Claude, so fishmonger still builds its window but no agent starts.
+--- Terminal 1 runs sh rather than Claude or an agent chat, so fishmonger still builds its window but no agent starts.
 function M.stub_claude()
   local fishmonger = require("fishmonger")
   local show = fishmonger.show
   fishmonger.show = function(slot, opts)
     return show(slot, vim.tbl_extend("force", opts or {}, { shell = { "sh" } }))
+  end
+  require("config.agent_chat").start = function(tab)
+    fishmonger.show(1, { tab = tab, insert = false })
   end
 end
 

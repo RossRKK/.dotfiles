@@ -268,16 +268,6 @@ describe("workspace.prefix", function()
 end)
 
 describe("workspace.agent_shell", function()
-  it(
-    "continues this directory's last Claude conversation, else starts one, at a fish prompt, marked as terminal 1",
-    function()
-      assert.same(
-        { "env", "WORKSPACE_TERMINAL=1", "fish", "-C", "claude --continue; or claude" },
-        require("config.workspace").agent_shell(false)
-      )
-    end
-  )
-
   it("tells that Claude the name to take when it has one", function()
     assert.same({
       "env",
@@ -285,11 +275,11 @@ describe("workspace.agent_shell", function()
       "CLAUDE_AGENT_NAME=keen-heron",
       "fish",
       "-C",
-      "claude --continue; or claude",
-    }, require("config.workspace").agent_shell(false, "keen-heron"))
+      "claude --resume 5acea7d5-42e4-48ab-bae8-c06adaa57027",
+    }, require("config.workspace").agent_shell(false, "keen-heron", "5acea7d5-42e4-48ab-bae8-c06adaa57027"))
   end)
 
-  it("resumes the session it is given instead of continuing the directory's last", function()
+  it("resumes the session it is given at a fish prompt, marked as terminal 1", function()
     assert.same({
       "env",
       "WORKSPACE_TERMINAL=1",
@@ -593,10 +583,17 @@ describe("workspace.open in the background", function()
       snacks = _G.Snacks,
       sidebar = package.loaded["util.sidebar"],
       fishmonger = package.loaded["fishmonger"],
+      agent_chat = package.loaded["config.agent_chat"],
     }
     _G.Snacks = { dashboard = { update = function() end } }
     package.loaded["util.sidebar"] = { open = function() end }
     package.loaded["fishmonger"] = { show = function(_, _) end }
+    -- Terminal 1's agent chat takes slot 1 through fishmonger, as agent_chat.start does.
+    package.loaded["config.agent_chat"] = {
+      start = function(tab)
+        package.loaded["fishmonger"].show(1, { tab = tab })
+      end,
+    }
     package.loaded["config.workspace"] = nil
     ws = require("config.workspace")
     ws.set_labels = function() end -- the tab label reads fishmonger and bufferline
@@ -611,6 +608,7 @@ describe("workspace.open in the background", function()
     _G.Snacks = saved.snacks
     package.loaded["util.sidebar"] = saved.sidebar
     package.loaded["fishmonger"] = saved.fishmonger
+    package.loaded["config.agent_chat"] = saved.agent_chat
   end)
 
   --- Opens `dir` with `opts` and waits for open()'s deferred half to finish.
@@ -704,7 +702,7 @@ describe("workspace.open in the background", function()
     assert.same({ vim.api.nvim_tabpage_get_win(ws.find(dir)) }, ready_windows(ready))
   end)
 
-  it("starts terminal 1's Claude under the agent name its directory gives", function()
+  it("resumes terminal 1's Claude under the agent name its directory gives", function()
     local shell
     package.loaded["fishmonger"].show = function(_, opts)
       shell = opts.shell
@@ -712,7 +710,7 @@ describe("workspace.open in the background", function()
     ws.agent_name = function(d)
       return d == dir and "keen-heron" or nil
     end
-    ws.open(dir, { tab = true })
+    ws.open(dir, { tab = true, resume = { id = "5acea7d5-42e4-48ab-bae8-c06adaa57027", client = "terminal" } })
     assert.is_true(vim.wait(1000, function()
       return shell ~= nil
     end))
@@ -827,5 +825,83 @@ describe("workspace.agent_name", function()
   it("with agent worktrees off, names no agent", function()
     ws.setup({ agent_worktrees = false })
     assert.is_nil(ws.agent_name(repo .. "/.worktrees/keen-heron"))
+  end)
+end)
+
+-- What terminal 1 runs: an agent chat, unless the session it resumes ran in the Claude TUI.
+describe("workspace.open's terminal 1", function()
+  local A = "5acea7d5-42e4-48ab-bae8-c06adaa57027"
+  local ws, dir, saved, shells, chats
+
+  before_each(function()
+    pcall(vim.cmd, "tabonly")
+    vim.t.workspace_slot = nil
+    saved = {
+      snacks = _G.Snacks,
+      sidebar = package.loaded["util.sidebar"],
+      fishmonger = package.loaded["fishmonger"],
+      agent_chat = package.loaded["config.agent_chat"],
+    }
+    shells, chats = {}, {}
+    _G.Snacks = { dashboard = { update = function() end } }
+    package.loaded["util.sidebar"] = { open = function() end }
+    package.loaded["fishmonger"] = {
+      show = function(slot, opts)
+        shells[#shells + 1] = { slot = slot, shell = opts.shell }
+      end,
+    }
+    package.loaded["config.agent_chat"] = {
+      start = function(tab, session_id)
+        chats[#chats + 1] = { tab = tab, session_id = session_id }
+      end,
+    }
+    package.loaded["config.workspace"] = nil
+    ws = require("config.workspace")
+    ws.set_labels = function() end -- the tab label reads fishmonger and bufferline
+    ws.agent_name = function() end -- asks git
+    ws.assign_slot()
+    dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+  end)
+
+  after_each(function()
+    pcall(vim.cmd, "tabonly")
+    vim.fn.delete(dir, "rf")
+    _G.Snacks = saved.snacks
+    package.loaded["util.sidebar"] = saved.sidebar
+    package.loaded["fishmonger"] = saved.fishmonger
+    package.loaded["config.agent_chat"] = saved.agent_chat
+  end)
+
+  --- Opens `dir` in a new tab with `opts`, waiting for terminal 1 to start.
+  local function open(opts)
+    ws.open(dir, vim.tbl_extend("force", { tab = true }, opts))
+    assert.is_true(vim.wait(1000, function()
+      return #shells + #chats > 0
+    end))
+  end
+
+  it("is an agent chat in the directory's newest session when there is nothing to resume", function()
+    open({})
+    assert.same({ { tab = ws.find(dir) } }, chats)
+    assert.same({}, shells)
+  end)
+
+  it("resumes a chat's session as a chat", function()
+    open({ resume = { id = A, client = "chat" } })
+    assert.same({ { tab = ws.find(dir), session_id = A } }, chats)
+  end)
+
+  it("resumes a Claude TUI session in the TUI", function()
+    open({ resume = { id = A, client = "terminal" } })
+    assert.same({}, chats)
+    assert.equals(1, shells[1].slot)
+    assert.equals("claude --resume " .. A, shells[1].shell[#shells[1].shell])
+  end)
+
+  it("is a plain shell without an agent", function()
+    open({ agent = false })
+    assert.same({ { slot = 1 } }, shells)
+    assert.same({}, chats)
   end)
 end)
