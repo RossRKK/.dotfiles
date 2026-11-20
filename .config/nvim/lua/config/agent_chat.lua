@@ -63,6 +63,9 @@ function M.new(tab)
     end
   end
 
+  -- Ctrl+N leaves insert mode in the prompt as it leaves terminal mode in a side terminal (config/keymaps.lua).
+  vim.keymap.set("i", "<C-n>", "<Esc>", { buffer = session.widget.buf_nrs.input, desc = "Agent prompt: normal mode" })
+
   -- The tab is the session: killing it (<C-b>&, closing the workspace) ends it.
   vim.api.nvim_create_autocmd("BufWipeout", {
     buffer = buf,

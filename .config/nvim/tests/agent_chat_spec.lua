@@ -277,6 +277,16 @@ describe("agent_chat.new", function()
     end)
   end)
 
+  it("leaves insert mode in its prompt on Ctrl+N", function()
+    new()
+    local input = created[1].session.widget.buf_nrs.input
+    vim.api.nvim_set_current_win(created[1].session.widget.win_nrs.input)
+
+    vim.api.nvim_feedkeys(vim.keycode("ihello<C-n>x"), "x", false)
+
+    assert.same({ "hell" }, vim.api.nvim_buf_get_lines(input, 0, -1, true))
+  end)
+
   it("is what fishmonger's <C-b>A makes, as this config sets fishmonger up", function()
     require("plugins.fishmonger")[1].config()
     vim.cmd("stopinsert")
