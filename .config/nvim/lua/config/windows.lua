@@ -5,18 +5,23 @@ local M = {}
 
 -- Buffer role: stands in for the main window wherever it is shown (the greeter).
 local PLACEHOLDER = "main_placeholder"
--- Window role: a split beside the main window that a file puts away (the todo list); holds the buffer it was opened for.
+-- Window role: a split under the main window that anything but the greeter there puts away (the todo list);
+-- holds the buffer it was opened for and the window it sits under.
 local COMPANION = "main_companion"
 
-local is_file, move_file
+local is_file, move_file, sits_under
 
---- Replace the main area with any file that opens in its main window or a companion.
+--- Put companions away for whatever takes the window they sit under, and a file opened in one into the main window.
 function M.setup()
   vim.api.nvim_create_autocmd("BufWinEnter", {
     group = vim.api.nvim_create_augroup("main_companions", { clear = true }),
     callback = function(ev)
       local win = vim.api.nvim_get_current_win()
-      -- Deferred: closing a window mid-command pulls the layout from under it.
+      if vim.w[win][COMPANION] == nil then
+        -- Now: what arrived may split windows under it (an agent chat's prompt) that a later close would grow.
+        return M.replace_placeholders(win)
+      end
+      -- Deferred: moving the file out closes the window the opening command is still in.
       vim.schedule(function()
         if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == ev.buf then
           M.replace_placeholders(win)
@@ -26,24 +31,25 @@ function M.setup()
   })
 end
 
---- A file now in `win`, the main window or a companion, takes the main window and the tab's companions close.
+--- The buffer now in `win`: anything but the greeter in the window a companion sits under closes the tab's
+--- companions, and a file in a companion moves to the main window first.
 ---@param win integer
 function M.replace_placeholders(win)
   local tab = vim.api.nvim_win_get_tabpage(win)
   local buf = vim.api.nvim_win_get_buf(win)
   local own = vim.w[win][COMPANION]
-  if not is_file(buf) or own == buf then
-    return
-  end
-  local main = M.main_window(tab)
   if own ~= nil then
+    if own.buf == buf or not is_file(buf) then
+      return
+    end
+    local main = M.main_window(tab)
     if not main then
       -- The companion is all the main area this tab has, so it becomes the main window.
       vim.w[win][COMPANION] = nil
       return
     end
     move_file(win, main)
-  elseif win ~= main then
+  elseif vim.b[buf][PLACEHOLDER] or not sits_under(tab, win) then
     return
   end
   for _, companion in ipairs(M.companions(tab)) do
@@ -57,10 +63,11 @@ function M.mark_placeholder(buf)
   vim.b[buf][PLACEHOLDER] = true
 end
 
---- Mark `win` as a companion of the main window, standing for the buffer it shows now.
+--- Mark `win` as a companion of main window `under`, standing for the buffer it shows now.
 ---@param win integer
-function M.mark_companion(win)
-  vim.w[win][COMPANION] = vim.api.nvim_win_get_buf(win)
+---@param under integer
+function M.mark_companion(win, under)
+  vim.w[win][COMPANION] = { buf = vim.api.nvim_win_get_buf(win), under = under }
 end
 
 --- The companion windows in `tab`.
@@ -150,7 +157,10 @@ function M.open(path, line, col)
   vim.cmd.edit(vim.fn.fnameescape(path))
   if line then
     local last = vim.api.nvim_buf_line_count(0)
-    vim.api.nvim_win_set_cursor(0, { math.min(math.max(line, 1), last), math.max((col or 1) - 1, 0) })
+    vim.api.nvim_win_set_cursor(
+      0,
+      { math.min(math.max(line, 1), last), math.max((col or 1) - 1, 0) }
+    )
   end
 end
 
@@ -166,6 +176,16 @@ function move_file(from, to)
   if vim.api.nvim_get_current_win() == from then
     vim.api.nvim_set_current_win(to)
   end
+end
+
+--- Whether a companion in `tab` sits under `win`.
+---@param tab integer
+---@param win integer
+---@return boolean
+function sits_under(tab, win)
+  return vim.iter(M.companions(tab)):any(function(companion)
+    return vim.w[companion][COMPANION].under == win
+  end)
 end
 
 --- An ordinary, listed file buffer.

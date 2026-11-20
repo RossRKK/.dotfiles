@@ -37,6 +37,13 @@ function M.prompt_height()
     or vim.NIL
 end
 
+--- Whether the current tab shows the todo split.
+---@return boolean
+function M.todo_shown()
+  local todo = require("config.todo")
+  return todo.window(0, todo.FILE) ~= nil
+end
+
 --- Focus the newest agent chat's chat window.
 function M.focus_chat()
   vim.api.nvim_set_current_win(assert(chat_windows().chat))

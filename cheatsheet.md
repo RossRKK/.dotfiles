@@ -171,9 +171,10 @@ greeter. Outside a git repo there's no overview, so it falls back to the pickers
 (`f` find, `g` grep, `n` new file).
 
 The greeter opens your todo list, `~/todo.md`, in a split below it (worktrees
-too): the real file, so edit it there (`Ctrl+W j`). It closes when a file
-opens in the main window (or with `:q`); it comes back the next time the
-greeter opens, and reopening the greeter never adds a second one.
+too): the real file, so edit it there (`Ctrl+W j`). It closes as soon as
+anything takes the greeter's place above it: a file, a terminal, an agent chat
+(`Ctrl+B Z`), any buffer; or with `:q`. Floats don't count. It comes back the
+next time the greeter opens, and reopening the greeter never adds a second one.
 
 ### Todo list (checkmate)
 

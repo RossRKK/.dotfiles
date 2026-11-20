@@ -231,28 +231,27 @@ describe("a workspace tab", function()
     assert_like_by_hand(visit_all(), 4)
   end)
 
-  it(
-    "keeps an agent chat's prompt height when Ctrl+B Z put it over the todo split, which then closes",
-    function()
-      start()
-      open_from_start_screen(repo("chat"))
-      visit(1)
-      -- Wide enough that Ctrl+B Z takes the editor, the widest window, rather than the prompt.
-      vim.fn.jobresize(job, 240, 48)
-      assert.is_true(vim.wait(5000, function()
-        return child("return vim.o.columns") == 240
-      end, 20))
-      child("P.stand_in_agent(); require('config.agent_chat').new(0)")
-      assert.is_true(vim.wait(5000, function()
-        return child("return P.prompt_height()") ~= vim.NIL
-      end, 20))
-      local opened = child("return P.prompt_height()")
-      child("P.focus_chat(); require('fishmonger').maximise()")
-      child("local todo = require('config.todo'); todo.toggle(todo.FILE)")
-      vim.wait(1000, function()
-        return child("return P.prompt_height()") == opened
-      end, 20)
-      assert.same(opened, child("return P.prompt_height()"))
-    end
-  )
+  it("puts the todo split away when Ctrl+B Z puts an agent chat over the greeter", function()
+    start()
+    open_from_start_screen(repo("chat"))
+    visit(1)
+    -- Wide enough that Ctrl+B Z takes the editor, the widest window, rather than the prompt.
+    vim.fn.jobresize(job, 240, 48)
+    assert.is_true(vim.wait(5000, function()
+      return child("return vim.o.columns") == 240
+    end, 20))
+    child("P.stand_in_agent(); require('config.agent_chat').new(0)")
+    assert.is_true(vim.wait(5000, function()
+      return child("return P.prompt_height()") ~= vim.NIL
+    end, 20))
+    local opened = child("return P.prompt_height()")
+    child("P.focus_chat(); require('fishmonger').maximise()")
+    vim.wait(5000, function()
+      return not child("return P.todo_shown()")
+    end, 20)
+    assert.same(
+      { todo = false, prompt = opened },
+      child("return { todo = P.todo_shown(), prompt = P.prompt_height() }")
+    )
+  end)
 end)

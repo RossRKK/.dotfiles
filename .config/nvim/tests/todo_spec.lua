@@ -1,5 +1,5 @@
 -- The todo split (config/todo.lua): toggled under the main window, and closed
--- when a file takes over the main window, and only then.
+-- when anything but the greeter goes into the window it sits under.
 
 local assert = require("luassert")
 local todo = require("config.todo")
@@ -51,20 +51,49 @@ describe("todo split closing", function()
     assert.is_nil(todo.window(0, todo_file))
   end)
 
-  it("stays for a terminal in the main window", function()
+  it("closes for a terminal in the main window", function()
     local term = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_open_term(term, {})
     vim.api.nvim_win_set_buf(main, term)
     flush()
-    assert.equals(todo_win, todo.window(0, todo_file))
+    assert.is_nil(todo.window(0, todo_file))
   end)
 
-  it("stays for an unlisted buffer in the main window", function()
+  it("closes for an unlisted buffer in the main window", function()
     local buf = vim.api.nvim_create_buf(false, false)
     vim.api.nvim_buf_set_name(buf, vim.fn.tempname())
     vim.api.nvim_win_set_buf(main, buf)
     flush()
+    assert.is_nil(todo.window(0, todo_file))
+  end)
+
+  -- As Ctrl+B Z puts a chat there from the side panel.
+  it("closes for a scratch buffer put in the main window from another window", function()
+    local side = vim.api.nvim_open_win(
+      vim.api.nvim_create_buf(false, true),
+      true,
+      { split = "right", win = -1 }
+    )
+    vim.api.nvim_win_set_buf(main, vim.api.nvim_create_buf(false, true))
+    flush()
+    assert.is_nil(todo.window(0, todo_file))
+    vim.api.nvim_win_close(side, true)
+  end)
+
+  it("stays when the greeter comes back into the main window", function()
+    local greeter = vim.api.nvim_create_buf(true, true)
+    windows.mark_placeholder(greeter)
+    vim.api.nvim_win_set_buf(main, greeter)
+    flush()
     assert.equals(todo_win, todo.window(0, todo_file))
+  end)
+
+  it("stays for a buffer put in another window", function()
+    local other = vim.api.nvim_open_win(file_buf(), false, { split = "right", win = main })
+    vim.api.nvim_win_set_buf(other, file_buf())
+    flush()
+    assert.equals(todo_win, todo.window(0, todo_file))
+    vim.api.nvim_win_close(other, true)
   end)
 
   -- Every opener ends in one of these: neo-tree and :e edit the window they land in, others set its buffer.
@@ -102,7 +131,11 @@ describe("todo split closing", function()
   end)
 
   it("stays for a file opened in a float", function()
-    local float = vim.api.nvim_open_win(file_buf(), true, { relative = "editor", row = 1, col = 1, width = 20, height = 5 })
+    local float = vim.api.nvim_open_win(
+      file_buf(),
+      true,
+      { relative = "editor", row = 1, col = 1, width = 20, height = 5 }
+    )
     flush()
     assert.equals(todo_win, todo.window(0, todo_file))
     vim.api.nvim_win_close(float, true)
@@ -120,7 +153,11 @@ describe("todo.toggle", function()
 
   it("opens the list below the main window and focuses it", function()
     -- A side panel to toggle from, so the anchor is not just the current window.
-    local side = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), true, { split = "right", win = main })
+    local side = vim.api.nvim_open_win(
+      vim.api.nvim_create_buf(false, true),
+      true,
+      { split = "right", win = main }
+    )
     vim.w[side].fishmonger_side = true
     todo.toggle(todo_file)
     local todo_win = todo.window(0, todo_file)

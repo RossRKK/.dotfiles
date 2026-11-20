@@ -1,6 +1,6 @@
 -- The personal todo list (plugins/checkmate.lua) as a split under a tab's main
 -- window: shown by the greeter (config/greeter.lua) or toggled by hand, and put
--- away when a file takes the main window over (a companion, config/windows.lua).
+-- away when anything but the greeter takes the window it sits under (a companion, config/windows.lua).
 local M = {}
 
 -- Outside the dotfiles: the repo is public.
@@ -48,7 +48,7 @@ function M.open_below(win, path)
     height = math.max(6, math.floor(vim.api.nvim_win_get_height(win) / 3)),
   })
   vim.wo[todo_win].winfixheight = true
-  require("config.windows").mark_companion(todo_win)
+  require("config.windows").mark_companion(todo_win, win)
   return todo_win
 end
 
