@@ -1,4 +1,4 @@
-# The ACP adapter CodeCompanion drives Claude Code through, at a release newer
+# The ACP adapter agentic.nvim drives Claude Code through, at a release newer
 # than nixpkgs' 0.36.1, running the `claude` given so its sessions load the same
 # --plugin-dir mods and login as the TUI.
 {
