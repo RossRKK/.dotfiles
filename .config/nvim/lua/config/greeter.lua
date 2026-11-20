@@ -525,6 +525,22 @@ local function edit(path)
   vim.cmd.edit(vim.fn.fnameescape(path))
 end
 
+--- The height and pane width of whichever window is showing the greeter NOW,
+--- not the one it was opened in: the buffer outlives any single window (it's a
+--- bufferline tab you come back to), so a captured window handle goes stale --
+--- and asking a stale one for its size is an error, which would blank the
+--- section. A greeter on no window gets a nominal size.
+---@param buf integer
+---@return integer height, integer width
+local function pane_size(buf)
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_buf(w) == buf then
+      return vim.api.nvim_win_get_height(w), math.min(PANE_WIDTH, vim.api.nvim_win_get_width(w))
+    end
+  end
+  return 30, PANE_WIDTH
+end
+
 --- A dim text line, indented to sit under the header.
 ---@param chunks table[] snacks text chunks
 ---@return table item
@@ -621,17 +637,7 @@ local function files(report, attrs, buf)
     return {}
   end
   local triage = require("triage")
-  -- Sized against whichever window is showing the greeter NOW, not the one it
-  -- was opened in: the buffer outlives any single window (it's a bufferline tab
-  -- you come back to), so a captured window handle goes stale -- and asking a
-  -- stale one for its height is an error, which would blank the section.
-  local height = 30
-  for _, w in ipairs(vim.api.nvim_list_wins()) do
-    if vim.api.nvim_win_get_buf(w) == buf then
-      height = vim.api.nvim_win_get_height(w)
-      break
-    end
-  end
+  local height = pane_size(buf)
   -- Leave room for the header, the summary and the section title; the rest of
   -- the window is the list's.
   local limit = math.max(5, height - 12)
@@ -978,14 +984,7 @@ function M.sections(root, buf, tab, report)
       local entry, rep = M.prs[root], report()
       -- The entry can be for the branch before a checkout until the refetch.
       if entry and entry.pr and rep and entry.branch == rep.branch then
-        local height, width = 30, PANE_WIDTH
-        for _, w in ipairs(vim.api.nvim_list_wins()) do
-          if vim.api.nvim_win_get_buf(w) == buf then
-            height = vim.api.nvim_win_get_height(w)
-            width = math.min(PANE_WIDTH, vim.api.nvim_win_get_width(w))
-            break
-          end
-        end
+        local height, width = pane_size(buf)
         -- A third of what's below the header, so the file list keeps its share.
         items = M.pr_items(entry.pr, width, math.max(3, math.floor((height - 12) / 3)))
         items[#items + 1] = { padding = 1 }
