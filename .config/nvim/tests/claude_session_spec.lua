@@ -70,3 +70,40 @@ describe("claude_session.role", function()
     assert.is_nil(claude_session.role(roles, home .. "/.dotfiles"))
   end)
 end)
+
+describe("claude_session.cwd", function()
+  local projects
+  local id = "5acea7d5-42e4-48ab-bae8-c06adaa57027"
+
+  --- Session `id`'s transcript in project directory `slug`, one JSON line per row.
+  local function transcript(slug, rows)
+    vim.fn.mkdir(projects .. "/" .. slug, "p")
+    vim.fn.writefile(vim.tbl_map(vim.json.encode, rows), projects .. "/" .. slug .. "/" .. id .. ".jsonl")
+  end
+
+  before_each(function()
+    projects = vim.fn.tempname()
+  end)
+
+  after_each(function()
+    vim.fn.delete(projects, "rf")
+  end)
+
+  it("reads the directory the session started in, from the first row that records one", function()
+    transcript("-home-me-proj", {
+      { type = "custom-title", customTitle = "calm-otter" },
+      { type = "user", cwd = "/home/me/proj" },
+      { type = "user", cwd = "/home/me/proj/sub" },
+    })
+    assert.equals("/home/me/proj", claude_session.cwd(projects, id))
+  end)
+
+  it("has none for a session with no transcript", function()
+    assert.is_nil(claude_session.cwd(projects, id))
+  end)
+
+  it("has none for a transcript that records no directory yet", function()
+    transcript("-home-me-proj", { { type = "custom-title", customTitle = "calm-otter" } })
+    assert.is_nil(claude_session.cwd(projects, id))
+  end)
+end)

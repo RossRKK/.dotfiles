@@ -1,4 +1,5 @@
--- Claude Code's record of each live session, <config dir>/sessions/<pid>.json, read for the name it goes by.
+-- Claude Code's record of each live session, <config dir>/sessions/<pid>.json, read for the name it goes by,
+-- and of each session's transcript, read for the directory it ran in.
 
 local M = {}
 
@@ -39,6 +40,25 @@ function M.role(roles, dir)
   end
   f:close()
   return found
+end
+
+--- The directory session `id` started in, as its transcript's first row with one
+--- records it: Claude files the transcript under it, so a resume has to run there.
+---@param projects string Claude's projects directory
+---@param id string
+---@return string?
+function M.cwd(projects, id)
+  -- Session ids are unique, so any project's directory may hold it.
+  local transcript = vim.fn.glob(projects .. "/*/" .. id .. ".jsonl", true, true)[1]
+  if not transcript then
+    return nil
+  end
+  for line in io.lines(transcript) do
+    local ok, row = pcall(vim.json.decode, line)
+    if ok and type(row) == "table" and type(row.cwd) == "string" then
+      return row.cwd
+    end
+  end
 end
 
 return M
