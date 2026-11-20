@@ -21,5 +21,6 @@
       postBuild = "wrapProgram $out/bin/neovide --set AGENT_WORKTREES 1";
     })
     (callPackage ../0xproto-upright.nix { })
+    (callPackage ../symbol-fallback-fonts.nix { })
   ];
 }
