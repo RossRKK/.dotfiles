@@ -851,8 +851,8 @@ describe("workspace.open's terminal 1", function()
       end,
     }
     package.loaded["config.agent_chat"] = {
-      start = function(tab, session_id)
-        chats[#chats + 1] = { tab = tab, session_id = session_id }
+      start = function(tab, session_id, agent_name)
+        chats[#chats + 1] = { tab = tab, session_id = session_id, agent_name = agent_name }
       end,
     }
     package.loaded["config.workspace"] = nil
@@ -890,6 +890,14 @@ describe("workspace.open's terminal 1", function()
   it("resumes a chat's session as a chat", function()
     open({ resume = { id = A, client = "chat" } })
     assert.same({ { tab = ws.find(dir), session_id = A } }, chats)
+  end)
+
+  it("starts its chat under the agent name its directory gives", function()
+    ws.agent_name = function(d)
+      return d == dir and "keen-heron" or nil
+    end
+    open({})
+    assert.equals("keen-heron", chats[1].agent_name)
   end)
 
   it("resumes a Claude TUI session in the TUI", function()

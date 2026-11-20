@@ -610,7 +610,7 @@ function M.open(dir, opts)
         shell = M.agent_shell(background.user_manager(), M.agent_name(dir), resume.id),
       })
     else
-      require("config.agent_chat").start(tab, resume and resume.id)
+      require("config.agent_chat").start(tab, resume and resume.id, M.agent_name(dir))
     end
     if vim.api.nvim_get_current_tabpage() == tab and vim.api.nvim_win_is_valid(editor) then
       vim.api.nvim_set_current_win(editor)
