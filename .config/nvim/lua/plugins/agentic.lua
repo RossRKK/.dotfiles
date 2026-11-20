@@ -10,6 +10,11 @@ return {
     ---@type agentic.PartialUserConfig
     opts = {
       provider = "claude-agent-acp",
+      headers = {
+        input = function(parts, session_state)
+          return require("config.agent_chat").input_header(parts, session_state)
+        end,
+      },
     },
   },
 }
