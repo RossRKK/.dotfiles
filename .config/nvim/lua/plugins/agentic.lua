@@ -10,6 +10,10 @@ return {
     ---@type agentic.PartialUserConfig
     opts = {
       provider = "claude-agent-acp",
+      -- Agent messages are headed with the name the session's Claude goes by, as its tab is.
+      agent_name = function(session_id)
+        return require("config.agent_chat").agent_name(session_id)
+      end,
       headers = {
         input = function(parts, session_state)
           return require("config.agent_chat").input_header(parts, session_state)

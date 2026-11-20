@@ -264,6 +264,14 @@ describe("agent_chat.new", function()
       assert.same({ key = 1, window = "input" }, rendered[#rendered])
     end)
 
+    it("heads its agent's messages in the chat with its Claude's name", function()
+      new()
+      report("acp-1", "calm-otter")
+
+      assert.equals("calm-otter", require("plugins.agentic")[1].opts.agent_name("acp-1"))
+      assert.is_nil(require("plugins.agentic")[1].opts.agent_name("acp-unknown"))
+    end)
+
     it("titles its prompt with its Claude's name, then agentic's parts", function()
       new()
       report("acp-1", "calm-otter")
