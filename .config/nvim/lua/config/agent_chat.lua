@@ -154,8 +154,22 @@ function host(spec, place)
   vim.keymap.set("i", "<C-n>", "<Esc>", { buffer = session.widget.buf_nrs.input, desc = "Agent prompt: normal mode" })
   -- Replaces agentic's Ctrl+V to share the clipboard reads of every other Ctrl+V (config/keymaps.lua).
   vim.keymap.set("i", "<C-v>", function()
-    paste(key)
+    paste(key, function(text)
+      vim.api.nvim_paste(text, true, -1)
+    end)
   end, { buffer = session.widget.buf_nrs.input, desc = "Agent prompt: paste text, or attach an image or file" })
+  -- p/P from the clipboard paste as Ctrl+V does, text put natively; from any other register, as ever.
+  for _, lhs in ipairs({ "p", "P" }) do
+    vim.keymap.set("n", lhs, function()
+      local put = ("normal! %d\"%s%s"):format(vim.v.count1, vim.v.register, lhs)
+      if vim.v.register ~= "+" and vim.v.register ~= "*" then
+        return vim.cmd(put)
+      end
+      paste(key, function()
+        vim.cmd(put)
+      end)
+    end, { buffer = session.widget.buf_nrs.input, desc = "Agent prompt: put text, or attach an image or file" })
+  end
 
   -- The tab is the session: killing it (<C-b>&, closing the workspace) ends it.
   vim.api.nvim_create_autocmd("BufWipeout", {
@@ -193,16 +207,17 @@ function host(spec, place)
   end
 end
 
---- Ctrl+V in session `key`'s prompt: text is typed, unless it is only a path to a file, which is
---- attached, as are an image and files copied on Windows.
+--- Paste the clipboard into session `key`'s prompt: text goes in by `put_text`, unless it is only a
+--- path to a file, which is attached, as are an image and files copied on Windows.
 ---@param key integer
-function paste(key)
+---@param put_text fun(text: string)
+function paste(key, put_text)
   local clipboard = require("util.clipboard")
   local text = clipboard.text()
   if text then
     local path = clipboard.path_in(text)
     if not (path and attach(key, { path })) then
-      vim.api.nvim_paste(text, true, -1)
+      put_text(text)
     end
     return
   end

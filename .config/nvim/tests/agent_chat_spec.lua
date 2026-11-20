@@ -315,13 +315,31 @@ describe("agent_chat.new", function()
     assert.same({ "hell" }, vim.api.nvim_buf_get_lines(input, 0, -1, true))
   end)
 
-  describe("Ctrl+V in its prompt", function()
+  describe("pasting in its prompt", function()
     local clipboard = require("util.clipboard")
     local text, read_windows = clipboard.text, clipboard.read_windows
     local held_text, held_windows, session
+    local clipboard_setting, provider = vim.o.clipboard, vim.g.clipboard
 
     before_each(function()
       held_text, held_windows = nil, nil
+      -- The same text in the + register, for a native put to read.
+      vim.o.clipboard = "unnamedplus"
+      vim.g.clipboard = {
+        name = "spec",
+        copy = { ["+"] = function() end, ["*"] = function() end },
+        paste = {
+          ["+"] = function()
+            return held_text and vim.split(held_text, "\n") or {}
+          end,
+          ["*"] = function()
+            return {}
+          end,
+        },
+        cache_enabled = false,
+      }
+      vim.g.loaded_clipboard_provider = nil
+      vim.cmd.runtime("autoload/provider/clipboard.vim")
       clipboard.text = function()
         return held_text
       end
@@ -335,6 +353,9 @@ describe("agent_chat.new", function()
 
     after_each(function()
       clipboard.text, clipboard.read_windows = text, read_windows
+      vim.o.clipboard, vim.g.clipboard = clipboard_setting, provider
+      vim.g.loaded_clipboard_provider = nil
+      vim.cmd.runtime("autoload/provider/clipboard.vim")
     end)
 
     local function paste()
@@ -345,7 +366,7 @@ describe("agent_chat.new", function()
       return vim.api.nvim_buf_get_lines(session.widget.buf_nrs.input, 0, -1, true)
     end
 
-    it("attaches an image copied on Windows as a PNG file of it", function()
+    it("Ctrl+V attaches an image copied on Windows as a PNG file of it", function()
       held_windows = { kind = "image", png = "\137PNG\r\n\26\nbytes" }
 
       paste()
@@ -357,7 +378,7 @@ describe("agent_chat.new", function()
       assert.same({ "" }, typed())
     end)
 
-    it("attaches files copied in Explorer", function()
+    it("Ctrl+V attaches files copied in Explorer", function()
       local a, b = vim.fn.tempname(), vim.fn.tempname()
       vim.fn.writefile({}, a)
       vim.fn.writefile({}, b)
@@ -368,7 +389,7 @@ describe("agent_chat.new", function()
       assert.same({ a, b }, session.file_list.files)
     end)
 
-    it("attaches the file a copied path names, rather than typing it", function()
+    it("Ctrl+V attaches the file a copied path names, rather than typing it", function()
       local shot = vim.fn.tempname()
       vim.fn.writefile({}, shot)
       held_text = shot
@@ -379,7 +400,7 @@ describe("agent_chat.new", function()
       assert.same({ "" }, typed())
     end)
 
-    it("types text", function()
+    it("Ctrl+V types text", function()
       held_text = "hello /no/such/file"
 
       paste()
@@ -388,7 +409,7 @@ describe("agent_chat.new", function()
       assert.same({}, session.file_list.files)
     end)
 
-    it("says so when there is nothing to paste", function()
+    it("Ctrl+V says so when there is nothing to paste", function()
       local said
       local notify = vim.notify
       vim.notify = function(msg, level, opts) ---@diagnostic disable-line: duplicate-set-field, unused-local
@@ -398,6 +419,59 @@ describe("agent_chat.new", function()
       vim.notify = notify
 
       assert.is_not_nil(said)
+      assert.same({}, session.file_list.files)
+    end)
+
+    --- Normal-mode `keys` in a prompt holding `line`, cursor on its first character.
+    local function put(keys, line)
+      vim.api.nvim_buf_set_lines(session.widget.buf_nrs.input, 0, -1, true, { line })
+      vim.api.nvim_win_set_cursor(0, { 1, 0 })
+      vim.api.nvim_feedkeys(keys, "x", false)
+    end
+
+    it("p attaches an image copied on Windows", function()
+      held_windows = { kind = "image", png = "\137PNG\r\n\26\nbytes" }
+
+      put("p", "ab")
+
+      assert.equals(1, #session.file_list.files)
+      assert.same({ "ab" }, typed())
+    end)
+
+    it("P attaches the file a copied path names", function()
+      local shot = vim.fn.tempname()
+      vim.fn.writefile({}, shot)
+      held_text = shot
+
+      put("P", "ab")
+
+      assert.same({ shot }, session.file_list.files)
+      assert.same({ "ab" }, typed())
+    end)
+
+    it("p puts text after the cursor, as many times as its count", function()
+      held_text = "X"
+
+      put("3p", "ab")
+
+      assert.same({ "aXXXb" }, typed())
+    end)
+
+    it("P puts text before the cursor", function()
+      held_text = "X"
+
+      put("P", "ab")
+
+      assert.same({ "Xab" }, typed())
+    end)
+
+    it("p from another register puts that register, whatever the clipboard holds", function()
+      held_windows = { kind = "image", png = "\137PNG\r\n\26\nbytes" }
+      vim.fn.setreg("a", "R")
+
+      put('"ap', "ab")
+
+      assert.same({ "aRb" }, typed())
       assert.same({}, session.file_list.files)
     end)
   end)
