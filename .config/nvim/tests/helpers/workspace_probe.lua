@@ -15,6 +15,33 @@ function M.stub_claude()
   end
 end
 
+--- agentic's provider swapped for one that never answers, so a chat's windows open with no Claude behind them.
+function M.stand_in_agent()
+  local provider = require("agentic.config").acp_providers["claude-agent-acp"]
+  -- Exits when nvim does, as its stdin closes.
+  provider.command, provider.args = "sh", { "-c", "cat >/dev/null" }
+end
+
+--- The newest agent chat's widget windows.
+---@return table<string, integer>
+local function chat_windows()
+  local sessions = require("agentic.session_registry").list()
+  return #sessions > 0 and sessions[#sessions].widget.win_nrs or {}
+end
+
+--- The newest agent chat's prompt height, or vim.NIL before its prompt is open.
+---@return integer|vim.NIL
+function M.prompt_height()
+  local input = chat_windows().input
+  return input and vim.api.nvim_win_is_valid(input) and vim.api.nvim_win_get_height(input)
+    or vim.NIL
+end
+
+--- Focus the newest agent chat's chat window.
+function M.focus_chat()
+  vim.api.nvim_set_current_win(assert(chat_windows().chat))
+end
+
 --- Terminal 1's agent chat in `tab` once started, with the session it resumed; vim.NIL before.
 ---@param tab integer
 ---@return { session?: string }|vim.NIL
