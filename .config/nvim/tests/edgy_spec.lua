@@ -11,23 +11,6 @@ local function view(ft)
   end
 end
 
--- A tab can host a chat buffer, so the panel is docked whichever kind of tab it shows.
-for _, ft in ipairs({ "fishmonger", "codecompanion" }) do
-  describe("edgy's side panel view for " .. ft, function()
-    it("docks the window fishmonger marks as its panel, not the editor beside it", function()
-      vim.cmd("silent only!")
-      vim.w.fishmonger_side = nil
-      local editor = vim.api.nvim_get_current_win()
-      vim.cmd("vsplit")
-      local panel = vim.api.nvim_get_current_win()
-      vim.w[panel].fishmonger_side = true
-
-      assert.is_true(view(ft).filter(nil, panel))
-      assert.falsy(view(ft).filter(nil, editor))
-    end)
-  end)
-end
-
 for _, list in ipairs({
   { ft = "fishmonger-tasks", var = "fishmonger_tasks_height" },
   { ft = "fishmonger-files", var = "fishmonger_files_height" },
