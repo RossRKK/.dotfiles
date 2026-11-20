@@ -4,8 +4,9 @@
 -- (config/agent_chat.lua), made with fishmonger's Ctrl+B A; its own UX and keys as shipped.
 return {
   {
-    "carlos-algms/agentic.nvim",
-    dev = true,
+    -- Fork carrying the fishmonger-hosting patches until they go upstream.
+    "RossRKK/agentic.nvim",
+    branch = "rkk/target-window",
     lazy = true,
     ---@type agentic.PartialUserConfig
     opts = {
