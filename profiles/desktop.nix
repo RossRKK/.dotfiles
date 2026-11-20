@@ -20,6 +20,6 @@
       nativeBuildInputs = [ makeWrapper ];
       postBuild = "wrapProgram $out/bin/neovide --set AGENT_WORKTREES 1";
     })
-    nerd-fonts._0xproto
+    (callPackage ../0xproto-upright.nix { })
   ];
 }

@@ -31,10 +31,6 @@ font-feature = -calt
 font-feature = -liga
 font-feature = -dlig
 
-# Use the upright face for italics instead of 0xProto's cursive variant.
-font-style-italic = Regular
-font-style-bold-italic = Bold
-
 # Slow down mouse-wheel scrolling (default is 3 = fast). Lower = slower;
 # try 0.5 if 1 is still too quick.
 mouse-scroll-multiplier = 0.5

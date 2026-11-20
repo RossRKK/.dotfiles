@@ -22,7 +22,7 @@
   fonts.fontconfig.enable = true;
 
   home.packages = with pkgs; [
-    nerd-fonts._0xproto
+    (callPackage ../0xproto-upright.nix { })
   ];
 
   # A SteamOS update replaces the root filesystem, taking the installer's
