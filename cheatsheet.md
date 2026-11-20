@@ -329,8 +329,10 @@ conversation already has one; the agent switches branches there, so a PR stack i
 checkout. Tabs read
 `<repo> · <pet> · <branch>`. Neovide runs in this mode: on Linux its package is wrapped
 with the flag (profiles/desktop.nix); on Windows (WSL) `hms` writes its
-`%APPDATA%\neovide\config.toml` (shared config plus `neovim-bin = "env AGENT_WORKTREES=1 nvim"`)
-and installs its fonts for the Windows user (profiles/windows-neovide.nix).
+`%APPDATA%\neovide\config.toml` (shared config plus `neovim-bin = "env AGENT_WORKTREES=1 nvim"`,
+profiles/windows-neovide.nix). Its fonts are installed by hand once (right-click, "Install for me"):
+`0xProtoNerdFontMono-Regular.ttf`, `0xProtoNerdFontMono-Bold.ttf` (no Italic, so italics are slanted),
+`DejaVuSansMono.ttf`, `DejaVuSansMono-Bold.ttf`, `NotoSansSymbols2-Regular.otf` and `NotoSansMath-Regular.otf`.
 
 So a branch becomes a project tab: its own checkout, terminals and buffer list,
 with your main checkout untouched in the tab next door — no stash, no
