@@ -1,138 +1,150 @@
--- config.agent_chat: toggling the agentic chat swaps it with fishmonger's side
--- terminal per tabpage. Both plugins are faked: agentic as a real split showing
--- an AgenticChat buffer, fishmonger as a per-tabpage open flag.
+-- config.agent_chat: an agent chat is a fishmonger tab. Runs the real
+-- fishmonger (its shells faked, as in its own suite) against a fake
+-- agentic session registry that records what the glue asks of it.
 
 local assert = require("luassert")
 
-local agent_chat
-local panel -- tabpage -> whether the fake side terminal is showing
-local toggles -- fishmonger.toggle() calls
+local agent_chat, fishmonger
+local created, shown, hidden, destroyed
 
---- A window in `tab` showing an AgenticChat buffer, floating or not.
-local function chat_window(tab, float)
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
-    local is_float = vim.api.nvim_win_get_config(win).relative ~= ""
-    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "AgenticChat" and is_float == float then
-      return win
-    end
-  end
-end
-
-local function chat_buf()
+--- A fake agentic session whose chat buffer has agentic's filetype.
+local function fake_session(key)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].filetype = "AgenticChat"
-  return buf
+  return {
+    session_key = key,
+    widget = {
+      buf_nrs = { chat = buf },
+      hide = function()
+        hidden[#hidden + 1] = key
+      end,
+    },
+  }
+end
+
+local function fake_registry()
+  local sessions = {}
+  return {
+    create = function(provider, spec) ---@diagnostic disable-line: unused-local
+      local session = fake_session(#created + 1)
+      created[#created + 1] = { session = session, cwd = spec.cwd(vim.fn.getcwd()) }
+      sessions[session.session_key] = session
+      return session
+    end,
+    show_session = function(key, opts)
+      shown[#shown + 1] = { key = key, win = opts.win }
+    end,
+    get = function(key)
+      return sessions[key]
+    end,
+    destroy = function(key)
+      local session = sessions[key]
+      if not session then
+        return -- as agentic's: an unknown key is a no-op
+      end
+      destroyed[#destroyed + 1] = key
+      sessions[key] = nil
+      if vim.api.nvim_buf_is_valid(session.widget.buf_nrs.chat) then
+        vim.api.nvim_buf_delete(session.widget.buf_nrs.chat, { force = true })
+      end
+    end,
+  }
 end
 
 describe("agent_chat.toggle", function()
+  local jobstart = vim.fn.jobstart
+
   before_each(function()
     pcall(vim.cmd, "tabonly!")
     pcall(vim.cmd, "only!")
-    panel, toggles = {}, 0
-    package.loaded["fishmonger"] = {
-      panel_open = function(tab)
-        return panel[tab or vim.api.nvim_get_current_tabpage()] == true
-      end,
-      toggle = function()
-        local tab = vim.api.nvim_get_current_tabpage()
-        panel[tab] = not panel[tab]
-        toggles = toggles + 1
-      end,
-    }
-    package.loaded["agentic"] = {
-      open = function()
-        vim.cmd("botright vsplit")
-        vim.api.nvim_win_set_buf(0, chat_buf())
-      end,
-      close = function()
-        local win = chat_window(vim.api.nvim_get_current_tabpage(), false)
-        if win then
-          vim.api.nvim_win_close(win, true)
-        end
-      end,
-    }
+    vim.w.fishmonger_side = nil
+    created, shown, hidden, destroyed = {}, {}, {}, {}
+    -- Keep jobstart's real arity, as fishmonger's own suite does.
+    vim.fn.jobstart = function(cmd, opts) ---@diagnostic disable-line: duplicate-set-field, unused-local
+      return 1
+    end
+    package.loaded["fishmonger"] = nil
+    fishmonger = require("fishmonger")
+    fishmonger.setup_exit()
+    package.loaded["agentic.session_registry"] = fake_registry()
     package.loaded["config.agent_chat"] = nil
     agent_chat = require("config.agent_chat")
   end)
 
   after_each(function()
+    vim.fn.jobstart = jobstart
+    package.loaded["agentic.session_registry"] = nil
     package.loaded["fishmonger"] = nil
-    package.loaded["agentic"] = nil
   end)
 
-  it("hides a showing side terminal to open the chat, and brings it back on close", function()
-    local tab = vim.api.nvim_get_current_tabpage()
-    panel[tab] = true
-
+  it("opens a new agent tab in the panel and shows its session there", function()
     agent_chat.toggle()
-    assert.is_not_nil(chat_window(tab, false))
-    assert.is_false(panel[tab])
 
-    agent_chat.toggle()
-    assert.is_nil(chat_window(tab, false))
-    assert.is_true(panel[tab])
+    assert.equals(1, #created)
+    local chat = created[1].session.widget.buf_nrs.chat
+    assert.equals(chat, vim.api.nvim_win_get_buf(fishmonger.win))
+    assert.same({ { key = 1, win = fishmonger.win } }, shown)
   end)
 
-  it("leaves a hidden side terminal hidden on both open and close", function()
-    local tab = vim.api.nvim_get_current_tabpage()
+  it("starts the session in the tabpage's directory, not the focused window's", function()
+    local root = vim.fn.getcwd()
+    vim.cmd("tabnew")
+    vim.cmd.tcd(vim.fn.fnameescape(vim.fn.fnamemodify(vim.fn.tempname(), ":h")))
+    local tab_dir = vim.fn.getcwd()
+    vim.cmd.lcd(vim.fn.fnameescape(root))
 
     agent_chat.toggle()
-    agent_chat.toggle()
 
-    assert.equals(0, toggles)
-    assert.is_nil(chat_window(tab, false))
+    assert.are_not.equal(root, tab_dir)
+    assert.equals(tab_dir, created[1].cwd)
   end)
 
-  it("restores on the next close after the chat was closed some other way", function()
-    local tab = vim.api.nvim_get_current_tabpage()
-    panel[tab] = true
+  it("goes back to the agent tab rather than making another", function()
     agent_chat.toggle()
-    vim.api.nvim_win_close(chat_window(tab, false), true) -- :q on the chat
-
-    agent_chat.toggle() -- reopens the chat, the terminal stays hidden
-    assert.is_not_nil(chat_window(tab, false))
-    assert.is_false(panel[tab])
-
+    fishmonger.show(2)
     agent_chat.toggle()
-    assert.is_true(panel[tab])
+
+    assert.equals(1, #created)
+    assert.equals(1, fishmonger.current)
+    assert.same({ 1 }, hidden) -- slot 2's shell took the window first
   end)
 
-  it("doesn't toggle a terminal the user already reopened", function()
-    local tab = vim.api.nvim_get_current_tabpage()
-    panel[tab] = true
+  it("closes the panel when the agent tab is already showing, hiding the session", function()
     agent_chat.toggle()
-    panel[tab] = true -- <C-t> while the chat is open
+    agent_chat.toggle()
 
-    agent_chat.toggle()
-    assert.equals(1, toggles)
-    assert.is_true(panel[tab])
+    assert.is_false(fishmonger.panel_open())
+    assert.same({ 1 }, hidden)
   end)
 
-  it("keeps what it hid per tabpage", function()
-    local first = vim.api.nvim_get_current_tabpage()
-    panel[first] = true
+  it("gives each workspace its own agent tab", function()
     agent_chat.toggle()
     vim.cmd("tabnew")
-    local second = vim.api.nvim_get_current_tabpage()
+    agent_chat.toggle()
 
-    agent_chat.toggle()
-    agent_chat.toggle()
-    assert.is_nil(panel[second])
-
-    vim.api.nvim_set_current_tabpage(first)
-    agent_chat.toggle()
-    assert.is_true(panel[first])
+    assert.equals(2, #created)
   end)
 
-  it("opens the chat when only agentic's hidden float of it exists", function()
-    local tab = vim.api.nvim_get_current_tabpage()
-    vim.api.nvim_open_win(
-      chat_buf(),
-      false,
-      { relative = "editor", row = 0, col = 0, width = 10, height = 5, hide = true }
-    )
-
+  it("ends the session when its tab is killed", function()
     agent_chat.toggle()
-    assert.is_not_nil(chat_window(tab, false))
+    fishmonger.kill()
+    -- Scheduled out of BufWipeout; waits on the outcome, not a duration.
+    vim.wait(1000, function()
+      return #destroyed > 0
+    end)
+
+    assert.same({ 1 }, destroyed)
+  end)
+
+  it("ends the session it made when every slot is taken", function()
+    for slot = 1, 9 do
+      fishmonger.show(slot)
+    end
+    local notify = vim.notify
+    vim.notify = function(msg, level, opts) end ---@diagnostic disable-line: duplicate-set-field, unused-local
+    agent_chat.toggle()
+    vim.notify = notify
+
+    assert.same({ 1 }, destroyed)
   end)
 end)

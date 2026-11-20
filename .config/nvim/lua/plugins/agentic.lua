@@ -1,6 +1,7 @@
--- agentic.nvim: Claude Code as a chat sidebar, driven over ACP by claude-agent-acp
+-- agentic.nvim: Claude Code as a chat, driven over ACP by claude-agent-acp
 -- (claude-agent-acp.nix). That adapter runs home-manager's wrapped claude, so the
--- chat reuses its login and mods; no token. Its own UX, keys and layout as shipped.
+-- chat reuses its login and mods; no token. Each chat is a fishmonger tab
+-- (config/agent_chat.lua); its own UX and keys as shipped.
 return {
   {
     "carlos-algms/agentic.nvim",
@@ -13,7 +14,7 @@ return {
         function()
           require("config.agent_chat").toggle()
         end,
-        desc = "Toggle agent chat (swaps with the side terminal)",
+        desc = "Agent chat: this workspace's agent tab, or a new one",
       },
     },
     ---@type agentic.PartialUserConfig

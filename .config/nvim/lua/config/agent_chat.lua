@@ -1,53 +1,89 @@
--- The agentic.nvim chat and fishmonger's side terminal both want the right
--- edge, so toggling the chat swaps them: opening it hides a showing terminal,
--- closing it brings back only a terminal it hid. Per tabpage, as workspaces are.
+-- Agent chats are fishmonger tabs: each tab holds one agentic.nvim session, its
+-- chat in the tab's window with the prompt and panels stacked under it, started
+-- in the workspace's directory. The one place that knows both plugins.
 
 local M = {}
 
--- agentic.nvim has no "is the chat visible" API; its documented filetype is the next best public signal.
+-- agentic.nvim's documented filetype for its chat buffer: what makes a tab an agent tab.
 local CHAT_FILETYPE = "AgenticChat"
 
-local chat_visible, open, close -- defined below their caller
+local agent_slot, new_chat -- defined below their caller
 
+-- Space+i: shows this tabpage's agent tab, making one if it has none, or closes
+-- the panel when that tab is already showing there.
 function M.toggle()
-  local tab = vim.api.nvim_get_current_tabpage()
-  if chat_visible(tab) then
-    close(tab)
-  else
-    open(tab)
-  end
-end
-
--- A split, not a float: agentic keeps a hidden float of the chat buffer while the chat is closed.
-function chat_visible(tab)
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
-    if
-      vim.bo[vim.api.nvim_win_get_buf(win)].filetype == CHAT_FILETYPE
-      and vim.api.nvim_win_get_config(win).relative == ""
-    then
-      return true
-    end
-  end
-  return false
-end
-
-function open(tab)
   local fishmonger = require("fishmonger")
-  if fishmonger.panel_open(tab) then
+  local tab = vim.api.nvim_get_current_tabpage()
+  local slot = agent_slot()
+  if slot and slot == fishmonger.current and fishmonger.panel_open(tab) then
     fishmonger.toggle()
-    vim.t[tab].agent_chat_hid_terminal = true
+  elseif slot then
+    fishmonger.show(slot)
+  else
+    new_chat(tab)
   end
-  require("agentic").open()
 end
 
-function close(tab)
-  require("agentic").close()
-  if vim.t[tab].agent_chat_hid_terminal then
-    vim.t[tab].agent_chat_hid_terminal = nil
-    local fishmonger = require("fishmonger")
-    if not fishmonger.panel_open(tab) then
-      fishmonger.toggle()
+-- This tabpage's agent tab: the current one if it is an agent, else the lowest numbered.
+function agent_slot()
+  local fishmonger = require("fishmonger")
+  local function is_agent(slot)
+    local term = fishmonger.slots[slot]
+    return term and vim.bo[term.buf].filetype == CHAT_FILETYPE
+  end
+  if fishmonger.current and is_agent(fishmonger.current) then
+    return fishmonger.current
+  end
+  for slot = 1, 9 do
+    if is_agent(slot) then
+      return slot
     end
+  end
+end
+
+-- A new agent tab in the lowest free slot, its session started in the directory
+-- fishmonger gives the tabpage rather than the focused window's.
+function new_chat(tab)
+  local fishmonger = require("fishmonger")
+  -- agentic's public new_session asks what to do with the current session and
+  -- keeps the new one's key to itself; every agent tab keeps its own session.
+  local registry = require("agentic.session_registry")
+  local dir = fishmonger.dir(tab)
+  local session = registry.create(nil, {
+    kind = "new",
+    cwd = function()
+      return dir
+    end,
+  })
+  if not session then
+    return
+  end
+  local key = session.session_key
+  local buf = session.widget.buf_nrs.chat
+
+  -- The tab is the session: killing it (<C-b>&, closing the workspace) ends it.
+  vim.api.nvim_create_autocmd("BufWipeout", {
+    buffer = buf,
+    once = true,
+    callback = vim.schedule_wrap(function()
+      registry.destroy(key)
+    end),
+  })
+
+  local hosted = fishmonger.new({
+    buf = buf,
+    on_show = function(win)
+      registry.show_session(key, { win = win })
+    end,
+    on_hide = function()
+      local live = registry.get(key)
+      if live then
+        live.widget:hide()
+      end
+    end,
+  })
+  if not hosted then
+    registry.destroy(key)
   end
 end
 
