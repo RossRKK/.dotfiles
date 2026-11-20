@@ -45,6 +45,20 @@ local function list_height(var)
   end
 end
 
+--- The view docking fishmonger's side panel while it shows a buffer of filetype `ft`.
+---@param ft string
+---@return table
+local function side_panel(ft)
+  return {
+    ft = ft,
+    wo = { winbar = false },
+    size = { width = 0.4 }, -- opening width, ~40% of the screen
+    filter = function(_, win)
+      return vim.w[win].fishmonger_side and vim.api.nvim_win_get_config(win).relative == ""
+    end,
+  }
+end
+
 return {
   {
     "folke/edgy.nvim",
@@ -127,14 +141,11 @@ return {
         -- the entry and the next layout update rebuilds it and re-applies `wo`.
         -- Hence the tab strip vanishing at unpredictable moments rather than on
         -- any one action.
-        {
-          ft = "fishmonger",
-          wo = { winbar = false },
-          size = { width = 0.4 }, -- opening width, ~40% of the screen
-          filter = function(_, win)
-            return vim.w[win].fishmonger_side and vim.api.nvim_win_get_config(win).relative == ""
-          end,
-        },
+        --
+        -- edgy matches views by filetype, so the panel needs one per filetype a
+        -- fishmonger tab can be: its terminals, and the chats it hosts (:AgentChat).
+        side_panel("fishmonger"),
+        side_panel("codecompanion"),
         -- fishmonger's background-task list, under the panel. Sized by the
         -- height fishmonger asks for: a fixed one here would undo fishmonger's
         -- resize on every layout pass, and the list hopped between the two.

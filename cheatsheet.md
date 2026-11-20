@@ -966,6 +966,14 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B r`    | Mark this terminal's agent read: an empty circle, whatever its state, until it next reports one |
 | `Ctrl+B u`    | Mark it unread: a question mark until it next reports a status (or `Ctrl+B r`) |
 | `Ctrl+T`      | Toggle the side terminal (`Ctrl+N` first from a terminal) |
+| `:AgentChat`  | A Claude Code chat (CodeCompanion over ACP) in the next free tab |
+
+**Claude Code chat.** `:AgentChat` opens Claude Code as an editable chat buffer
+in a tab: normal vim motions and yanks over the conversation, your prompt at the
+bottom under `## Me`, `Ctrl+S` (or `Enter` in normal mode) to send. It is the
+same Claude as the TUI (your login and mods), started in the workspace's
+directory. `/resume` in the chat picks up an earlier session. `Ctrl+B &`
+closes it; `Space+ya` types a `path:line` at the end of its prompt.
 
 **Seen agents.** A finished agent's tick turns into an empty circle once you
 enter terminal mode in its terminal (going to it with `Ctrl+B N`, the agent
