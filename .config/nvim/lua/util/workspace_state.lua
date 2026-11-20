@@ -6,15 +6,9 @@
 
 local M = {}
 
----@alias workspace_state.Client "terminal" | "chat" what terminal 1 runs its Claude in: the TUI, or an agent chat
-
----@class workspace_state.Session
----@field id string Claude's session id
----@field client workspace_state.Client
-
 ---@class workspace_state.Project
 ---@field slot? integer the workspace number it had, for a stable restore order
----@field session? workspace_state.Session terminal 1's Claude session
+---@field session? string terminal 1's Claude session id
 
 ---@alias workspace_state.Projects table<string, workspace_state.Project> project dir -> project
 
@@ -166,15 +160,15 @@ function M.restorable(stored, is_open, is_dir)
 end
 
 --- `session` when Claude still has its transcript, so terminal 1 resumes it rather than failing to.
----@param session? workspace_state.Session
+---@param session? string a session id
 ---@param projects string Claude's projects directory
----@return workspace_state.Session?
+---@return string?
 function M.resumable(session, projects)
   if not session then
     return nil
   end
   -- Session ids are unique, so any project's directory may hold it.
-  local found = vim.fn.glob(projects .. "/*/" .. session.id .. ".jsonl", true, true)
+  local found = vim.fn.glob(projects .. "/*/" .. session .. ".jsonl", true, true)
   return #found > 0 and session or nil
 end
 
@@ -182,7 +176,6 @@ end
 ---@return workspace_state.Projects
 function collect()
   local workspace = require("config.workspace")
-  local agent_chat = require("config.agent_chat")
   local fishmonger = package.loaded["fishmonger"]
   local now = {}
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
@@ -190,9 +183,8 @@ function collect()
     if slot then
       local session
       for _, term in ipairs(fishmonger and fishmonger.tabs(tab) or {}) do
-        local id = term.slot == 1 and term.agent and valid_session(term.agent.session)
-        if id then
-          session = { id = id, client = agent_chat.hosts(id) and "chat" or "terminal" }
+        if term.slot == 1 and term.agent then
+          session = valid_session(term.agent.session)
         end
       end
       now[real(workspace.cwd(tab))] = { slot = slot, session = session }
@@ -246,18 +238,11 @@ function forget(dirs)
   write(stored)
 end
 
---- A stored session; a bare id is from before chats, when terminal 1 only ran the Claude TUI.
+--- A stored session's id; a table is a file saved when entries also named the client the session ran in.
 ---@param stored any
----@return workspace_state.Session?
+---@return string?
 function parse_session(stored)
-  if type(stored) == "string" then
-    stored = { id = stored, client = "terminal" }
-  end
-  if type(stored) ~= "table" or (stored.client ~= "terminal" and stored.client ~= "chat") then
-    return nil
-  end
-  local id = valid_session(stored.id)
-  return id and { id = id, client = stored.client }
+  return valid_session(type(stored) == "table" and stored.id or stored)
 end
 
 --- `id` if it is a session id, which also makes it safe to put in a shell command.

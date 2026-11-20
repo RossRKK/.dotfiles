@@ -31,10 +31,11 @@ end
 
 --- Saved workspaces for the child to restore, numbered in order.
 ---@param dirs string[]
-local function save(dirs)
+---@param sessions? table<string, any> dir -> its terminal 1 session, as a workspaces.json has it
+local function save(dirs, sessions)
   local projects = {}
   for i, dir in ipairs(dirs) do
-    projects[dir] = { slot = i }
+    projects[dir] = { slot = i, session = (sessions or {})[dir] }
   end
   vim.fn.mkdir(root .. "/state/nvim", "p")
   vim.fn.writefile({ vim.json.encode(projects) }, root .. "/state/nvim/workspaces.json")
@@ -186,6 +187,27 @@ describe("a workspace tab", function()
       assert_like_by_hand(visit_all(), 3)
     end
   )
+
+  it("restored with the start screen's s resumes each saved session as an agent chat", function()
+    local A, B = "5acea7d5-42e4-48ab-bae8-c06adaa57027", "d19ff978-d52f-4cc4-91c4-54ec57bbc5bf"
+    local one, two = repo("one"), repo("two")
+    -- A bare id, as files from before agent chats have it, and one saved with the client it ran in.
+    save({ one, two }, { [one] = A, [two] = { id = B, client = "terminal" } })
+    vim.fn.mkdir(root .. "/claude/projects/-p", "p")
+    for _, id in ipairs({ A, B }) do
+      vim.fn.writefile({}, root .. "/claude/projects/-p/" .. id .. ".jsonl")
+    end
+    start()
+    child("vim.api.nvim_input('s')")
+    local chats = function()
+      return child("return vim.tbl_map(P.chat, P.workspaces())")
+    end
+    vim.wait(5000, function()
+      local started = chats()
+      return #started == 2 and started[1] ~= vim.NIL and started[2] ~= vim.NIL
+    end, 50)
+    assert.same({ { session = A }, { session = B } }, chats())
+  end)
 
   it("restored with :WorkspaceRestore from a workspace tab is laid out as by hand", function()
     local first = repo("first")

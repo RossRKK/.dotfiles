@@ -360,15 +360,14 @@ still gets its own tab.
 
 **Resuming workspaces after a restart.** Every nvim keeps its open workspaces in
 `~/.local/state/nvim/workspaces.json`: each project's directory, its number and
-terminal 1's Claude session, and whether it ran as an agent chat or the Claude
-TUI. Neovide and terminal nvim share the file without
+terminal 1's Claude session. Neovide and terminal nvim share the file without
 wiping each other's projects. A project leaves it only when you close its tab
 (`Space+tx`, `Space+tX`); quitting nvim, a crash or a WSL shutdown keep them all.
 On the start screen of a bare `nvim`, **`s` Resume** (or `:WorkspaceRestore`
 from anywhere) reopens every saved project not already open here, under its old
-number where that is free, and terminal 1 resumes its Claude session as it ran:
-an agent chat loads it, history and all, in the directory the session started
-in; a TUI session runs `claude --resume <id>`. Its name and colour come back
+number where that is free, and terminal 1's agent chat loads its Claude session,
+history and all, in the directory the session started in, even one that ran in
+the Claude TUI. Its name and colour come back
 with it. A session whose transcript is gone falls back to the directory's newest
 conversation, and a project whose
 directory is gone (a removed worktree) is skipped and forgotten. Nothing resumes

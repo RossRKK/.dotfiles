@@ -9,9 +9,18 @@ function M.stub_claude()
   fishmonger.show = function(slot, opts)
     return show(slot, vim.tbl_extend("force", opts or {}, { shell = { "sh" } }))
   end
-  require("config.agent_chat").start = function(tab)
+  require("config.agent_chat").start = function(tab, session_id)
+    vim.api.nvim_tabpage_set_var(tab, "probe_chat", { session = session_id })
     fishmonger.show(1, { tab = tab, insert = false })
   end
+end
+
+--- Terminal 1's agent chat in `tab` once started, with the session it resumed; vim.NIL before.
+---@param tab integer
+---@return { session?: string }|vim.NIL
+function M.chat(tab)
+  local ok, chat = pcall(vim.api.nvim_tabpage_get_var, tab, "probe_chat")
+  return ok and chat or vim.NIL
 end
 
 --- A tabpage's window tree with each window shown as its buffer's filetype.

@@ -40,7 +40,7 @@ end
 --- Terminal 1's agent chat in `tab`: back in session `session_id` when given, else
 --- in the directory's newest conversation, or a new one when it has none, as
 --- `claude --continue; or claude` does for a terminal.
---- Its Claude is told what terminal 1's is (see workspace.agent_shell), so the
+--- Its Claude is told it is terminal 1's (WORKSPACE_TERMINAL=1), so the
 --- session-identity mod gives it a standing role or `agent_name`.
 ---@param tab integer
 ---@param session_id? string a session whose transcript exists
@@ -59,17 +59,6 @@ function M.start(tab, session_id, agent_name)
   end
   newest(dir, function(id)
     first(dir, id)
-  end)
-end
-
---- Whether an agent chat runs Claude session `id`.
----@param id string
----@return boolean
-function M.hosts(id)
-  -- No chat exists before agentic loads, and asking mustn't load it.
-  local registry = package.loaded["agentic.session_registry"]
-  return registry ~= nil and vim.iter(registry.list()):any(function(session)
-    return session.session_id == id
   end)
 end
 

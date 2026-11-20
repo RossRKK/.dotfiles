@@ -445,13 +445,6 @@ describe("agent_chat.start", function()
 
     assert.same({ claudeCode = { options = { env = { WORKSPACE_TERMINAL = "1" } } } }, created[1].meta)
   end)
-
-  it("knows the sessions its chats run, and no others", function()
-    start(A)
-
-    assert.is_true(agent_chat.hosts(created[1].session.session_id))
-    assert.is_false(agent_chat.hosts(A))
-  end)
 end)
 
 describe("the agentic config", function()

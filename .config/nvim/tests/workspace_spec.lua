@@ -267,33 +267,6 @@ describe("workspace.prefix", function()
   end)
 end)
 
-describe("workspace.agent_shell", function()
-  it("tells that Claude the name to take when it has one", function()
-    assert.same({
-      "env",
-      "WORKSPACE_TERMINAL=1",
-      "CLAUDE_AGENT_NAME=keen-heron",
-      "fish",
-      "-C",
-      "claude --resume 5acea7d5-42e4-48ab-bae8-c06adaa57027",
-    }, require("config.workspace").agent_shell(false, "keen-heron", "5acea7d5-42e4-48ab-bae8-c06adaa57027"))
-  end)
-
-  it("resumes the session it is given at a fish prompt, marked as terminal 1", function()
-    assert.same({
-      "env",
-      "WORKSPACE_TERMINAL=1",
-      "fish",
-      "-C",
-      "claude --resume 5acea7d5-42e4-48ab-bae8-c06adaa57027",
-    }, require("config.workspace").agent_shell(
-      false,
-      nil,
-      "5acea7d5-42e4-48ab-bae8-c06adaa57027"
-    ))
-  end)
-end)
-
 -- <M-b>e: a browser for a project that is NOT open yet, so it must start at
 -- ~ rather than following the current buffer's file (the explorer default).
 describe("workspace.explore", function()
@@ -702,21 +675,6 @@ describe("workspace.open in the background", function()
     assert.same({ vim.api.nvim_tabpage_get_win(ws.find(dir)) }, ready_windows(ready))
   end)
 
-  it("resumes terminal 1's Claude under the agent name its directory gives", function()
-    local shell
-    package.loaded["fishmonger"].show = function(_, opts)
-      shell = opts.shell
-    end
-    ws.agent_name = function(d)
-      return d == dir and "keen-heron" or nil
-    end
-    ws.open(dir, { tab = true, resume = { id = "5acea7d5-42e4-48ab-bae8-c06adaa57027", client = "terminal" } })
-    assert.is_true(vim.wait(1000, function()
-      return shell ~= nil
-    end))
-    assert.truthy(vim.tbl_contains(shell, "CLAUDE_AGENT_NAME=keen-heron"))
-  end)
-
   it("does not switch to a tab already open on the directory", function()
     open({ tab = true })
     vim.cmd("tabprevious")
@@ -828,7 +786,7 @@ describe("workspace.agent_name", function()
   end)
 end)
 
--- What terminal 1 runs: an agent chat, unless the session it resumes ran in the Claude TUI.
+-- What terminal 1 runs: an agent chat, whatever the session it resumes ran in.
 describe("workspace.open's terminal 1", function()
   local A = "5acea7d5-42e4-48ab-bae8-c06adaa57027"
   local ws, dir, saved, shells, chats
@@ -887,9 +845,10 @@ describe("workspace.open's terminal 1", function()
     assert.same({}, shells)
   end)
 
-  it("resumes a chat's session as a chat", function()
-    open({ resume = { id = A, client = "chat" } })
+  it("resumes the session it is given as a chat", function()
+    open({ resume = A })
     assert.same({ { tab = ws.find(dir), session_id = A } }, chats)
+    assert.same({}, shells)
   end)
 
   it("starts its chat under the agent name its directory gives", function()
@@ -898,13 +857,6 @@ describe("workspace.open's terminal 1", function()
     end
     open({})
     assert.equals("keen-heron", chats[1].agent_name)
-  end)
-
-  it("resumes a Claude TUI session in the TUI", function()
-    open({ resume = { id = A, client = "terminal" } })
-    assert.same({}, chats)
-    assert.equals(1, shells[1].slot)
-    assert.equals("claude --resume " .. A, shells[1].shell[#shells[1].shell])
   end)
 
   it("is a plain shell without an agent", function()
