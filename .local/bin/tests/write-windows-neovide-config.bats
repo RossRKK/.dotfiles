@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
-# Runs install-windows-neovide against stand-ins for cmd.exe and wslpath, with
+# Runs write-windows-neovide-config against stand-ins for cmd.exe and wslpath, with
 # Windows' C: drive at $BATS_TEST_TMPDIR/c.
 
 setup() {
-  installer="$BATS_TEST_DIRNAME/../install-windows-neovide"
+  writer="$BATS_TEST_DIRNAME/../write-windows-neovide-config"
   c="$BATS_TEST_TMPDIR/c"
   bin="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$bin" "$BATS_TEST_TMPDIR/src"
@@ -28,7 +28,7 @@ stub() {
 }
 
 @test "writes the config to %APPDATA%\\neovide\\config.toml" {
-  run "$installer" "$BATS_TEST_TMPDIR/src/config.toml"
+  run "$writer" "$BATS_TEST_TMPDIR/src/config.toml"
   [ "$status" -eq 0 ]
   [ "$(cat "$config")" = "wsl = true" ]
 }
@@ -37,7 +37,7 @@ stub() {
   mkdir -p "$(dirname "$config")"
   printf 'old\n' >"$config"
 
-  run "$installer" "$BATS_TEST_TMPDIR/src/config.toml"
+  run "$writer" "$BATS_TEST_TMPDIR/src/config.toml"
   [ "$status" -eq 0 ]
   [ "$(cat "$config")" = "wsl = true" ]
 }
@@ -45,7 +45,7 @@ stub() {
 @test "without Windows interop it warns and changes nothing" {
   stub cmd.exe <<<'echo "cannot execute binary file: Exec format error" >&2; exit 126'
 
-  run "$installer" "$BATS_TEST_TMPDIR/src/config.toml"
+  run "$writer" "$BATS_TEST_TMPDIR/src/config.toml"
   [ "$status" -eq 0 ]
   [[ "$output" == *"Windows interop unavailable"* ]]
   [ ! -e "$c" ]

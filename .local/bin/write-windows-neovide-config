@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Writes Windows Neovide's config from inside WSL, to %APPDATA%\neovide\config.toml.
 #
-#   install-windows-neovide <config.toml>
+#   write-windows-neovide-config <config.toml>
 #
 # Without Windows interop (no cmd.exe, or WSL's binfmt registration lost) it
 # warns and changes nothing, so a home-manager switch still goes through.
 set -euo pipefail
 
 main() {
-  [ $# -eq 1 ] || fail "usage: install-windows-neovide <config.toml>"
+  [ $# -eq 1 ] || fail "usage: write-windows-neovide-config <config.toml>"
   local appdata
   if ! appdata=$(windows_dir APPDATA); then
     warn "Windows interop unavailable, skipping Windows Neovide config"
@@ -26,7 +26,7 @@ windows_dir() {
 }
 
 warn() {
-  printf 'install-windows-neovide: %s\n' "$1" >&2
+  printf 'write-windows-neovide-config: %s\n' "$1" >&2
 }
 
 fail() {

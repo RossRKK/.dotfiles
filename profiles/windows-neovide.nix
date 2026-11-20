@@ -13,16 +13,16 @@ let
     }
   );
 
-  installer = pkgs.writeShellApplication {
-    name = "install-windows-neovide";
+  writer = pkgs.writeShellApplication {
+    name = "write-windows-neovide-config";
     runtimeInputs = [ pkgs.coreutils ];
-    text = builtins.readFile ../.local/bin/install-windows-neovide;
+    text = builtins.readFile ../.local/bin/write-windows-neovide-config;
   };
 in
 {
   # Activation drops the login PATH; WSL keeps wslpath in /bin and cmd.exe in System32.
   home.activation.windowsNeovide = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     PATH="$PATH:/bin:$(/bin/wslpath -u 'C:\Windows\System32' 2>/dev/null)" \
-      run ${installer}/bin/install-windows-neovide ${windowsConfig}
+      run ${writer}/bin/write-windows-neovide-config ${windowsConfig}
   '';
 }
