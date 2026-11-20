@@ -110,7 +110,7 @@ function M.agent_name(session_id)
   return record and claude_session.name(options.claude_sessions, record.agent_pid)
 end
 
---- The prompt's title: the agent's name, so its identity sits by the prompt, then agentic's parts.
+--- The prompt's title: the agent's name, so its identity sits by the prompt, then agentic's context and suffix.
 ---@param parts agentic.ui.ChatWidget.HeaderParts
 ---@param session_state agentic.acp.SessionState?
 ---@return string
@@ -119,7 +119,8 @@ function M.input_header(parts, session_state)
     return s.session_state == session_state
   end)
   local pieces = {}
-  for _, piece in ipairs({ session and M.agent_name(session.session_id) or false, parts.title, parts.context or false, parts.suffix or false }) do
+  -- "Prompt" rather than agentic's title, which leads with an icon glyph.
+  for _, piece in ipairs({ session and M.agent_name(session.session_id) or false, "Prompt", parts.context or false, parts.suffix or false }) do
     if piece then
       pieces[#pieces + 1] = piece
     end

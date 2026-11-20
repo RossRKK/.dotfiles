@@ -279,9 +279,9 @@ describe("agent_chat.new", function()
 
       assert.equals(
         "calm-otter | Prompt | submit: <CR>",
-        agent_chat.input_header({ title = "Prompt", suffix = "submit: <CR>" }, session.session_state)
+        agent_chat.input_header({ title = "󰦨 Prompt", suffix = "submit: <CR>" }, session.session_state)
       )
-      assert.equals("Prompt", agent_chat.input_header({ title = "Prompt" }, {}))
+      assert.equals("Prompt", agent_chat.input_header({ title = "󰦨 Prompt" }, {}))
     end)
   end)
 
@@ -303,5 +303,42 @@ describe("agent_chat.new", function()
 
     assert.equals(1, #created)
     vim.cmd("stopinsert")
+  end)
+end)
+
+describe("the agentic config", function()
+  --- Whether `text` has an emoji or an icon-font glyph (Unicode's private use areas, where Nerd Fonts live).
+  local function pictographic(text)
+    for _, code in ipairs(vim.fn.str2list(text)) do
+      if code >= 0x1F000 or (code >= 0x2600 and code <= 0x26FF) or code == 0xFE0F or (code >= 0xE000 and code <= 0xF8FF) then
+        return true
+      end
+    end
+    return false
+  end
+
+  it("draws no emoji or icon glyphs in the chat's headings, titles, buffer names and spinner", function()
+    vim.opt.runtimepath:prepend(vim.fn.expand("~/dev/agentic.nvim"))
+    local opts = require("plugins.agentic")[1].opts
+    local config = vim.tbl_deep_extend("force", require("agentic.config_default"), opts)
+    local shown = {}
+    for _, group in ipairs({ "chat_icons", "message_icons", "diagnostic_icons" }) do
+      vim.list_extend(shown, vim.tbl_values(config[group]))
+    end
+    for _, frames in pairs(config.spinner_chars) do
+      vim.list_extend(shown, frames)
+    end
+    for name, header in pairs(require("agentic.ui.window_decoration").default_headers()) do
+      local own = config.headers[name]
+      if type(own) ~= "function" then -- the prompt's is drawn by input_header, below
+        shown[#shown + 1] = own and own.title or header.title
+      end
+    end
+    shown[#shown + 1] = require("config.agent_chat").input_header({ title = "󰦨 Prompt" }, {})
+    -- Without a buffer_name agentic names the prompt's buffer after its default title.
+    shown[#shown + 1] = config.windows.input.buffer_name
+      or require("agentic.ui.window_decoration").default_headers().input.title
+
+    assert.same({}, vim.tbl_filter(pictographic, shown))
   end)
 end)

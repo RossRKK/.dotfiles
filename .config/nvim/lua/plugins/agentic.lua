@@ -14,10 +14,25 @@ return {
       agent_name = function(session_id)
         return require("config.agent_chat").agent_name(session_id)
       end,
+      -- No emoji or icon glyphs in the chat's headings, titles and spinner; words and plain marks instead.
+      chat_icons = { user = "", agent = "" },
+      message_icons = { thinking = ">", finished = "✓", stopped = "■", error = "✗" },
+      diagnostic_icons = { error = "E", warn = "W", info = "I", hint = "H" },
+      spinner_chars = {
+        thinking = { "·", "✢", "✳", "∗", "✻", "✽" },
+        searching = { "·", "✢", "✳", "∗", "✻", "✽" },
+      },
+      -- The prompt's title is a function, so its buffer name (in the statusline) is set here.
+      windows = { input = { buffer_name = "Prompt" } },
       headers = {
+        chat = { title = "Agentic Chat" },
         input = function(parts, session_state)
           return require("config.agent_chat").input_header(parts, session_state)
         end,
+        code = { title = "Selected Code Snippets" },
+        files = { title = "Referenced Files" },
+        diagnostics = { title = "Diagnostics" },
+        todos = { title = "Tasks list" },
       },
     },
   },
