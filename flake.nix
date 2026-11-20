@@ -92,7 +92,7 @@
         let pkgs = pkgsLinux "x86_64-linux"; in
         pkgs.runCommand "neovide-glyph-coverage" {
           nativeBuildInputs = [ (pkgs.python3.withPackages (p: [ p.fonttools ])) ];
-        } "python3 -I ${./checks/glyph-coverage.py} '✓✔✗◻◼☐☑↵⏳⌛⧗' ${pkgs.callPackage ./0xproto-upright.nix { }}/share/fonts/truetype/NerdFonts/0xProto/0xProtoNerdFontMono-Regular.ttf ${pkgs.callPackage ./symbol-fallback-fonts.nix { }}/share/fonts/*/* && touch $out";
+        } "python3 -I ${./checks/glyph-coverage.py} '✓✔✗◻◼☐☑↵⏳⌛' ${pkgs.callPackage ./0xproto-upright.nix { }}/share/fonts/truetype/NerdFonts/0xProto/0xProtoNerdFontMono-Regular.ttf ${pkgs.callPackage ./symbol-fallback-fonts.nix { }}/share/fonts/*/* && touch $out";
 
       homeConfigurations."rossrkk@personal" = home-manager.lib.homeManagerConfiguration {
         pkgs = pkgsLinux "x86_64-linux";

@@ -7,5 +7,5 @@
 
 runCommand "symbol-fallback-fonts" { } ''
   install -Dm644 -t $out/share/fonts/truetype ${dejavu_fonts}/share/fonts/truetype/DejaVuSansMono{,-Bold}.ttf
-  install -Dm644 -t $out/share/fonts/opentype ${noto-fonts}/share/fonts/noto/NotoSans{Symbols2,Math}-Regular.otf
+  install -Dm644 -t $out/share/fonts/opentype ${noto-fonts}/share/fonts/noto/NotoSansSymbols2-Regular.otf
 ''

@@ -1,8 +1,8 @@
 # Match Ghostty's font setup (see ../ghostty/config): 0xProto with programming
 # ligatures off. Mono rather than Ghostty's Propo since Neovide draws a fixed grid.
-# The rest cover symbols 0xProto lacks (✓ ◻ ↵ ⏳ ⧗), so neither OS reaches for colour emoji.
+# The rest cover symbols 0xProto lacks (✓ ◻ ↵ ⏳), so neither OS reaches for colour emoji.
 [font]
-normal = ["0xProto Nerd Font Mono", "DejaVu Sans Mono", "Noto Sans Symbols 2", "Noto Sans Math"]
+normal = ["0xProto Nerd Font Mono", "DejaVu Sans Mono", "Noto Sans Symbols 2"]
 size = 12.0
 
 # Disable ligatures — show >= as two glyphs, not one. calt drives 0xProto's
