@@ -928,6 +928,7 @@ scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI munging).
 | ---------------------- | ----------------------------------------------------- |
 | `Ctrl+T`               | Toggle the side terminal; from a terminal, `Ctrl+N` first |
 | `Ctrl+G`               | Toggle the git TUI (lazygit), from terminals too              |
+| `Space+i`              | Toggle the agent chat (agentic.nvim); hides the side terminal while open and brings it back on close (closing the chat with its own `q` or `:q` leaves the terminal hidden until the next `Space+i` close) |
 | `Ctrl+Shift+G`         | Open the git TUI in a picked project (`Ctrl+N` first from a terminal) |
 | `Ctrl+N` (in terminal) | Enter terminal-normal mode (then `gf` jumps to a ref) |
 | `<leader>y` (visual, side terminal) | Yank the selection joined into one line — for wrapped commands in Claude Code output (pty soft-wraps in shell output join automatically on any yank) |

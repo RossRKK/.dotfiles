@@ -5,6 +5,16 @@ return {
   {
     "carlos-algms/agentic.nvim",
     lazy = true,
+    keys = {
+      -- i for AI: Space+a is already treesitter's swap-parameter.
+      {
+        "<leader>i",
+        function()
+          require("config.agent_chat").toggle()
+        end,
+        desc = "Toggle agent chat (swaps with the side terminal)",
+      },
+    },
     ---@type agentic.PartialUserConfig
     opts = {
       provider = "claude-agent-acp",
