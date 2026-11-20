@@ -30,6 +30,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `term_caps_spec.lua` | inline-image capability (Ghostty yes, Neovide/other no) |
 | `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
 | `reviewqueue_spec.lua` | CODEOWNERS glob matching / last-match-wins, "does this PR need my review" tiers, "what's my PR waiting on" tiers |
+| `pr_stack_spec.lua` | the PR stack around a branch from recorded PR nodes (`tests/fixtures`): top-first order to the trunk, the same stack from any branch in it, none for a lone PR or a branch without one, forks kept together, base cycles stopped |
 | `diffsize_spec.lua` | PR diff size by review tier: path rules, `git check-attr` parsing and overrides, headline sums without generated, bar widths and colours, grouping files by tier; the PR body section (files by tier, binary marked) and replacing it in a body (present, absent, unclosed) |
 | `background_spec.lua` | side-terminal shells wrapped into systemd's `background.slice` only when a user manager is running |
 | `sidebar_reveal_spec.lua` | `<leader>v` reveals in the tree without re-rooting it or `:tcd`-ing the tab; files outside the workspace float at their project root. Loads real neo-tree |
