@@ -328,8 +328,9 @@ however opened, takes its directory's name (`CLAUDE_AGENT_NAME`) unless its
 conversation already has one; the agent switches branches there, so a PR stack is one
 checkout. Tabs read
 `<repo> · <pet> · <branch>`. Neovide runs in this mode: on Linux its package is wrapped
-with the flag (profiles/desktop.nix); on Windows (WSL) its
-`%APPDATA%\neovide\config.toml` has `neovim-bin = "env AGENT_WORKTREES=1 nvim"`.
+with the flag (profiles/desktop.nix); on Windows (WSL) `hms` writes its
+`%APPDATA%\neovide\config.toml` (shared config plus `neovim-bin = "env AGENT_WORKTREES=1 nvim"`)
+and installs its fonts for the Windows user (profiles/windows-neovide.nix).
 
 So a branch becomes a project tab: its own checkout, terminals and buffer list,
 with your main checkout untouched in the tab next door — no stash, no

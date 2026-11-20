@@ -3,6 +3,7 @@
 {
   imports = [
     ../base.nix
+    ../profiles/windows-neovide.nix
   ];
 
   programs.git.settings.user.email = "ross.kelso@oxionics.com";
