@@ -28,7 +28,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `claude_session_spec.lua` | a live Claude's name from Claude Code's `sessions/<pid>.json`; none for a missing, half-written or unnamed record; a checkout's standing role from `claude-roles` (`~` expanded) |
 | `workspace_state_spec.lua` | saved workspaces: two nvims' saves merge per project, a deliberate close drops one but exit doesn't, an absent agent keeps its last session id; restore skips and forgets a deleted directory, resumes only a session with a transcript |
 | `term_caps_spec.lua` | inline-image capability (Ghostty yes, Neovide/other no) |
-| `clipboard_spec.lua` | text-vs-image clipboard sniffing for terminal paste |
+| `clipboard_spec.lua` | text-vs-image clipboard sniffing for paste; the clipboard's text read without raising when Neovide's provider fails on an image; the Windows clipboard's image or Explorer-copied files from PowerShell's output; a copied path, Linux or quoted Windows (real `wslpath`) |
 | `reviewqueue_spec.lua` | CODEOWNERS glob matching / last-match-wins, "does this PR need my review" tiers, "what's my PR waiting on" tiers |
 | `pr_stack_spec.lua` | the PR stack around a branch from recorded PR nodes (`tests/fixtures`): top-first order to the trunk, the same stack from any branch in it, none for a lone PR or a branch without one, forks kept together, base cycles stopped |
 | `diffsize_spec.lua` | PR diff size by review tier: path rules, `git check-attr` parsing and overrides, headline sums without generated, bar widths and colours, grouping files by tier; the PR body section (files by tier, binary marked) and replacing it in a body (present, absent, unclosed) |
