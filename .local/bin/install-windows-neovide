@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Sets up Windows Neovide from inside WSL: writes its config to
+# %APPDATA%\neovide\config.toml and installs each font for the Windows user
+# (copied into %LOCALAPPDATA%\Microsoft\Windows\Fonts and registered under HKCU,
+# as Windows' own per-user install does).
+#
+#   install-windows-neovide <config.toml> [<font file>...]
+#
+# Without Windows interop (no cmd.exe, or WSL's binfmt registration lost) it
+# warns and changes nothing, so a home-manager switch still goes through.
+set -euo pipefail
+
+fonts_key='HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+
+main() {
+  [ $# -ge 1 ] || fail "usage: install-windows-neovide <config.toml> [<font file>...]"
+  local config=$1 appdata localappdata font
+  shift
+  if ! appdata=$(windows_dir APPDATA) || ! localappdata=$(windows_dir LOCALAPPDATA); then
+    warn "Windows interop unavailable, skipping Windows Neovide setup"
+    return 0
+  fi
+  install -D -m 644 "$config" "$appdata/neovide/config.toml"
+  for font in "$@"; do
+    install_font "$font" "$localappdata/Microsoft/Windows/Fonts"
+  done
+}
+
+# The WSL path of the directory in Windows environment variable <name>.
+windows_dir() {
+  local dir
+  dir=$(cmd.exe /d /c "echo %$1%" 2>/dev/null | tr -d '\r') || return 1
+  [ -n "$dir" ] && [ "$dir" != "%$1%" ] || return 1
+  wslpath -u "$dir"
+}
+
+# Copies <font> into <dir> unless it's already there and registers it under
+# the value name Windows' installer uses: full name and outline format.
+install_font() {
+  local font=$1 target name outlines
+  target=$2/$(basename "$font")
+  IFS='|' read -r name outlines < <(fc-scan --format '%{fullname[0]}|%{fontformat}\n' "$font")
+  if ! cmp -s "$font" "$target"; then
+    # Windows refuses to replace a font file a running app has open.
+    install -D -m 644 "$font" "$target" 2>/dev/null ||
+      { warn "couldn't replace $target (in use?), keeping the old one"; return 0; }
+  fi
+  [ "$outlines" = CFF ] && outlines=OpenType
+  reg.exe add "$fonts_key" /v "$name ($outlines)" /t REG_SZ /d "$(wslpath -w "$target")" /f >/dev/null
+}
+
+warn() {
+  printf 'install-windows-neovide: %s\n' "$1" >&2
+}
+
+fail() {
+  warn "$1"
+  exit 1
+}
+
+main "$@"
