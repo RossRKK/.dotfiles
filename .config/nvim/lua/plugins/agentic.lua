@@ -27,6 +27,8 @@ return {
       tool_calls = { subagent_activity = "summary" },
       -- The prompt's title is a function, so its buffer name (in the statusline) is set here.
       windows = { input = { buffer_name = "Prompt" } },
+      -- Unbound: in a fishmonger tab agentic's close hid the prompt and left the chat behind.
+      keymaps = { widget = { close = {} } },
       headers = {
         chat = { title = "Agentic Chat" },
         input = function(parts, session_state)
