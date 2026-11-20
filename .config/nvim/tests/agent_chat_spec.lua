@@ -51,7 +51,7 @@ local function fake_registry()
   }
 end
 
-describe("agent_chat.toggle", function()
+describe("agent_chat.new", function()
   local jobstart = vim.fn.jobstart
 
   before_each(function()
@@ -77,8 +77,12 @@ describe("agent_chat.toggle", function()
     package.loaded["fishmonger"] = nil
   end)
 
+  local function new()
+    agent_chat.new(vim.api.nvim_get_current_tabpage())
+  end
+
   it("opens a new agent tab in the panel and shows its session there", function()
-    agent_chat.toggle()
+    new()
 
     assert.equals(1, #created)
     local chat = created[1].session.widget.buf_nrs.chat
@@ -93,40 +97,31 @@ describe("agent_chat.toggle", function()
     local tab_dir = vim.fn.getcwd()
     vim.cmd.lcd(vim.fn.fnameescape(root))
 
-    agent_chat.toggle()
+    new()
 
     assert.are_not.equal(root, tab_dir)
     assert.equals(tab_dir, created[1].cwd)
   end)
 
-  it("goes back to the agent tab rather than making another", function()
-    agent_chat.toggle()
-    fishmonger.show(2)
-    agent_chat.toggle()
+  it("makes another agent tab each time, hiding the one it replaces", function()
+    new()
+    new()
 
-    assert.equals(1, #created)
-    assert.equals(1, fishmonger.current)
-    assert.same({ 1 }, hidden) -- slot 2's shell took the window first
+    assert.equals(2, #created)
+    assert.equals(2, fishmonger.current)
+    assert.same({ 1 }, hidden)
   end)
 
-  it("closes the panel when the agent tab is already showing, hiding the session", function()
-    agent_chat.toggle()
-    agent_chat.toggle()
+  it("hides the session when the panel closes", function()
+    new()
+    fishmonger.toggle()
 
     assert.is_false(fishmonger.panel_open())
     assert.same({ 1 }, hidden)
   end)
 
-  it("gives each workspace its own agent tab", function()
-    agent_chat.toggle()
-    vim.cmd("tabnew")
-    agent_chat.toggle()
-
-    assert.equals(2, #created)
-  end)
-
   it("ends the session when its tab is killed", function()
-    agent_chat.toggle()
+    new()
     fishmonger.kill()
     -- Scheduled out of BufWipeout; waits on the outcome, not a duration.
     vim.wait(1000, function()
@@ -142,9 +137,19 @@ describe("agent_chat.toggle", function()
     end
     local notify = vim.notify
     vim.notify = function(msg, level, opts) end ---@diagnostic disable-line: duplicate-set-field, unused-local
-    agent_chat.toggle()
+    new()
     vim.notify = notify
 
     assert.same({ 1 }, destroyed)
+  end)
+
+  it("is what fishmonger's <C-b>A makes, as this config sets fishmonger up", function()
+    require("plugins.fishmonger")[1].config()
+    vim.cmd("stopinsert")
+
+    vim.api.nvim_feedkeys(vim.keycode("<C-b>A"), "x", false)
+
+    assert.equals(1, #created)
+    vim.cmd("stopinsert")
   end)
 end)
