@@ -233,6 +233,8 @@ in
       # programs.neovim wrapper would generate an init.lua that collides with
       # the symlinked ~/.config/nvim.
       neovim
+      # CodeCompanion's Claude Code chat (plugins/codecompanion.lua), over ACP.
+      (callPackage ./claude-agent-acp.nix { claude = config.programs.claude-code.finalPackage; })
 
       # tmux stays a plain package: programs.tmux always generates its own
       # ~/.config/tmux/tmux.conf, which the symlinked ~/.tmux.conf would shadow.
