@@ -13,6 +13,7 @@
 
   home.packages = with pkgs; [
     ghostty
+    obsidian
     # Neovide's nvim gives each agent its own worktree (util/worktree.lua); terminal nvim stays per branch.
     (symlinkJoin {
       name = "neovide";
