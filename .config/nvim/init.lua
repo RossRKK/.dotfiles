@@ -1,10 +1,6 @@
+-- First, so messages from loading the rest of the config are logged too.
+require("util.message_log").setup({ dir = vim.fn.stdpath("log"), keep_previous = 20 })
 require("config.options")
--- Early, so the history is still saved when a later part of the config fails to load.
-require("util.message_log").setup({
-  path = vim.fn.stdpath("log") .. "/messages.log",
-  max_bytes = 1024 * 1024,
-  interval_ms = 1000,
-})
 require("config.keymaps")
 require("config.autocmds")
 local agent_worktrees = vim.env.AGENT_WORKTREES == "1"

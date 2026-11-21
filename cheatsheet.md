@@ -509,10 +509,11 @@ directory), then googleapis' common protos. buf's own lint is hidden; buf_ls
 keeps navigation, completion and compile errors, and `Space+cf` runs
 `buf format`.
 
-**Messages after a restart:** everything in `:messages` (Lua errors with their
-tracebacks) is appended to `~/.local/state/nvim/logs/messages.log`, timestamped
-with the nvim's pid; at 1 MiB it moves to `messages.log.1`. Follow it with
-`tail -f ~/.local/state/nvim/logs/messages.log`.
+**Messages after a restart:** every message nvim shows (Lua errors with their
+tracebacks, `:messages` output too) goes to its own
+`~/.local/state/nvim/logs/messages-<YYYYMMDD-HHMMSS>-<pid>.log`; the newest 20
+are kept. Writes are buffered, so a kill can lose the last few. Follow the
+newest with `tail -f "$(ls -t ~/.local/state/nvim/logs/messages-*.log | head -1)"`.
 
 ### Space+u — UI toggles
 
