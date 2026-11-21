@@ -38,24 +38,20 @@ local function fake_session(key)
     return false
   end
   local session = { session_key = key, session_id = "acp-" .. key, session_state = {}, widget = widget, file_list = file_list }
-  -- Records what stopping it asks of agentic's agent, permissions and spinner.
   session.is_generating = false
-  session.agent = {
-    stop_generation = function(_, session_id)
-      stopped[#stopped + 1] = { "agent", session_id }
-    end,
-  }
-  session.permission_manager = {
-    clear = function()
-      stopped[#stopped + 1] = { "permissions", key }
-    end,
-  }
-  session.status_animation = {
-    stop = function()
-      stopped[#stopped + 1] = { "spinner", key }
-    end,
-  }
   return session
+end
+
+--- agentic's two stops, recording which one is asked of which session.
+local function fake_agentic()
+  return {
+    stop_generation = function(opts)
+      stopped[#stopped + 1] = { "reply", opts.session }
+    end,
+    stop_subagents = function(opts)
+      stopped[#stopped + 1] = { "subagents", opts.session }
+    end,
+  }
 end
 
 local function fake_registry()
@@ -116,6 +112,7 @@ local function fresh()
   fishmonger = require("fishmonger")
   fishmonger.setup_exit()
   package.loaded["agentic.session_registry"] = fake_registry()
+  package.loaded["agentic"] = fake_agentic()
   package.loaded["config.agent_chat"] = nil
   agent_chat = require("config.agent_chat")
 end
@@ -123,6 +120,7 @@ end
 local function unfake()
   vim.fn.jobstart = jobstart
   package.loaded["agentic.session_registry"] = nil
+  package.loaded["agentic"] = nil
   package.loaded["fishmonger"] = nil
 end
 
@@ -338,15 +336,14 @@ describe("agent_chat.new", function()
       created[n].session.is_generating = true
     end
 
-    it("stops its agent's reply from the prompt in insert mode, keeping what was typed", function()
+    it("stops only its agent's reply while it is generating, keeping what was typed", function()
       new()
       generating(1)
       vim.api.nvim_set_current_win(created[1].session.widget.win_nrs.input)
 
       vim.api.nvim_feedkeys(vim.keycode("ihello<C-c> world<Esc>"), "x", false)
 
-      assert.same({ { "agent", "acp-1" }, { "permissions", 1 }, { "spinner", 1 } }, stopped)
-      assert.is_false(created[1].session.is_generating)
+      assert.same({ { "reply", 1 } }, stopped)
       assert.same({ "hello world" }, vim.api.nvim_buf_get_lines(created[1].session.widget.buf_nrs.input, 0, -1, true))
     end)
 
@@ -360,7 +357,7 @@ describe("agent_chat.new", function()
 
         vim.api.nvim_feedkeys(vim.keycode("<C-c>"), "x", false)
 
-        assert.same({ "agent", "acp-1" }, stopped[1])
+        assert.same({ { "reply", 1 } }, stopped)
       end
     end)
 
@@ -374,17 +371,17 @@ describe("agent_chat.new", function()
 
       vim.api.nvim_feedkeys(vim.keycode("<C-c>"), "x", false)
 
-      assert.same({ "agent", "acp-1" }, stopped[1])
-      assert.is_true(created[2].session.is_generating)
+      assert.same({ { "reply", 1 } }, stopped)
     end)
 
-    it("does nothing when its agent isn't replying", function()
+    -- agentic stops only sub-agents still working, so with none this does nothing.
+    it("stops its running sub-agents once its agent isn't replying, keeping what was typed", function()
       new()
       vim.api.nvim_set_current_win(created[1].session.widget.win_nrs.input)
 
       vim.api.nvim_feedkeys(vim.keycode("ihello<C-c><Esc>"), "x", false)
 
-      assert.same({}, stopped)
+      assert.same({ { "subagents", 1 } }, stopped)
       assert.same({ "hello" }, vim.api.nvim_buf_get_lines(created[1].session.widget.buf_nrs.input, 0, -1, true))
     end)
   end)

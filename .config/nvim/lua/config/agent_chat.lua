@@ -171,11 +171,11 @@ function host(spec, place)
     end, { buffer = session.widget.buf_nrs.input, desc = "Agent prompt: put text, or attach an image or file" })
   end
 
-  -- Ctrl+C stops this chat's reply, as in Claude Code; agentic's stop_generation stops whichever session it thinks current.
+  -- Ctrl+C stops what this chat has running, as in Claude Code: its reply, then the sub-agents left running.
   for _, panel in pairs(session.widget.buf_nrs) do
     vim.keymap.set({ "n", "i" }, "<C-c>", function()
       stop(key)
-    end, { buffer = panel, desc = "Agent chat: stop the agent's reply" })
+    end, { buffer = panel, desc = "Agent chat: stop the agent's reply, else its running sub-agents" })
   end
 
   -- The tab is the session: killing it (<C-b>&, closing the workspace) ends it.
@@ -214,19 +214,19 @@ function host(spec, place)
   end
 end
 
---- Stop session `key`'s reply as agentic's stop_generation does, keeping the session.
+--- Stop session `key`'s reply while it generates, else its running sub-agents; agentic stops nothing that isn't running.
 ---@param key integer
 function stop(key)
   local live = require("agentic.session_registry").get(key)
-  if not (live and live.is_generating) then
+  if not live then
     return
   end
-  if live.session_id then
-    live.agent:stop_generation(live.session_id)
+  local agentic = require("agentic")
+  if live.is_generating then
+    agentic.stop_generation({ session = key })
+  else
+    agentic.stop_subagents({ session = key })
   end
-  live.permission_manager:clear()
-  live.is_generating = false
-  live.status_animation:stop()
 end
 
 --- Paste the clipboard into session `key`'s prompt: text goes in by `put_text`, unless it is only a
