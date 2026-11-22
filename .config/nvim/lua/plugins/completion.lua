@@ -42,6 +42,8 @@ return {
           { name = "path" },
         }),
       })
+      -- agentic completes / and @ in its own prompt; cmp's menu and its Tab, Enter and Ctrl+N fought it.
+      cmp.setup.filetype("AgenticInput", { enabled = false })
     end,
   },
 }

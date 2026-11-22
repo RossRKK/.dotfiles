@@ -36,6 +36,13 @@ describe("agentic chat buffers", function()
   it("keep agentic's other widget keys", function()
     assert.is_true(vim.tbl_contains(normal_keys(widget.buf_nrs.input), "<CR>"))
   end)
+
+  -- A preselected item was taken by Enter, so each menu needed an Esc to keep the typed text.
+  it("open the prompt's completion menus with nothing selected", function()
+    local input = widget.buf_nrs.input
+    require("agentic.acp.slash_commands").setup_completion(input)
+    assert.are.equal("menu,menuone,noselect,popup,fuzzy", vim.bo[input].completeopt)
+  end)
 end)
 
 describe("agentic chat windows", function()
