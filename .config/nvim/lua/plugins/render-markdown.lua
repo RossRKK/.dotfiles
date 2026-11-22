@@ -1,6 +1,5 @@
--- render-markdown.nvim: the tables in an agent chat's replies drawn as grids.
+-- render-markdown.nvim: an agent chat's replies drawn as rendered markdown.
 -- Only in the chat (AgenticChat, which agentic parses as markdown); files stay raw.
-local off = { enabled = false }
 local rerender_on_write -- defined below the spec
 
 local spec = {
@@ -17,21 +16,6 @@ local spec = {
       file_types = { "AgenticChat" },
       -- The chat is read while typing in the prompt, so it renders in every mode.
       render_modes = true,
-      -- Tables only: agentic draws its own headings and tool call fences, without icon glyphs.
-      heading = off,
-      paragraph = off,
-      code = off,
-      dash = off,
-      document = off,
-      bullet = off,
-      checkbox = off,
-      quote = off,
-      link = off,
-      sign = off,
-      inline_highlight = off,
-      html = off,
-      latex = off,
-      yaml = off,
     },
     config = function(_, opts)
       require("render-markdown").setup(opts)
