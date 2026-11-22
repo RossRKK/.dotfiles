@@ -210,13 +210,20 @@ describe("agent_chat.new", function()
       agent_chat.setup({ claude_sessions = root .. "/sessions" })
     end)
 
-    --- Report ACP session `id` as agent-status and Claude would: its status, and its name.
-    ---@param fields? table more of the status record
+    --- Report session `id` as agent-status and Claude would: its status, and its name.
+    ---@param fields? table more of the status record; its chat's session is `id` unless given
     local function report(id, name, fields)
       local pid = vim.fn.getpid() -- alive, so the record survives the liveness check
-      local record = vim.tbl_extend("force", { session = id, state = "done", agent_pid = pid, pids = { pid } }, fields or {})
+      local record = vim.tbl_extend(
+        "force",
+        { session = id, chat_session = id, state = "done", agent_pid = pid, pids = { pid } },
+        fields or {}
+      )
       vim.fn.writefile({ vim.json.encode(record) }, root .. "/agents/" .. id .. ".json")
-      vim.fn.writefile({ vim.json.encode({ pid = pid, name = name }) }, root .. "/sessions/" .. pid .. ".json")
+      vim.fn.writefile(
+        { vim.json.encode({ pid = record.agent_pid, name = name }) },
+        root .. "/sessions/" .. record.agent_pid .. ".json"
+      )
       require("fishmonger").refresh_agents()
     end
 
@@ -313,6 +320,31 @@ describe("agent_chat.new", function()
 
       assert.equals("calm-otter", require("plugins.agentic")[1].opts.agent_name("acp-1"))
       assert.is_nil(require("plugins.agentic")[1].opts.agent_name("acp-unknown"))
+    end)
+
+    describe("after /clear moves its Claude to a new session", function()
+      before_each(function()
+        new()
+        claim("red")
+        report("s2", "brave-owl", { chat_session = "acp-1" })
+      end)
+
+      it("still finds its Claude's name and colour", function()
+        assert.equals("brave-owl", agent_chat.agent_name("acp-1"))
+        assert.equals("red", agent_chat.agent_colour("acp-1"))
+      end)
+
+      it("shows the new session's status icon and name on its tab", function()
+        local done = require("fishmonger.agent").states.done.icon
+        assert.equals(" 1:" .. require("fishmonger.agent").glyph_cell(done) .. "brave-owl ", strip())
+      end)
+
+      it("passes over a record under its ACP id that isn't its chat's", function()
+        -- pid 1 is alive, so the record survives fishmonger's liveness check.
+        report("acp-1", "stale-name", { chat_session = "elsewhere", agent_pid = 1, pids = { 1 } })
+
+        assert.equals("brave-owl", agent_chat.agent_name("acp-1"))
+      end)
     end)
 
     it("titles its prompt with its Claude's name, then agentic's parts", function()

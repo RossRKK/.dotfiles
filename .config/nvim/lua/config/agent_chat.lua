@@ -19,7 +19,7 @@ function M.setup(opts)
   options = vim.tbl_extend("force", options, opts)
 end
 
-local host, host_first, newest, start_spec, stop, paste, attach, pass_ctrl_keys, route_ctrl_key, paint, repaint_all, title_hl, set_title_hl -- defined below their callers
+local host, host_first, newest, start_spec, stop, paste, attach, pass_ctrl_keys, route_ctrl_key, chat_record, paint, repaint_all, title_hl, set_title_hl -- defined below their callers
 
 -- A session's name and colour arrive as agent-status and Claude report them.
 vim.api.nvim_create_autocmd("User", {
@@ -200,10 +200,11 @@ function host(spec, place)
         live.widget:hide()
       end
     end,
-    -- The ACP session is Claude's own, so its id is the one agent-status reports under.
+    -- Claude's session now, which /clear moves on from the ACP session's.
     session = function()
       local live = registry.get(key)
-      return live and live.session_id
+      local record = live and chat_record(live.session_id)
+      return record and record.session
     end,
     -- Until its Claude has a name the tab still says what it is, not agentic's buffer name.
     title = function()
@@ -326,7 +327,7 @@ end
 ---@param session_id string?
 ---@return string?
 function M.agent_name(session_id)
-  local record = session_id and require("fishmonger.agent").get(session_id)
+  local record = chat_record(session_id)
   return record and claude_session.name(options.claude_sessions, record.agent_pid)
 end
 
@@ -353,12 +354,23 @@ end
 ---@param session_id string?
 ---@return string?
 function M.agent_colour(session_id)
-  local record = session_id and require("fishmonger.agent").get(session_id)
+  local record = chat_record(session_id)
   if not record then
     return nil
   end
   return record.colour
     or (record.transcript and claude_session.recorded_colours({ record.transcript })[record.transcript])
+end
+
+--- The status record of the Claude behind ACP session `session_id`, or nil: the one naming
+--- it as its chat's session, as Claude's own session id changes on /clear.
+---@param session_id string?
+---@return table?
+function chat_record(session_id)
+  return session_id
+    and vim.iter(require("fishmonger.agent").all()):find(function(record)
+      return record.chat_session == session_id
+    end)
 end
 
 -- Every session's titles, for when names or colours may have changed.
