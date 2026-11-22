@@ -1,9 +1,13 @@
 -- plugins/agentic.lua: the chat's buffers as agentic builds them under this
--- config's opts. Runs lazy's installed agentic.nvim, its setup() given the spec's opts.
+-- config's opts. Runs agentic.nvim as lazy's dev path resolves it, its setup() given the spec's opts.
 
 local assert = require("luassert")
 
-vim.opt.runtimepath:prepend(vim.fn.stdpath("data") .. "/lazy/agentic.nvim")
+local agentic = vim.fn.expand("~/dev/agentic.nvim")
+if vim.fn.isdirectory(agentic) == 0 then
+  agentic = vim.fn.stdpath("data") .. "/lazy/agentic.nvim"
+end
+vim.opt.runtimepath:prepend(agentic)
 
 --- The lhs of every normal-mode mapping in `buf`.
 local function normal_keys(buf)
