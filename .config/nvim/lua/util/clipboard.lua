@@ -115,7 +115,7 @@ end
 --- What READ_WINDOWS printed: an image's PNG bytes, or the Windows paths of files copied in Explorer.
 --- @param stdout string
 --- @return util.clipboard.Content|nil
-function M.parse_windows(stdout)
+function M.parse_script_output(stdout)
   local paths = {}
   for line in vim.gsplit(stdout, "\r?\n", { trimempty = true }) do
     local kind, value = line:match("^(%a+) (.+)$")
@@ -134,7 +134,7 @@ end
 function M.read_windows(on_read)
   vim.system({ "powershell.exe", "-NoProfile", "-Command", READ_WINDOWS }, { text = true }, function(result)
     vim.schedule(function()
-      local content = result.code == 0 and M.parse_windows(result.stdout) or nil
+      local content = result.code == 0 and M.parse_script_output(result.stdout) or nil
       if content and content.kind == "files" then
         content.paths = vim.tbl_map(M.wsl_path, content.paths)
       end

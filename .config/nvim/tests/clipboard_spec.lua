@@ -86,21 +86,21 @@ describe("clipboard.text", function()
   end)
 end)
 
-describe("clipboard.parse_windows", function()
+describe("clipboard.parse_script_output", function()
   it("reads an image as its PNG bytes", function()
     local png = "\137PNG\r\n\26\n\0\0\0\13IHDR"
-    assert.same({ kind = "image", png = png }, clipboard.parse_windows("png " .. vim.base64.encode(png) .. "\r\n"))
+    assert.same({ kind = "image", png = png }, clipboard.parse_script_output("png " .. vim.base64.encode(png) .. "\r\n"))
   end)
 
   it("reads files copied in Explorer as their Windows paths", function()
     assert.same(
       { kind = "files", paths = { [[C:\Users\me\Shot 1.png]], [[D:\x.txt]] } },
-      clipboard.parse_windows("file C:\\Users\\me\\Shot 1.png\r\nfile D:\\x.txt\r\n")
+      clipboard.parse_script_output("file C:\\Users\\me\\Shot 1.png\r\nfile D:\\x.txt\r\n")
     )
   end)
 
   it("is nil for neither", function()
-    assert.is_nil(clipboard.parse_windows(""))
+    assert.is_nil(clipboard.parse_script_output(""))
   end)
 end)
 
