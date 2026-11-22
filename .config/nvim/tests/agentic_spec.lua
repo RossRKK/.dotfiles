@@ -67,6 +67,17 @@ describe("agentic chat windows", function()
     widget:destroy()
   end)
 
+  it("title the prompt with a bar as wide as its window, its text at the left", function()
+    widget:show({ focus_prompt = false })
+    -- agentic draws its titles on the next tick.
+    vim.wait(1000, function()
+      return vim.wo[widget.win_nrs.input].winbar ~= ""
+    end)
+    local winbar = vim.wo[widget.win_nrs.input].winbar
+    assert.is_truthy(winbar:find("^%%#Normal#%%#[%w]+# "), winbar)
+    assert.is_truthy(winbar:find("%%=$"), winbar)
+  end)
+
   it("draw no wrap marker in agentic's own windows", function()
     widget:show({ focus_prompt = false })
     for name, win in pairs(widget.win_nrs) do

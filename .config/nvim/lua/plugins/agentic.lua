@@ -39,6 +39,8 @@ return {
       },
       -- Unbound: in a fishmonger tab agentic's close hid the prompt and left the chat behind.
       keymaps = { widget = { close = {} } },
+      -- Each panel's title is a bar across its window, not a centred island.
+      header_align = "full",
       headers = {
         chat = { title = "Agentic Chat" },
         input = function(parts, session_state)
