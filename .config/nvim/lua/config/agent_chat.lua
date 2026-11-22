@@ -390,10 +390,10 @@ function title_hl(colour)
   end
   local name = "AgentChatTitle" .. colour:gsub("^%l", string.upper)
   -- A tint of the colour, as tokyonight tints its own bars: a full-width bar at full strength glares.
-  local normal_bg = vim.api.nvim_get_hl(0, { name = "Normal", link = false }).bg
-  local tint = require("tokyonight.util").blend(hex, 0.25, normal_bg and ("#%06x"):format(normal_bg) or "#000000")
+  local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
+  local tint = require("tokyonight.util").blend(hex, 0.35, normal.bg and ("#%06x"):format(normal.bg) or "#000000")
   -- Set on every paint so a colorscheme's :hi clear can't leave it undefined.
-  vim.api.nvim_set_hl(0, name, { bg = tint, fg = hex, bold = true })
+  vim.api.nvim_set_hl(0, name, { bg = tint, fg = normal.fg or "#ffffff", bold = true })
   return name
 end
 

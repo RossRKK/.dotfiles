@@ -261,9 +261,9 @@ describe("agent_chat.new", function()
       assert.equals("EndOfBuffer:,AgenticTitle:AgentChatTitleRed", prompt_winhighlight())
       local red = require("fishmonger.agent").colours.red
       local title = vim.api.nvim_get_hl(0, { name = "AgentChatTitleRed" })
-      assert.equals(red, ("#%06x"):format(title.fg))
-      local normal_bg = ("#%06x"):format(vim.api.nvim_get_hl(0, { name = "Normal", link = false }).bg)
-      assert.equals(require("tokyonight.util").blend(red, 0.25, normal_bg), ("#%06x"):format(title.bg))
+      local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
+      assert.equals(normal.fg, title.fg)
+      assert.equals(require("tokyonight.util").blend(red, 0.35, ("#%06x"):format(normal.bg)), ("#%06x"):format(title.bg))
     end)
 
     it("takes a /color typed by hand from the transcript when there is no claim", function()
