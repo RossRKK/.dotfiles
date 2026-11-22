@@ -300,5 +300,8 @@ in
       # too so anything outside the wrapper (terminals, scripts) gets a clipboard provider.
       # Wayland-only, so skip it on hosts (e.g. macOS) that can't build it.
       wl-clipboard
+      # claude-plugins/lib/process reads stdout targets with it off /proc, which
+      # the tests force here; macOS ships its own.
+      lsof
     ];
 }
