@@ -31,10 +31,11 @@ end
 
 --- Saved workspaces for the child to restore, numbered in order.
 ---@param dirs string[]
-local function save(dirs)
+---@param sessions? table<string, any> dir -> its terminal 1 session, as a workspaces.json has it
+local function save(dirs, sessions)
   local projects = {}
   for i, dir in ipairs(dirs) do
-    projects[dir] = { slot = i }
+    projects[dir] = { slot = i, session = (sessions or {})[dir] }
   end
   vim.fn.mkdir(root .. "/state/nvim", "p")
   vim.fn.writefile({ vim.json.encode(projects) }, root .. "/state/nvim/workspaces.json")
@@ -42,7 +43,7 @@ end
 
 --- Start a child nvim on its start screen, with no Claude in its terminals.
 local function start()
-  local sock = root .. "/nvim.sock"
+  local sock, listening = root .. "/nvim.sock", root .. "/listening"
   job = vim.fn.jobstart({
     "env",
     "-u",
@@ -56,9 +57,12 @@ local function start()
     "nvim",
     "--listen",
     sock,
+    -- The socket file exists from bind(), before listen(); --cmd runs only once the server accepts.
+    "--cmd",
+    "call writefile([], " .. vim.fn.string(listening) .. ")",
   }, { pty = true, width = 160, height = 48, cwd = root, env = { TERM = "xterm-256color" } })
   assert.is_true(vim.wait(10000, function()
-    return vim.uv.fs_stat(sock) ~= nil
+    return vim.uv.fs_stat(listening) ~= nil
   end, 20))
   ch = vim.fn.sockconnect("pipe", sock, { rpc = true })
   assert.is_true(vim.wait(10000, function()
@@ -184,6 +188,27 @@ describe("a workspace tab", function()
     end
   )
 
+  it("restored with the start screen's s resumes each saved session as an agent chat", function()
+    local A, B = "5acea7d5-42e4-48ab-bae8-c06adaa57027", "d19ff978-d52f-4cc4-91c4-54ec57bbc5bf"
+    local one, two = repo("one"), repo("two")
+    -- A bare id, as files from before agent chats have it, and one saved with the client it ran in.
+    save({ one, two }, { [one] = A, [two] = { id = B, client = "terminal" } })
+    vim.fn.mkdir(root .. "/claude/projects/-p", "p")
+    for _, id in ipairs({ A, B }) do
+      vim.fn.writefile({}, root .. "/claude/projects/-p/" .. id .. ".jsonl")
+    end
+    start()
+    child("vim.api.nvim_input('s')")
+    local chats = function()
+      return child("return vim.tbl_map(P.chat, P.workspaces())")
+    end
+    vim.wait(5000, function()
+      local started = chats()
+      return #started == 2 and started[1] ~= vim.NIL and started[2] ~= vim.NIL
+    end, 50)
+    assert.same({ { session = A }, { session = B } }, chats())
+  end)
+
   it("restored with :WorkspaceRestore from a workspace tab is laid out as by hand", function()
     local first = repo("first")
     save({ repo("one"), repo("two") })
@@ -204,5 +229,29 @@ describe("a workspace tab", function()
       dirs
     )
     assert_like_by_hand(visit_all(), 4)
+  end)
+
+  it("puts the todo split away when Ctrl+B Z puts an agent chat over the greeter", function()
+    start()
+    open_from_start_screen(repo("chat"))
+    visit(1)
+    -- Wide enough that Ctrl+B Z takes the editor, the widest window, rather than the prompt.
+    vim.fn.jobresize(job, 240, 48)
+    assert.is_true(vim.wait(5000, function()
+      return child("return vim.o.columns") == 240
+    end, 20))
+    child("P.stand_in_agent(); require('config.agent_chat').new(0)")
+    assert.is_true(vim.wait(5000, function()
+      return child("return P.prompt_height()") ~= vim.NIL
+    end, 20))
+    local opened = child("return P.prompt_height()")
+    child("P.focus_chat(); require('fishmonger').maximise()")
+    vim.wait(5000, function()
+      return not child("return P.todo_shown()")
+    end, 20)
+    assert.same(
+      { todo = false, prompt = opened },
+      child("return { todo = P.todo_shown(), prompt = P.prompt_height() }")
+    )
   end)
 end)

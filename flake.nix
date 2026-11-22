@@ -11,9 +11,11 @@
     # and <script> blocks otherwise); take them from unstable until stable
     # catches up. Same for openspec: 26.05 ships 1.4.1, ten minor
     # releases behind upstream. And api-linter: 26.05 ships 2.3.1, behind
-    # the 2.4 line a work repo's pre-commit hook pins. And neovide: 26.05's
-    # 0.16.2 fails to parse the API info of the 0.13 neovim built here.
+    # the 2.4 line a work repo's pre-commit hook pins.
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    # Neovide alone, so bumping it rebuilds nothing else (kache follows unstable):
+    # 0.16.2 fails to parse the API info of the 0.13 neovim built here.
+    nixpkgs-neovide.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -40,7 +42,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, plasma-manager, claude-code, kache, neovim, ... }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-neovide, home-manager, plasma-manager, claude-code, kache, neovim, ... }:
     let
       # Linux hosts (personal, work) take atmos/poethepoet/opentofu from
       # unstable, see the nixpkgs-unstable input comment above.
@@ -61,7 +63,7 @@
             svelte-language-server = pkgs-unstable.svelte-language-server;
             openspec = pkgs-unstable.openspec;
             api-linter = pkgs-unstable.api-linter;
-            neovide = pkgs-unstable.neovide;
+            neovide = nixpkgs-neovide.legacyPackages.${system}.neovide;
             claude-code = claude-code.packages.${system}.default;
             kache = kache.packages.${system}.default;
           })
@@ -86,6 +88,14 @@
       ];
       };
     in {
+      # Symbols agents print (Claude Code's checklists, ↵ line ends, timers) that
+      # Neovide's font.normal chain must draw without falling back to colour emoji.
+      checks.x86_64-linux.neovide-glyph-coverage =
+        let pkgs = pkgsLinux "x86_64-linux"; in
+        pkgs.runCommand "neovide-glyph-coverage" {
+          nativeBuildInputs = [ (pkgs.python3.withPackages (p: [ p.fonttools ])) ];
+        } "python3 -I ${./checks/glyph-coverage.py} '✓✔✗◻◼☐☑↵⏳⌛' ${pkgs.callPackage ./0xproto-upright.nix { }}/share/fonts/truetype/NerdFonts/0xProto/0xProtoNerdFontMono-Regular.ttf ${pkgs.callPackage ./symbol-fallback-fonts.nix { }}/share/fonts/*/* && touch $out";
+
       homeConfigurations."rossrkk@personal" = home-manager.lib.homeManagerConfiguration {
         pkgs = pkgsLinux "x86_64-linux";
         modules = [

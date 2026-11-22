@@ -39,6 +39,15 @@ opt.swapfile = false
 opt.autoread = true
 
 opt.clipboard = "unnamedplus"
+if vim.g.neovide then
+  -- Neovide's own provider raises on an image; set either side of Neovide's init, which skips its own given the flag.
+  vim.g.neovide_no_custom_clipboard = true
+  vim.g.clipboard = require("util.clipboard").neovide_provider(function(method, ...)
+    return vim.rpcrequest(vim.g.neovide_channel_id, method, ...)
+  end)
+  vim.g.loaded_clipboard_provider = nil
+  vim.cmd.runtime("autoload/provider/clipboard.vim")
+end
 
 opt.updatetime = 250
 opt.timeoutlen = 500

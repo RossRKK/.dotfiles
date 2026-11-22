@@ -160,16 +160,21 @@ off the left end. It's also what the main window falls back to when the last
 buffer closes, rather than a blank `[No Name]`. It shows a branch overview:
 `repo - branch` (a worktree reads as its repo, not its checkout directory), how
 far ahead/behind its remote it is, the review base and commits on top of it,
-and the files this branch changes — the same merge-result diff and triage marks (`●` changed, `✓`
-approved, `✗` rejected, `↻` revised) review mode puts in the explorer. Each file
-has a key next to it; press it to open. `Space+X` is the quick way back to the
+the size of the branch's diff to that base (`+adds -dels`, a bar and a legend
+by review tier, as in [the review queue](#review-queue-spacerq) below; binary
+files count no lines), and the files this branch changes — the same
+merge-result diff and triage marks (`●` changed, `✓`
+approved, `✗` rejected, `↻` revised) review mode puts in the explorer, listed
+by review tier (spec, proto, code, test, docs, generated). Each file has a key
+next to it; press it to open. `Space+X` is the quick way back to the
 greeter. Outside a git repo there's no overview, so it falls back to the pickers
 (`f` find, `g` grep, `n` new file).
 
 The greeter opens your todo list, `~/todo.md`, in a split below it (worktrees
-too): the real file, so edit it there (`Ctrl+W j`). It closes when a file
-opens in the main window (or with `:q`); it comes back the next time the
-greeter opens, and reopening the greeter never adds a second one.
+too): the real file, so edit it there (`Ctrl+W j`). It closes as soon as
+anything takes the greeter's place above it: a file, a terminal, an agent chat
+(`Ctrl+B Z`), any buffer; or with `:q`. Floats don't count. It comes back the
+next time the greeter opens, and reopening the greeter never adds a second one.
 
 ### Todo list (checkmate)
 
@@ -263,9 +268,9 @@ worktree's directory name until its Claude is up. A session in its standing
 role from `~/.config/claude-roles` is the whole label (`dotty`). (The
 OS window title still tracks the workspace you're _in_.)
 
-Opening a workspace starts **Claude in terminal 1**, continuing that directory's
-last conversation (`claude --continue`), or a new one if there is none; quitting
-it leaves a fish prompt. Once a session starts, the `claude-plugins/session-identity`
+Opening a workspace starts **an agent chat in terminal 1**, continuing that
+directory's newest conversation (as `claude --continue` would), or a new one if
+there is none. Once a session starts, the `claude-plugins/session-identity`
 mod gives it a **name** derived from its id (`/rename`, e.g. `calm-otter`) and
 the `/color` fewest live sessions are using. A session that already has a name
 (resumed, or after `/clear`) keeps it and only gets its colour back -- on resume
@@ -274,7 +279,7 @@ fresh name of its own. The name is what
 other sessions address it by (`ListAgents` / `SendMessage`), and fishmonger draws
 that terminal's tab and agent-view row in the same colour as its prompt bar.
 
-Terminal 1's Claude runs with `WORKSPACE_TERMINAL=1`, and in the checkouts
+Terminal 1's Claude, chat or TUI, runs with `WORKSPACE_TERMINAL=1`, and in the checkouts
 listed in `~/.config/claude-roles` (`<checkout> <role>` per line, kept out of
 this repo) it gets a fixed name: in `~/.dotfiles` it is **dotty**. Everywhere
 else, worktrees included, it keeps its pet name.
@@ -284,6 +289,10 @@ opens the branch as a tab here (resolved as `Alt+B w` resolves it) in the
 background, leaving you on your tab, and prints the name of the Claude that
 starts there once it can take messages, so the agent knows who to hand the work
 to.
+
+The PRs agents open end with `diff-size` output: the greeter's size line, and the
+files by review tier in a collapsed list. They refresh it with
+`diff-size --update-pr` after each push, measured against the PR's own base.
 
 Buffers are global in Vim, but the bufferline shows only those under the current
 tab's project, and `Shift+L`/`Shift+H` cycle that filtered list.
@@ -320,8 +329,11 @@ however opened, takes its directory's name (`CLAUDE_AGENT_NAME`) unless its
 conversation already has one; the agent switches branches there, so a PR stack is one
 checkout. Tabs read
 `<repo> · <pet> · <branch>`. Neovide runs in this mode: on Linux its package is wrapped
-with the flag (profiles/desktop.nix); on Windows (WSL) its
-`%APPDATA%\neovide\config.toml` has `neovim-bin = "env AGENT_WORKTREES=1 nvim"`.
+with the flag (profiles/desktop.nix); on Windows (WSL) `hms` writes its
+`%APPDATA%\neovide\config.toml` (shared config plus `neovim-bin = "env AGENT_WORKTREES=1 nvim"`,
+profiles/windows-neovide.nix). Its fonts are installed by hand once (right-click, "Install for me"):
+`0xProtoNerdFontMono-Regular.ttf`, `0xProtoNerdFontMono-Bold.ttf` (no Italic, so italics are slanted),
+`DejaVuSansMono.ttf`, `DejaVuSansMono-Bold.ttf` and `NotoSansSymbols2-Regular.otf`.
 
 So a branch becomes a project tab: its own checkout, terminals and buffer list,
 with your main checkout untouched in the tab next door — no stash, no
@@ -354,9 +366,11 @@ wiping each other's projects. A project leaves it only when you close its tab
 (`Space+tx`, `Space+tX`); quitting nvim, a crash or a WSL shutdown keep them all.
 On the start screen of a bare `nvim`, **`s` Resume** (or `:WorkspaceRestore`
 from anywhere) reopens every saved project not already open here, under its old
-number where that is free, and terminal 1 resumes its Claude session with
-`claude --resume <id>`. Its name and colour come back with it. A session whose
-transcript is gone falls back to `claude --continue`, and a project whose
+number where that is free, and terminal 1's agent chat loads its Claude session,
+history and all, in the directory the session started in, even one that ran in
+the Claude TUI. Its name and colour come back
+with it. A session whose transcript is gone falls back to the directory's newest
+conversation, and a project whose
 directory is gone (a removed worktree) is skipped and forgotten. Nothing resumes
 on its own, so a second or nested nvim never starts duplicate agents. Only
 terminal 1 comes back: other terminals' jobs and the open files don't.
@@ -369,7 +383,7 @@ terminal 1 comes back: other terminals' jobs and the open files don't.
 
 | Key  | Action                                   |
 | ---- | ---------------------------------------- |
-| `gd` | Go to definition                         |
+| `gd` | Go to definition. On a markdown link (files and agent chats) to a URL, opens it in the browser; a link to a file or `#heading` goes there |
 | `gi` | Go to implementation                     |
 | `gr` | Go to references                         |
 | `gf` / `gF` | The builtins (nvim's own parsing, via `Ctrl-W f` / `Ctrl-W F`), opened in the **main window**. `gF` also jumps to the line (`foo.rs:42`, `foo.rs (42)`, …). Works from the terminal (enter terminal-normal mode with `Ctrl+N` first): jump to a path a program printed |
@@ -495,12 +509,19 @@ directory), then googleapis' common protos. buf's own lint is hidden; buf_ls
 keeps navigation, completion and compile errors, and `Space+cf` runs
 `buf format`.
 
+**Messages after a restart:** every message nvim shows (Lua errors with their
+tracebacks, `:messages` output too) goes to its own
+`~/.local/state/nvim/logs/messages-<YYYYMMDD-HHMMSS>-<pid>.log`; the newest 20
+are kept. Writes are buffered, so a kill can lose the last few. Follow the
+newest with `tail -f "$(ls -t ~/.local/state/nvim/logs/messages-*.log | head -1)"`.
+
 ### Space+u — UI toggles
 
 | Key        | Action                                              |
 | ---------- | --------------------------------------------------- |
 | `Space+uh` | Toggle inlay hints (off by default; current buffer) |
 | `Space+um` | Toggle the mouse (off by default)                   |
+| `Space+ur` | Toggle markdown rendering in this buffer (on by default in markdown files and agent chats) |
 
 ### Space+cf — Format (conform)
 
@@ -686,9 +707,27 @@ that repo's buffers until toggled off.
 review, and `Enter` opens one as a worktree tab with review mode
 already on (fetched to the PR head, targeted at the PR's base). `Ctrl+o` (or `G` in normal mode, as in lazygit) opens
 it in the browser instead. Each tier lists the newest PR first. Each row shows
-the diff size (`+adds -dels`) without generated files: `linguist-generated` in
-`.gitattributes` (read from the base branch), plus lockfiles (`Cargo.lock`,
-`package-lock.json`, `uv.lock`, …) unless marked `linguist-generated=false`.
+the diff size (`+adds -dels`) summed over the files that need review. Every
+changed file falls in one review tier:
+
+| Tier        | Files                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------- |
+| `spec`      | `.md`/`.txt` files whose name contains `spec` or `intent`                                       |
+| `proto`     | `*.proto`                                                                                        |
+| `code`      | anything not in another tier                                                                     |
+| `test`      | `*_spec.*`, `*_test.*`, `test_*.py`, `*.test.*`, `*.spec.*`, `*Test.*`, `tests/`, `__tests__/`, `spec/` |
+| `docs`      | `linguist-documentation`, or `.md`/`.markdown`/`.rst`/`.adoc`                                  |
+| `generated` | `linguist-generated`, or a lockfile (`Cargo.lock`, `uv.lock`, …); left out of `+adds -dels`      |
+
+Attributes come from `.gitattributes` on the base branch; `=false` on either
+linguist attribute keeps a file out of that tier, and `review-tier=<tier>`
+overrides everything. The preview reads `**+690 -100** · 20 spec · 100 proto ·
+410 code · 260 test · 9.4k generated` (lines touched per tier, zero tiers left
+out). The greeter draws the same line for the checked-out branch, with
+attributes from the checkout itself and a bar coloured by tier: reviewed tiers
+fill it, generated trails dimmed and capped at half its width. triage leaves
+`linguist-generated` files out of the branch's file list, so there generated is
+the lockfiles only.
 
 The queue refreshes in the background every 5 minutes for every repo with an
 open tab (and when you leave review mode), so the picker opens instantly from
@@ -697,8 +736,13 @@ refreshed behind it. Outside review mode the greeter shows the counts
 (`12 need you · 1 back to you · 3 for your team`), and under them the
 [my PRs](#my-prs-spacerm) counts. Whenever the branch has a
 PR — reviewing or your own — the greeter shows it too: number, title, state,
-review decision, checks, the diff size (generated files excluded, as above),
-and the start of the description (fenced blocks collapsed to a placeholder).
+review decision, checks, and the start of the description (fenced blocks collapsed to a placeholder).
+When that PR is one of yours stacked with others (PRs targeting each other's
+branches), a **Stack** section lists the whole stack top first, down to the
+branch the bottom one targets: `◉` marks the checked-out branch's PR, each row
+shows its [my PRs](#my-prs-spacerm) tier (or `draft`) and checks (`✓` `●` `✗`),
+and a PR forked off one lower down says `on <branch>`. It reads the same
+background fetch, so it is as fresh as `Space+rm`.
 
 | Tier          | Means                                                              |
 | ------------- | ------------------------------------------------------------------ |
@@ -896,6 +940,9 @@ scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI munging).
 | `Ctrl+G`               | Toggle the git TUI (lazygit), from terminals too              |
 | `Ctrl+Shift+G`         | Open the git TUI in a picked project (`Ctrl+N` first from a terminal) |
 | `Ctrl+N` (in terminal) | Enter terminal-normal mode (then `gf` jumps to a ref) |
+| `Ctrl+N` (in an agent chat's prompt) | Leave insert mode, as from a terminal |
+| Other `Ctrl` keys (in an agent chat's prompt) | Run their normal-mode mapping (`Ctrl+B`, `Ctrl+T`, `Ctrl+H/J/K/L`, ...) as from a terminal; with none, the editing keys (`Ctrl+W`, `Ctrl+U`, `Ctrl+R`, `Ctrl+O`, `Ctrl+G`) stay and the rest type nothing |
+| `Ctrl+V`, `p`, `P` (in an agent chat's prompt) | Paste the clipboard; an image or files copied (on Windows under WSL, macOS or Wayland), or a copied path to a file, is attached to the next message instead. `"ap` still puts register a |
 | `<leader>y` (visual, side terminal) | Yank the selection joined into one line — for wrapped commands in Claude Code output (pty soft-wraps in shell output join automatically on any yank) |
 
 **lazygit copy-to-clipboard:** `Ctrl+O` copies the selected item — branch name in
@@ -933,7 +980,8 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B &`    | Kill the current tab                              |
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
 | `Ctrl+B m N`  | Move the current tab to workspace N (the number on its label; you follow it) |
-| `Ctrl+B a`    | Agent view: every agent across all workspaces, blocked first; the row's key jumps to it |
+| `Ctrl+B a`    | New agent chat (agentic.nvim) as a tab in the next free slot, started in the workspace's directory, its prompt under the chat; `Ctrl+T` hides it as a terminal (`q` is unbound); killing the tab (`Ctrl+B &`) ends the session; `Ctrl+C` in any of its windows stops the agent's reply while it is generating, else the sub-agents it left running in the background (Claude Code stops those with `Ctrl+X Ctrl+K` twice), keeping what you typed |
+| `Ctrl+B A`    | Agent view: every agent across all workspaces, blocked first; the row's key jumps to it |
 | `Ctrl+B f`    | Referenced files: toggle a list under the terminal of the files its agent read, edited or named, newest first (see below) |
 | `Ctrl+B r`    | Mark this terminal's agent read: an empty circle, whatever its state, until it next reports one |
 | `Ctrl+B u`    | Mark it unread: a question mark until it next reports a status (or `Ctrl+B r`) |

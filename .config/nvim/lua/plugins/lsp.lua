@@ -162,6 +162,29 @@ return {
         refresh_venv(vim.api.nvim_get_current_buf())
       end, { desc = "Re-point basedpyright at the nearest .venv" })
 
+      -- Chooses at call time, so gd's FileType and LspAttach mappings are interchangeable.
+      local function go_to_definition()
+        local url = require("util.markdown_links").url_at(0, vim.api.nvim_win_get_cursor(0))
+        if url then
+          local _, err = vim.ui.open(url)
+          if err then
+            vim.notify(err, vim.log.levels.ERROR)
+          end
+        elseif next(vim.lsp.get_clients({ bufnr = 0, method = "textDocument/definition" })) then
+          Snacks.picker.lsp_definitions()
+        else
+          vim.cmd("normal! gd")
+        end
+      end
+      -- Agent chats parse as markdown but have no language server to attach.
+      vim.api.nvim_create_autocmd("FileType", {
+        pattern = { "markdown", "AgenticChat" },
+        callback = function(ev)
+          local opts = { buffer = ev.buf, desc = "Go to definition" }
+          vim.keymap.set("n", "gd", go_to_definition, opts)
+        end,
+      })
+
       -- Keymaps on LSP attach
       vim.api.nvim_create_autocmd("LspAttach", {
         callback = function(ev)
@@ -170,9 +193,7 @@ return {
           end
           -- Nav pickers use snacks (see lua/plugins/picker.lua); each opens a
           -- picker of the candidates, jumping straight through on a single match.
-          map("gd", function()
-            Snacks.picker.lsp_definitions()
-          end, "Go to definition")
+          map("gd", go_to_definition, "Go to definition")
           map("gi", function()
             Snacks.picker.lsp_implementations()
           end, "Go to implementation")

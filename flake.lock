@@ -96,6 +96,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-neovide": {
+      "locked": {
+        "lastModified": 1795217999,
+        "narHash": "sha256-Z5mAFcY8XTAaWe+RwTchz4Fx1gwaeQ2WD8A8bKX7njY=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "680275f0bb6afce84fbac3e75fc47c5f2272400b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs-unstable": {
       "locked": {
         "lastModified": 1790055231,
@@ -158,6 +174,7 @@
         "kache": "kache",
         "neovim": "neovim",
         "nixpkgs": "nixpkgs_2",
+        "nixpkgs-neovide": "nixpkgs-neovide",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "plasma-manager": "plasma-manager"
       }

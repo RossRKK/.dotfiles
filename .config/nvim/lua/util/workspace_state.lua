@@ -25,7 +25,7 @@ local mine = {}
 -- Set from VimLeavePre on: tabs and agents vanishing during exit aren't closes.
 local leaving = false
 
-local collect, load, write, forget, valid_session, real
+local collect, load, write, forget, parse_session, valid_session, real
 
 --- Set once at startup (init.lua): watch the workspaces and add :WorkspaceRestore.
 ---@param opts? workspace_state.Options
@@ -100,7 +100,7 @@ function M.restore(opts)
       drop_buf = drop_buf,
       background = drop_buf == nil,
       slot = p.slot,
-      resume = M.resume_id(p.session, options.claude_projects),
+      resume = M.resumable(p.session, options.claude_projects),
     })
     drop_buf = nil
   end
@@ -160,10 +160,10 @@ function M.restorable(stored, is_open, is_dir)
 end
 
 --- `session` when Claude still has its transcript, so terminal 1 resumes it rather than failing to.
----@param session? string
+---@param session? string a session id
 ---@param projects string Claude's projects directory
 ---@return string?
-function M.resume_id(session, projects)
+function M.resumable(session, projects)
   if not session then
     return nil
   end
@@ -207,7 +207,7 @@ function load()
     if type(dir) == "string" and type(p) == "table" then
       projects[dir] = {
         slot = type(p.slot) == "number" and p.slot % 1 == 0 and p.slot or nil,
-        session = valid_session(p.session),
+        session = parse_session(p.session),
       }
     end
   end
@@ -236,6 +236,13 @@ function forget(dirs)
     stored[dir] = nil
   end
   write(stored)
+end
+
+--- A stored session's id; a table is a file saved when entries also named the client the session ran in.
+---@param stored any
+---@return string?
+function parse_session(stored)
+  return valid_session(type(stored) == "table" and stored.id or stored)
 end
 
 --- `id` if it is a session id, which also makes it safe to put in a shell command.

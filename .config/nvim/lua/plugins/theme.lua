@@ -15,6 +15,11 @@ return {
         -- use brighter hues at 25%. Bring the change tint up to match, so the
         -- inline diff (gitsigns linehl) and vimdiff read as three colours.
         highlights.DiffChange = { bg = require("tokyonight.util").blend_bg(colors.blue7, 0.35) }
+        -- tokyonight draws rendered tables' borders red and orange and their header blue; keep them calm.
+        highlights.RenderMarkdownTableHead = { fg = colors.comment }
+        highlights.RenderMarkdownTableRow = { fg = colors.comment }
+        -- Markdown's only bare @markup.heading capture is a table's header cells.
+        highlights["@markup.heading.markdown"] = { fg = colors.fg, bold = true }
       end,
     },
     config = function(_, opts)

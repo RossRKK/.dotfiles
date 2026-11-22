@@ -211,6 +211,8 @@ in
         ".local/bin/worktree-tab"
         # Agents open files in the editor with it (.claude/CLAUDE.md).
         ".local/bin/nvim-open"
+        # Agents keep their PRs' size section current with it (.claude/CLAUDE.md).
+        ".local/bin/diff-size"
         # Out-of-store so Claude can still append to it in place.
         ".claude/CLAUDE.md"
       ]
@@ -231,6 +233,8 @@ in
       # programs.neovim wrapper would generate an init.lua that collides with
       # the symlinked ~/.config/nvim.
       neovim
+      # agentic.nvim's Claude Code chat (plugins/agentic.lua), over ACP.
+      (callPackage ./claude-agent-acp.nix { claude = config.programs.claude-code.finalPackage; })
 
       # tmux stays a plain package: programs.tmux always generates its own
       # ~/.config/tmux/tmux.conf, which the symlinked ~/.tmux.conf would shadow.

@@ -900,7 +900,7 @@ function commits(root, shas)
 end
 
 -- Defined below M.pick, which uses them.
-local agent_worktrees, live_colours, latest_transcript, recorded_colours
+local agent_worktrees, live_colours, latest_transcript
 
 --- <M-b>w: pick a branch, get its worktree as a tab. Recently opened
 --- worktrees float to the top (see M.order); typing a name that matches nothing
@@ -1027,7 +1027,7 @@ function M.agent_hls(paths, projects, live)
       transcripts[path] = latest_transcript(M.claude_project(projects, path))
     end
   end
-  local recorded = recorded_colours(vim.tbl_values(transcripts))
+  local recorded = require("util.claude_session").recorded_colours(vim.tbl_values(transcripts))
   local colour_hl = require("fishmonger.agent").colour_hl
   local out = {}
   for _, path in ipairs(paths) do
@@ -1075,27 +1075,6 @@ function latest_transcript(dir)
     end
   end
   return latest
-end
-
---- The colour each transcript's last agent-color row names, from one grep over
---- them all: transcripts run to megabytes and the picker shouldn't wait on Lua
---- reading them.
----@param transcripts string[]
----@return table<string, string> transcript -> colour
-function recorded_colours(transcripts)
-  if #transcripts == 0 then
-    return {}
-  end
-  local cmd = { "grep", "--null", "-HF", '"type":"agent-color"', "--", unpack(transcripts) }
-  local out = {}
-  for line in vim.gsplit(vim.system(cmd, { text = true }):wait().stdout or "", "\n") do
-    local nul = line:find("\0", 1, true)
-    local ok, row = pcall(vim.json.decode, nul and line:sub(nul + 1) or "")
-    if ok and type(row) == "table" and type(row.agentColor) == "string" then
-      out[line:sub(1, nul - 1)] = row.agentColor
-    end
-  end
-  return out
 end
 
 return M

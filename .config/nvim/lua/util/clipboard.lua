@@ -1,5 +1,6 @@
--- Telling "the clipboard holds text" from "the clipboard holds an image", for
--- the terminal-mode paste mapping in config/keymaps.lua.
+-- Telling "the clipboard holds text" from "the clipboard holds an image", and
+-- reading the image (or copied files) from Windows, macOS or Wayland, for the Ctrl+V
+-- mappings in config/keymaps.lua and the agent chat's prompt (config/agent_chat.lua).
 --
 -- This can't be inferred from whether `getreg("+")` errors. Whether it does is
 -- a property of the *provider*, not of the clipboard: win32yank rejects image
@@ -48,6 +49,228 @@ function M.is_text(s)
     end
   end
   return not s:sub(1, SNIFF_BYTES):find(BINARY_CONTROL)
+end
+
+--- The clipboard's text, or nil when it holds an image or nothing.
+--- @return string|nil
+function M.text()
+  -- pcall: Neovide's provider raises "cannot get clipboard contents" on an image.
+  local ok, text = pcall(vim.fn.getreg, "+")
+  if ok and M.is_text(text) then
+    return text
+  end
+  return nil
+end
+
+--- A g:clipboard over Neovide's clipboard RPC, as Neovide's own, except that a clipboard it
+--- can't read (an image) reads as empty: a put then says E353 instead of raising its error.
+--- @param request fun(method: string, ...): any an RPC request to Neovide
+--- @return table
+function M.neovide_provider(request)
+  local function get(register)
+    return function()
+      local ok, lines = pcall(request, "neovide.get_clipboard", register)
+      return ok and lines or {}
+    end
+  end
+  local function set(register)
+    return function(lines)
+      request("neovide.set_clipboard", lines, register)
+    end
+  end
+  return {
+    name = "neovide",
+    copy = { ["+"] = set("+"), ["*"] = set("*") },
+    paste = { ["+"] = get("+"), ["*"] = get("*") },
+    cache_enabled = false,
+  }
+end
+
+-- Read through interop rather than WSLg's bridge, which offers images only as
+-- image/bmp and has segfaulted weston on image transfers.
+local READ_WINDOWS = table.concat({
+  "Add-Type -AssemblyName System.Windows.Forms;",
+  "$i=[Windows.Forms.Clipboard]::GetImage();",
+  "if ($i) { $ms=New-Object IO.MemoryStream;",
+  "$i.Save($ms,[Drawing.Imaging.ImageFormat]::Png);",
+  "'png ' + [Convert]::ToBase64String($ms.ToArray()) }",
+  "else { [Windows.Forms.Clipboard]::GetFileDropList() | ForEach-Object { 'file ' + $_ } }",
+}, " ")
+
+-- JXA over AppKit ships with macOS, unlike pngpaste; files first, as Finder adds their icons as an image.
+local READ_MAC = table.concat({
+  'ObjC.import("AppKit");',
+  "function run() {",
+  "  const pb = $.NSPasteboard.generalPasteboard;",
+  "  const urls = ObjC.unwrap(pb.readObjectsForClassesOptions($([$.NSURL]),",
+  "    $({ NSPasteboardURLReadingFileURLsOnlyKey: true })));",
+  '  if (urls && urls.length) return urls.map((u) => "file " + u.path.js).join("\\n");',
+  "  const image = $.NSImage.alloc.initWithPasteboard(pb);",
+  '  if (image.isNil()) return "";',
+  "  const png = $.NSBitmapImageRep.imageRepWithData(image.TIFFRepresentation)",
+  "    .representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $({}));",
+  '  return "png " + png.base64EncodedStringWithOptions(0).js;',
+  "}",
+}, "\n")
+
+--- @alias util.clipboard.Content
+--- | { kind: "image", png: string }
+--- | { kind: "files", paths: string[] }
+
+--- @alias util.clipboard.Source "windows"|"mac"|"wayland"
+
+local READERS = { windows = "read_windows", mac = "read_mac", wayland = "read_wayland" }
+
+--- Read the clipboard's image or copied files, calling `on_read` on the main loop with them
+--- (files as local paths), or nil for neither. Where there is no reader (X11) it says so instead.
+--- @param on_read fun(content: util.clipboard.Content|nil)
+function M.read(on_read)
+  local source = M.source()
+  if not source then
+    vim.notify(
+      "Can't read a clipboard image or files here: only WSL, macOS and Wayland",
+      vim.log.levels.WARN
+    )
+    return
+  end
+  M[READERS[source]](on_read)
+end
+
+--- Whose clipboard to read an image from here: Windows on WSL, macOS, Wayland, or none known.
+--- @return util.clipboard.Source|nil
+function M.source()
+  if vim.fn.has("wsl") == 1 then
+    return "windows"
+  elseif vim.fn.has("mac") == 1 then
+    return "mac"
+  elseif (vim.env.WAYLAND_DISPLAY or "") ~= "" then
+    return "wayland"
+  end
+  return nil
+end
+
+--- What READ_WINDOWS or READ_MAC printed: an image's PNG bytes, or the paths of copied files.
+--- @param stdout string
+--- @return util.clipboard.Content|nil
+function M.parse_script_output(stdout)
+  local paths = {}
+  for line in vim.gsplit(stdout, "\r?\n", { trimempty = true }) do
+    local kind, value = line:match("^(%a+) (.+)$")
+    if kind == "png" then
+      return { kind = "image", png = vim.base64.decode(value) }
+    elseif kind == "file" then
+      paths[#paths + 1] = value
+    end
+  end
+  return #paths > 0 and { kind = "files", paths = paths } or nil
+end
+
+--- Read the Windows clipboard's image or copied files, calling `on_read` on the main loop
+--- with them (copied files as WSL paths), or nil for neither.
+--- @param on_read fun(content: util.clipboard.Content|nil)
+function M.read_windows(on_read)
+  vim.system({ "powershell.exe", "-NoProfile", "-Command", READ_WINDOWS }, { text = true }, function(result)
+    vim.schedule(function()
+      local content = result.code == 0 and M.parse_script_output(result.stdout) or nil
+      if content and content.kind == "files" then
+        content.paths = vim.tbl_map(M.wsl_path, content.paths)
+      end
+      on_read(content)
+    end)
+  end)
+end
+
+--- Read the macOS pasteboard's image or files copied in Finder, calling `on_read` on the main
+--- loop with them, or nil for neither.
+--- @param on_read fun(content: util.clipboard.Content|nil)
+function M.read_mac(on_read)
+  vim.system({ "osascript", "-l", "JavaScript", "-e", READ_MAC }, { text = true }, function(result)
+    vim.schedule(function()
+      on_read(result.code == 0 and M.parse_script_output(result.stdout) or nil)
+    end)
+  end)
+end
+
+--- Which of the types `wl-paste --list-types` printed to read: a PNG, else copied files' URIs.
+--- @param types string
+--- @return "image/png"|"text/uri-list"|nil
+function M.wayland_type(types)
+  local offered = {}
+  for mime in vim.gsplit(types, "\n", { trimempty = true }) do
+    offered[mime] = true
+  end
+  return (offered["image/png"] and "image/png") or (offered["text/uri-list"] and "text/uri-list") or nil
+end
+
+--- The clipboard's `mime` content as `wl-paste` gave it: an image's PNG bytes, or copied files' paths.
+--- @param mime "image/png"|"text/uri-list"
+--- @param data string
+--- @return util.clipboard.Content|nil
+function M.parse_wayland(mime, data)
+  if mime == "image/png" then
+    return data ~= "" and { kind = "image", png = data } or nil
+  end
+  local paths = {}
+  for uri in vim.gsplit(data, "\r?\n", { trimempty = true }) do
+    -- RFC 2483: a # line is a comment; only local files can be attached.
+    if uri:match("^file://") then
+      paths[#paths + 1] = vim.uri_to_fname(uri)
+    end
+  end
+  return #paths > 0 and { kind = "files", paths = paths } or nil
+end
+
+--- Read the Wayland clipboard's image or copied files, calling `on_read` on the main loop
+--- with them, or nil for neither.
+--- @param on_read fun(content: util.clipboard.Content|nil)
+function M.read_wayland(on_read)
+  local function done(content)
+    vim.schedule(function()
+      on_read(content)
+    end)
+  end
+  vim.system({ "wl-paste", "--list-types" }, { text = true }, function(listed)
+    local mime = listed.code == 0 and M.wayland_type(listed.stdout) or nil
+    if not mime then
+      return done(nil)
+    end
+    vim.system({ "wl-paste", "--no-newline", "--type", mime }, {}, function(result)
+      done(result.code == 0 and M.parse_wayland(mime, result.stdout) or nil)
+    end)
+  end)
+end
+
+--- Serve `png` as the Wayland clipboard's image/png, calling `on_done` once it is.
+--- @param png string
+--- @param on_done fun()
+function M.copy_to_wayland(png, on_done)
+  -- No stdout/stderr pipes: wl-copy's daemon would inherit them and hold the exit callback forever.
+  vim.system({ "wl-copy", "-t", "image/png" }, { stdin = png, stdout = false, stderr = false }, function()
+    vim.schedule(on_done)
+  end)
+end
+
+--- The path `text` is, when it is one path and nothing else: a Linux one, or a Windows one
+--- (as Explorer's "Copy as path" gives it, quoted) as WSL sees it.
+--- @param text string
+--- @return string|nil
+function M.path_in(text)
+  local path = vim.trim(text):gsub('^"(.*)"$', "%1")
+  if path:find("\n") then
+    return nil
+  end
+  if path:match("^%a:[\\/]") or path:match("^\\\\") then
+    return M.wsl_path(path)
+  end
+  return path:match("^/") and path or nil
+end
+
+--- `path` on Windows as WSL sees it.
+--- @param path string
+--- @return string
+function M.wsl_path(path)
+  local result = vim.system({ "wslpath", "-u", path }, { text = true }):wait()
+  return result.code == 0 and vim.trim(result.stdout) or path
 end
 
 return M

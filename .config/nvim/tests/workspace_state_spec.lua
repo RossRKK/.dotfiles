@@ -34,14 +34,14 @@ describe("workspace_state.next_state", function()
       want = { ["/other"] = { slot = 1, session = B }, ["/kept"] = { slot = 1 } },
     },
     {
-      name = "keeps the last session id while the project's agent is absent",
+      name = "keeps the last session while the project's agent is absent",
       stored = { ["/p"] = { slot = 1, session = A } },
       mine = { ["/p"] = true },
       now = { ["/p"] = { slot = 1 } },
       want = nil,
     },
     {
-      name = "takes a new session id (after /clear) over the stored one",
+      name = "takes a new session (after /clear) over the stored one",
       stored = { ["/p"] = { slot = 1, session = A } },
       mine = { ["/p"] = true },
       now = { ["/p"] = { slot = 1, session = B } },
@@ -109,6 +109,12 @@ describe("workspace_state on disk", function()
     return vim.json.decode(table.concat(vim.fn.readfile(file), "\n"))
   end
 
+  local function write(projects_by_dir)
+    vim.fn.mkdir(vim.fs.dirname(file), "p")
+    vim.fn.writefile({ vim.json.encode(projects_by_dir) }, file)
+  end
+
+  -- tabpage -> the session id terminal 1's agent reports.
   local sessions = {}
 
   before_each(function()
@@ -141,12 +147,12 @@ describe("workspace_state on disk", function()
 
   it("saves each workspace's directory, number and terminal 1's session", function()
     sessions[workspace_tab(dir .. "/one", 1)] = A
-    workspace_tab(dir .. "/two", 2)
+    sessions[workspace_tab(dir .. "/two", 2)] = B
     state.save()
-    assert.same(
-      { [dir .. "/one"] = { slot = 1, session = A }, [dir .. "/two"] = { slot = 2 } },
-      stored()
-    )
+    assert.same({
+      [dir .. "/one"] = { slot = 1, session = A },
+      [dir .. "/two"] = { slot = 2, session = B },
+    }, stored())
   end)
 
   it("writes no file from an nvim without workspaces", function()
@@ -181,6 +187,23 @@ describe("workspace_state on disk", function()
     assert.same({ [dir .. "/one"] = { slot = 1, session = A } }, stored())
   end)
 
+  it("reads a session saved with the client it ran in as its id", function()
+    write({ [dir .. "/one"] = { slot = 1, session = { id = A, client = "terminal" } } })
+    sessions[workspace_tab(dir .. "/two", 2)] = B
+    state.save()
+    assert.same({
+      [dir .. "/one"] = { slot = 1, session = A },
+      [dir .. "/two"] = { slot = 2, session = B },
+    }, stored())
+  end)
+
+  it("drops a session it cannot read", function()
+    write({ [dir .. "/one"] = { slot = 1, session = "not a session id" } })
+    sessions[workspace_tab(dir .. "/two", 2)] = B
+    state.save()
+    assert.same({ slot = 1 }, stored()[dir .. "/one"])
+  end)
+
   describe("restore", function()
     local opened
 
@@ -191,29 +214,24 @@ describe("workspace_state on disk", function()
       workspace.open = function(path, opts)
         opened[#opened + 1] = { dir = path, resume = opts.resume, slot = opts.slot }
       end
-      vim.fn.mkdir(vim.fs.dirname(file), "p")
-      vim.fn.writefile({
-        vim.json.encode({
-          [dir .. "/one"] = { slot = 1, session = A },
-          [dir .. "/two"] = { slot = 2, session = B },
-          [dir .. "/gone"] = { slot = 3, session = A },
-        }),
-      }, file)
+      write({
+        [dir .. "/one"] = { slot = 1, session = A },
+        [dir .. "/two"] = { slot = 2, session = { id = B, client = "terminal" } },
+        [dir .. "/three"] = { slot = 3, session = "2b5e8c1a-6f0d-4c7e-9a3b-1d4f6e8a0c2b" },
+        [dir .. "/gone"] = { slot = 4, session = A },
+      })
+      vim.fn.mkdir(dir .. "/three", "p")
       vim.fn.writefile({}, projects .. "/-one/" .. A .. ".jsonl")
+      vim.fn.writefile({}, projects .. "/-one/" .. B .. ".jsonl")
     end)
 
-    it("resumes a session with a transcript and leaves one without to --continue", function()
+    it("resumes every session with a transcript by its id, however it was saved, and opens one without fresh", function()
       state.restore()
       assert.same({
         { dir = dir .. "/one", slot = 1, resume = A },
-        { dir = dir .. "/two", slot = 2 },
+        { dir = dir .. "/two", slot = 2, resume = B },
+        { dir = dir .. "/three", slot = 3 },
       }, opened)
-      local workspace = require("config.workspace")
-      assert.equals("claude --resume " .. A, workspace.agent_shell(false, nil, opened[1].resume)[5])
-      assert.equals(
-        "claude --continue; or claude",
-        workspace.agent_shell(false, nil, opened[2].resume)[5]
-      )
     end)
 
     it("drops a project whose directory is gone from the file", function()

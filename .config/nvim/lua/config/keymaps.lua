@@ -28,51 +28,44 @@ map("t", "<C-n>", "<C-\\><C-n>", { desc = "Terminal: enter normal mode" })
 -- Normal mode is left alone (blockwise visual is worth more than a paste key
 -- there), and insert-literal remains on the builtin synonym <C-q>.
 local is_wsl = vim.fn.has("wsl") == 1
+local clipboard = require("util.clipboard")
 if vim.g.neovide then
-  map({ "i", "c" }, "<C-v>", "<C-r>+", { desc = "Paste clipboard" })
+  -- Not <C-r>+: Neovide's clipboard provider raises an error when the clipboard holds an image.
+  map({ "i", "c" }, "<C-v>", function()
+    local text = clipboard.text()
+    if text then
+      vim.api.nvim_paste(text, true, -1)
+    end
+  end, { desc = "Paste clipboard" })
 end
 if vim.g.neovide or is_wsl then
   -- Terminal mode: text goes through nvim_paste so the pty gets one proper
   -- bracketed paste; an image is left to the program inside -- forward the
   -- raw chord and let it read the clipboard itself (Claude Code does, via
   -- osascript / wl-paste). On WSL that read would go through WSLg's clipboard
-  -- bridge, which only offers image/bmp (Claude Code wants PNG) and has
-  -- segfaulted weston on image transfers -- so first re-copy the image from
-  -- the Windows clipboard into the Linux one as PNG via interop; wl-copy then
-  -- serves wl-paste locally, without the bridge.
-  local mirror_image_to_wayland = table.concat({
-    [[out=$(powershell.exe -NoProfile -Command ']]
-      .. [[Add-Type -AssemblyName System.Windows.Forms;]]
-      .. [[$i=[Windows.Forms.Clipboard]::GetImage();]]
-      .. [[if ($i) { $ms=New-Object IO.MemoryStream;]]
-      .. [[$i.Save($ms,[Drawing.Imaging.ImageFormat]::Png);]]
-      .. [[[Convert]::ToBase64String($ms.ToArray()) }' | tr -d '\r')]],
-    [[[ -n "$out" ] || exit 1]],
-    -- wl-copy forks a daemon to serve the selection; without the redirects it
-    -- inherits this pipeline's stdout/stderr and vim.system waits on those
-    -- pipes forever -- the on-exit callback (which forwards the paste chord)
-    -- would never fire.
-    [[printf %s "$out" | base64 -d | wl-copy -t image/png >/dev/null 2>&1]],
-  }, "\n")
+  -- bridge, which only offers image/bmp (Claude Code wants PNG) -- so first
+  -- re-copy the image from the Windows clipboard into the Linux one as PNG;
+  -- wl-copy then serves wl-paste locally, without the bridge.
   map("t", "<C-v>", function()
-    -- getreg throws on some providers when the clipboard holds an image and
-    -- returns raw image bytes on others; util/clipboard sorts out both.
-    local ok, text = pcall(vim.fn.getreg, "+")
-    if ok and require("util.clipboard").is_text(text) then
+    local text = clipboard.text()
+    if text then
       vim.api.nvim_paste(text, true, -1)
       return
     end
     local chan = vim.bo.channel
-    if not is_wsl then
+    -- Forwarded whether or not an image was found: the inner program should still see its paste key.
+    local function forward()
       vim.api.nvim_chan_send(chan, "\22")
-      return
     end
-    vim.system({ "sh", "-c", mirror_image_to_wayland }, {}, function()
-      -- Forward the chord whether or not an image was found: the inner
-      -- program should still see its paste key on a merely-empty clipboard.
-      vim.schedule(function()
-        vim.api.nvim_chan_send(chan, "\22")
-      end)
+    if not is_wsl then
+      return forward()
+    end
+    clipboard.read_windows(function(content)
+      if content and content.kind == "image" then
+        clipboard.copy_to_wayland(content.png, forward)
+      else
+        forward()
+      end
     end)
   end, { desc = "Paste clipboard" })
 end

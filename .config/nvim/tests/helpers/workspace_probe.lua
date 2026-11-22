@@ -2,13 +2,59 @@
 
 local M = {}
 
---- Terminal 1 runs sh rather than Claude, so fishmonger still builds its window but no agent starts.
+--- Terminal 1 runs sh rather than Claude or an agent chat, so fishmonger still builds its window but no agent starts.
 function M.stub_claude()
   local fishmonger = require("fishmonger")
   local show = fishmonger.show
   fishmonger.show = function(slot, opts)
     return show(slot, vim.tbl_extend("force", opts or {}, { shell = { "sh" } }))
   end
+  require("config.agent_chat").start = function(tab, session_id)
+    vim.api.nvim_tabpage_set_var(tab, "probe_chat", { session = session_id })
+    fishmonger.show(1, { tab = tab, insert = false })
+  end
+end
+
+--- agentic's provider swapped for one that never answers, so a chat's windows open with no Claude behind them.
+function M.stand_in_agent()
+  local provider = require("agentic.config").acp_providers["claude-agent-acp"]
+  -- Exits when nvim does, as its stdin closes.
+  provider.command, provider.args = "sh", { "-c", "cat >/dev/null" }
+end
+
+--- The newest agent chat's widget windows.
+---@return table<string, integer>
+local function chat_windows()
+  local sessions = require("agentic.session_registry").list()
+  return #sessions > 0 and sessions[#sessions].widget.win_nrs or {}
+end
+
+--- The newest agent chat's prompt height, or vim.NIL before its prompt is open.
+---@return integer|vim.NIL
+function M.prompt_height()
+  local input = chat_windows().input
+  return input and vim.api.nvim_win_is_valid(input) and vim.api.nvim_win_get_height(input)
+    or vim.NIL
+end
+
+--- Whether the current tab shows the todo split.
+---@return boolean
+function M.todo_shown()
+  local todo = require("config.todo")
+  return todo.window(0, todo.FILE) ~= nil
+end
+
+--- Focus the newest agent chat's chat window.
+function M.focus_chat()
+  vim.api.nvim_set_current_win(assert(chat_windows().chat))
+end
+
+--- Terminal 1's agent chat in `tab` once started, with the session it resumed; vim.NIL before.
+---@param tab integer
+---@return { session?: string }|vim.NIL
+function M.chat(tab)
+  local ok, chat = pcall(vim.api.nvim_tabpage_get_var, tab, "probe_chat")
+  return ok and chat or vim.NIL
 end
 
 --- A tabpage's window tree with each window shown as its buffer's filetype.

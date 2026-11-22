@@ -1114,14 +1114,14 @@ local function excluded(dir)
   return set
 end
 
---- linguist-generated for `paths`, as the base branch's .gitattributes say
+--- The review-tier attributes of `paths`, as the base branch's .gitattributes say
 --- (the local remote-tracking ref: attributes rarely move, so a stale fetch is
 --- fine). Falls back to the checkout's own attributes when that ref isn't
---- here, and to none (lockfiles only, see util/diffsize) outside a git repo.
+--- here, and to none (path rules only, see util/diffsize) outside a git repo.
 ---@param dir string
 ---@param base string
 ---@param paths string[]
----@return table<string, string>
+---@return table<string, diffsize.Attrs>
 local function attributes(dir, base, paths)
   local opts = { cwd = dir, stdin = diffsize.attr_input(paths) }
   local res = run(diffsize.attr_cmd("refs/remotes/origin/" .. base), opts)
@@ -1166,28 +1166,6 @@ local function repo_of(dir)
     error("not a GitHub repo: " .. vim.trim(view.stderr or ""), 0)
   end
   return { owner = info.owner.login, name = info.name }
-end
-
---- The diff size of one PR (the greeter's PR under review), or nil if it
---- couldn't be had. Its own fetch rather than `gh pr view --json files`,
---- which stops at 100 files without saying so.
----@param dir string
----@param number integer
----@param cb fun(size: diffsize.Size?)
-function M.size(dir, number, cb)
-  coroutine.wrap(function()
-    local ok, size = pcall(function()
-      local repo = repo_of(dir)
-      local node = details(repo, { number })[1]
-      if not node then
-        return nil
-      end
-      local pr = M.from_node(node, false, repo)
-      sizes(dir, { pr })
-      return pr.size
-    end)
-    cb(ok and size or nil)
-  end)()
 end
 
 --- The checks on one PR's head (the greeter's PR), read as the queue reads
@@ -1491,6 +1469,7 @@ local MINE_TIERS = {
   { label = "queued", hl = "Special" },
   { label = "waiting", hl = "Comment" },
 }
+M.MINE_TIERS = MINE_TIERS
 
 -- ---------------------------------------------------------------------------
 -- Cache: the queue is refreshed in the background (setup()), so the picker
@@ -1625,15 +1604,14 @@ function M.setup()
   timer:start(M.INTERVAL_MS, M.INTERVAL_MS, vim.schedule_wrap(M.refresh_open))
 end
 
---- The preview's size line, markdown: "**+12 -3** in 4 files · …".
+--- The preview's size line, markdown: "**+12 -3** · 10 code · 5 test · …".
 ---@param size diffsize.Size?
 ---@return string
 local function size_line(size)
   if not size then
     return ""
   end
-  local adds, dels = diffsize.counts(size)
-  return ("**%s %s**%s"):format(adds, dels, diffsize.detail(size))
+  return diffsize.markdown(size)
 end
 
 ---@param ms integer

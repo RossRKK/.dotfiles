@@ -1,4 +1,5 @@
--- Claude Code's record of each live session, <config dir>/sessions/<pid>.json, read for the name it goes by.
+-- Claude Code's record of each live session, <config dir>/sessions/<pid>.json, read for the name it goes by,
+-- and of each session's transcript, read for the directory it ran in and the colour it last had.
 
 local M = {}
 
@@ -39,6 +40,46 @@ function M.role(roles, dir)
   end
   f:close()
   return found
+end
+
+--- The directory session `id` started in, as its transcript's first row with one
+--- records it: Claude files the transcript under it, so a resume has to run there.
+---@param projects string Claude's projects directory
+---@param id string
+---@return string?
+function M.cwd(projects, id)
+  -- Session ids are unique, so any project's directory may hold it.
+  local transcript = vim.fn.glob(projects .. "/*/" .. id .. ".jsonl", true, true)[1]
+  if not transcript then
+    return nil
+  end
+  for line in io.lines(transcript) do
+    local ok, row = pcall(vim.json.decode, line)
+    if ok and type(row) == "table" and type(row.cwd) == "string" then
+      return row.cwd
+    end
+  end
+end
+
+--- The colour each transcript's last agent-color row names, from one grep over
+--- them all: transcripts run to megabytes and the picker shouldn't wait on Lua
+--- reading them.
+---@param transcripts string[]
+---@return table<string, string> transcript -> colour
+function M.recorded_colours(transcripts)
+  if #transcripts == 0 then
+    return {}
+  end
+  local cmd = { "grep", "--null", "-HF", '"type":"agent-color"', "--", unpack(transcripts) }
+  local out = {}
+  for line in vim.gsplit(vim.system(cmd, { text = true }):wait().stdout or "", "\n") do
+    local nul = line:find("\0", 1, true)
+    local ok, row = pcall(vim.json.decode, nul and line:sub(nul + 1) or "")
+    if ok and type(row) == "table" and type(row.agentColor) == "string" then
+      out[line:sub(1, nul - 1)] = row.agentColor
+    end
+  end
+  return out
 end
 
 return M

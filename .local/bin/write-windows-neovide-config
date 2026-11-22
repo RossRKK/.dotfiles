@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Writes Windows Neovide's config from inside WSL, to %APPDATA%\neovide\config.toml.
+#
+#   write-windows-neovide-config <config.toml>
+#
+# Without Windows interop (no cmd.exe, or WSL's binfmt registration lost) it
+# warns and changes nothing, so a home-manager switch still goes through.
+set -euo pipefail
+
+main() {
+  [ $# -eq 1 ] || fail "usage: write-windows-neovide-config <config.toml>"
+  local appdata
+  if ! appdata=$(windows_dir APPDATA); then
+    warn "Windows interop unavailable, skipping Windows Neovide config"
+    return 0
+  fi
+  install -D -m 644 "$1" "$appdata/neovide/config.toml"
+}
+
+# The WSL path of the directory in Windows environment variable <name>.
+windows_dir() {
+  local dir
+  dir=$(cmd.exe /d /c "echo %$1%" 2>/dev/null | tr -d '\r') || return 1
+  [ -n "$dir" ] && [ "$dir" != "%$1%" ] || return 1
+  wslpath -u "$dir"
+}
+
+warn() {
+  printf 'write-windows-neovide-config: %s\n' "$1" >&2
+}
+
+fail() {
+  warn "$1"
+  exit 1
+}
+
+main "$@"

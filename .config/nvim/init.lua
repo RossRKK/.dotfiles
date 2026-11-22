@@ -1,3 +1,5 @@
+-- First, so messages from loading the rest of the config are logged too.
+require("util.message_log").setup({ dir = vim.fn.stdpath("log"), keep_previous = 20 })
 require("config.options")
 require("config.keymaps")
 require("config.autocmds")
