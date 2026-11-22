@@ -156,7 +156,7 @@ transcript_ending() {
   run_under_agent start '{"session_id":"s1","cwd":"/w","source":"startup"}'
 
   run jq -c 'keys' "$status_dir/s1.json"
-  [ "$output" = '["agent_pid","cwd","detail","pids","session","state","summary","transcript"]' ]
+  [ "$output" = '["agent_pid","chat_session","cwd","detail","pids","session","state","summary","transcript"]' ]
 }
 
 @test "at stop, the message in the payload wins over a transcript not yet written" {
@@ -166,4 +166,61 @@ transcript_ending() {
 
   run jq -r .summary "$status_dir/s1.json"
   [ "$output" = "Shipped the fix" ]
+}
+
+# Runs `hook <event>` with <payload> for each pair given, in turn, all under one
+# stand-in agent, as the hooks of one claude process run; echoes the agent's pid.
+run_all_under_agent() {
+  "$agent" -c 'hook=$0; echo $$
+    while [ $# -gt 0 ]; do sh -c "\"\$0\" \"\$1\"; true" "$hook" "$1" <<<"$2"; shift 2; done' "$hook" "$@"
+}
+
+@test "a new session is its own chat session" {
+  agent_pid=$(run_under_agent start '{"session_id":"s1","cwd":"/w","source":"startup"}')
+
+  run jq -r .chat_session "$status_dir/s1.json"
+  [ "$output" = s1 ]
+  [ "$(jq -r .session "$status_dir/$agent_pid.chat")" = s1 ]
+}
+
+# Starts s1, clears to s2 with the SessionEnd and SessionStart <first> and
+# <second>, then runs a turn in s2; echoes the agent's pid.
+clear_with() {
+  local -A hooks=(
+    [end]='{"session_id":"s1","cwd":"/w","reason":"clear"}'
+    [start]='{"session_id":"s2","cwd":"/w","source":"clear"}'
+  )
+  run_all_under_agent \
+    start '{"session_id":"s1","cwd":"/w","source":"startup"}' \
+    "$1" "${hooks[$1]}" "$2" "${hooks[$2]}" \
+    busy '{"session_id":"s2","cwd":"/w","prompt":"go on"}'
+}
+
+@test "after a clear the new session names the one its chat started, whichever end fires first" {
+  for order in "end start" "start end"; do
+    rm -rf "$status_dir"
+    # shellcheck disable=SC2086
+    agent_pid=$(clear_with $order)
+
+    [ "$(jq -r .chat_session "$status_dir/s2.json")" = s1 ]
+    [ ! -e "$status_dir/s1.json" ]
+    [ "$(jq -r .session "$status_dir/$agent_pid.chat")" = s1 ]
+  done
+}
+
+@test "a session ending other than by clear drops its process's chat claim" {
+  agent_pid=$(run_all_under_agent \
+    start '{"session_id":"s1","cwd":"/w","source":"startup"}' \
+    end '{"session_id":"s1","cwd":"/w","reason":"prompt_input_exit"}')
+
+  [ ! -e "$status_dir/$agent_pid.chat" ]
+}
+
+@test "a chat claim a dead process left on the same pid is replaced" {
+  mkdir -p "$status_dir"
+  "$agent" -c 'printf "{\"session\":\"old\",\"pid_start\":1}\n" >"$1/$$.chat"
+    sh -c "\"\$0\" start; true" "$0" <<<"{\"session_id\":\"s1\",\"cwd\":\"/w\"}"' "$hook" "$status_dir"
+
+  run jq -r .chat_session "$status_dir/s1.json"
+  [ "$output" = s1 ]
 }

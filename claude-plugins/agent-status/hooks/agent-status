@@ -24,7 +24,8 @@
 # Output: $XDG_RUNTIME_DIR/claude-agents/<session_id>.json, plus one
 # <session_id>.<task_id>.task per background Bash task, all written atomically
 # (write to .tmp, rename) so a reader never sees half a file. Every write
-# carries every field, so a reader never meets a missing key.
+# carries every field, so a reader never meets a missing key. Each claude process
+# also claims <agent_pid>.chat, naming the session it first ran under.
 set -euo pipefail
 
 event=${1:-busy}
@@ -92,6 +93,20 @@ record_task() {
       write_atomically "$dir/$session.$id.task"
     return
   done
+}
+
+# The session the claude process <agent> first ran under, claimed the first time
+# it is seen: /clear moves the process to a new session id, but the chat that
+# started it still knows it by the first. The claim's start time tells it from
+# one a dead process on the same pid left.
+chat_session() {
+  local claim=$dir/$1.chat started
+  started=$(start_time "$1")
+  if [ "$(jq -r .pid_start "$claim" 2>/dev/null)" != "$started" ]; then
+    jq -nc --arg session "$session" --argjson pid_start "$started" \
+      '{session: $session, pid_start: $pid_start}' | write_atomically "$claim"
+  fi
+  jq -r .session "$claim"
 }
 
 # starttime is field 22 of stat, i.e. the 20th after the parenthesised comm.
@@ -216,6 +231,11 @@ stop)
   ;;
 end)
   rm -f "$dir/$session.json" "$dir/$session".*.task
+  # After /clear or /resume the process goes on under another session, still its chat's.
+  case $(get .reason) in
+  clear | resume) ;;
+  *) rm -f "$dir/$agent.chat" ;;
+  esac
   exit 0
   ;;
 esac
@@ -224,6 +244,7 @@ esac
 
 jq -nc \
   --arg session "$session" \
+  --arg chat_session "$(chat_session "$agent")" \
   --arg state "$state" \
   --arg detail "$detail" \
   --arg summary "$summary" \
@@ -232,6 +253,6 @@ jq -nc \
   --arg pids "$pids" \
   --argjson agent "$agent" \
   '{session: $session, state: $state, detail: $detail, summary: $summary, cwd: $cwd,
-    agent_pid: $agent, transcript: $transcript,
+    agent_pid: $agent, chat_session: $chat_session, transcript: $transcript,
     pids: ($pids | split(" ") | map(select(. != "") | tonumber))}' |
   write_atomically "$dir/$session.json"
