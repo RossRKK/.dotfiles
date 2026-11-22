@@ -521,7 +521,7 @@ newest with `tail -f "$(ls -t ~/.local/state/nvim/logs/messages-*.log | head -1)
 | ---------- | --------------------------------------------------- |
 | `Space+uh` | Toggle inlay hints (off by default; current buffer) |
 | `Space+um` | Toggle the mouse (off by default)                   |
-| `Space+ur` | Toggle markdown rendering (on by default; tables in agent chats) |
+| `Space+ur` | Toggle markdown rendering in this buffer (on by default in markdown files and agent chats) |
 
 ### Space+cf — Format (conform)
 

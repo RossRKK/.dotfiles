@@ -1,19 +1,21 @@
--- render-markdown.nvim: an agent chat's replies drawn as rendered markdown.
--- Only in the chat (AgenticChat, which agentic parses as markdown); files stay raw.
+-- render-markdown.nvim: markdown files and agent chats' replies (AgenticChat, which
+-- agentic parses as markdown) drawn as rendered markdown, under one config.
 local rerender_on_write -- defined below the spec
+
+local file_types = { "markdown", "AgenticChat" }
 
 local spec = {
   {
     "MeanderingProgrammer/render-markdown.nvim",
     dependencies = { "nvim-treesitter/nvim-treesitter" },
-    ft = { "AgenticChat" },
+    ft = file_types,
     keys = {
-      { "<leader>ur", "<cmd>RenderMarkdown toggle<cr>", desc = "Toggle markdown rendering" },
+      { "<leader>ur", "<cmd>RenderMarkdown buf_toggle<cr>", desc = "Toggle markdown rendering in this buffer" },
     },
     ---@module 'render-markdown'
     ---@type render.md.UserConfig
     opts = {
-      file_types = { "AgenticChat" },
+      file_types = file_types,
       -- The chat is read while typing in the prompt, so it renders in every mode.
       render_modes = true,
     },
