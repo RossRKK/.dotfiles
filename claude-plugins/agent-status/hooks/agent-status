@@ -75,12 +75,10 @@ current_state() {
 # Records a background Bash task. Its pid and output path come from the agent's
 # child whose stdout is the task's output file: the payload carries only the id.
 record_task() {
-  local agent=$1 id=$2 child output stat
+  local agent=$1 id=$2 child output
   for child in $(cat /proc/"$agent"/task/*/children 2>/dev/null); do
     output=$(readlink "/proc/$child/fd/1" 2>/dev/null) || continue
     [[ $output == */tasks/"$id".output ]] || continue
-    stat=$(cat "/proc/$child/stat")
-    # starttime is field 22 of stat, i.e. the 20th after the parenthesised comm.
     jq -nc \
       --arg session "$session" \
       --arg id "$id" \
@@ -88,7 +86,7 @@ record_task() {
       --arg command "$(get .tool_input.command)" \
       --arg output "$output" \
       --argjson pid "$child" \
-      --argjson pid_start "$(printf '%s' "${stat##*) }" | cut -d' ' -f20)" \
+      --argjson pid_start "$(start_time "$child")" \
       '{session: $session, id: $id, description: $description, command: $command,
         output: $output, pid: $pid, pid_start: $pid_start}' |
       write_atomically "$dir/$session.$id.task"
@@ -96,10 +94,42 @@ record_task() {
   done
 }
 
+# starttime is field 22 of stat, i.e. the 20th after the parenthesised comm.
+start_time() {
+  local line
+  line=$(cat "/proc/$1/stat" 2>/dev/null) || return 0
+  printf '%s' "${line##*) }" | cut -d' ' -f20
+}
+
 write_atomically() {
   cat >"$1.tmp"
   mv -f "$1.tmp" "$1"
 }
+
+# The pid chain from this hook up to init. fishmonger matches a session to a
+# terminal by looking for that terminal's shell pid in here -- exact even with
+# several agents in one directory, and it needs no wrapper script or env var,
+# because the hook is by construction a descendant of the shell that ran claude.
+#
+# The claude process itself is singled out on the way up, as the thing whose
+# being alive means the session is: every other pid in the chain (the shell,
+# nvim, the login session) outlives it, so a crashed agent that never got to run
+# its SessionEnd hook would otherwise leave a file that looks live forever.
+pids=
+agent=
+pid=$PPID
+while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
+  pids="$pids$pid "
+  # nix's binary is .claude-unwrapped, which comm truncates to 15 chars.
+  case $(cat "/proc/$pid/comm" 2>/dev/null) in
+  claude | .claude-unwrapp) [ -n "$agent" ] || agent=$pid ;;
+  esac
+  # /proc/<pid>/stat: ppid is the field after the parenthesised comm and state,
+  # and comm may itself contain spaces or brackets, so cut at the LAST ")".
+  line=$(cat "/proc/$pid/stat" 2>/dev/null) || break
+  pid=$(printf '%s' "${line##*) }" | cut -d' ' -f2)
+done
+: "${agent:=$PPID}"
 
 state=$event
 detail=
@@ -189,31 +219,6 @@ end)
   exit 0
   ;;
 esac
-
-# The pid chain from this hook up to init. fishmonger matches a session to a
-# terminal by looking for that terminal's shell pid in here -- exact even with
-# several agents in one directory, and it needs no wrapper script or env var,
-# because the hook is by construction a descendant of the shell that ran claude.
-#
-# The claude process itself is singled out on the way up, as the thing whose
-# being alive means the session is: every other pid in the chain (the shell,
-# nvim, the login session) outlives it, so a crashed agent that never got to run
-# its SessionEnd hook would otherwise leave a file that looks live forever.
-pids=
-agent=
-pid=$PPID
-while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
-  pids="$pids$pid "
-  # nix's binary is .claude-unwrapped, which comm truncates to 15 chars.
-  case $(cat "/proc/$pid/comm" 2>/dev/null) in
-  claude | .claude-unwrapp) [ -n "$agent" ] || agent=$pid ;;
-  esac
-  # /proc/<pid>/stat: ppid is the field after the parenthesised comm and state,
-  # and comm may itself contain spaces or brackets, so cut at the LAST ")".
-  line=$(cat "/proc/$pid/stat" 2>/dev/null) || break
-  pid=$(printf '%s' "${line##*) }" | cut -d' ' -f2)
-done
-: "${agent:=$PPID}"
 
 [ -z "$task_id" ] || record_task "$agent" "$task_id"
 
