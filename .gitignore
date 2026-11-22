@@ -1,3 +1,6 @@
 # Written by Claude Code when it loads a plugin with a hooks module.
 claude-plugins/*/.claude-plugin/types/
 claude-plugins/*/tsconfig.json
+
+# Claude Code's per-agent git worktrees.
+.claude/worktrees/
