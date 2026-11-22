@@ -56,22 +56,28 @@ test("a session whose transcript has a title keeps it and asks back the colour i
   expect(ran).toEqual(['/color blue'])
 })
 
-test('a /clear gives the colour back from the transcript it leaves, keeping the title', async ($, on) => {
-  const { ran, scripts, clock } = engine(on, NAMED)
+// What the scripts print for the session /clear moves to.
+const CLEARED = { 'session-name def': 'brave-owl\n', 'claim-colour --fresh': 'green\n' }
 
+test('a /clear gives the new session its own name and a fresh colour', async ($, on) => {
+  const { ran, scripts, clock } = engine(on, { ...PET, ...CLEARED })
+
+  await $.session.start(START)
+  await clock.settle()
   await $.command.run(typed('clear'))
   await clock.settle()
-  expect(scripts).toContainEqual(['recorded', 'colour', 'abc'])
-  expect(scripts).toContainEqual(['claim-colour', 'cyan'])
-  expect(ran).toEqual(['/clear', '/color blue'])
+  expect(scripts).toContainEqual(['session-name', 'def'])
+  expect(scripts).toContainEqual(['claim-colour', '--fresh'])
+  expect(ran).toEqual(['/rename loyal-fly', '/color blue', '/clear', '/rename brave-owl', '/color green'])
 })
 
-test('a /clear of a session with no title names it', async ($, on) => {
-  const { ran, clock } = engine(on, PET)
+test('a /clear renames over the title Claude carries across, reading nothing back', async ($, on) => {
+  const { ran, scripts, clock } = engine(on, { ...NAMED, ...CLEARED })
 
   await $.command.run(typed('clear'))
   await clock.settle()
-  expect(ran).toEqual(['/clear', '/rename loyal-fly', '/color blue'])
+  expect(scripts.map(([script]) => script)).not.toContain('recorded')
+  expect(ran).toEqual(['/clear', '/rename brave-owl', '/color green'])
 })
 
 test('other commands leave the name and colour alone', async ($, on) => {

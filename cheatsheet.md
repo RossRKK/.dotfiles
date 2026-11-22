@@ -272,10 +272,11 @@ Opening a workspace starts **an agent chat in terminal 1**, continuing that
 directory's newest conversation (as `claude --continue` would), or a new one if
 there is none. Once a session starts, the `claude-plugins/session-identity`
 mod gives it a **name** derived from its id (`/rename`, e.g. `calm-otter`) and
-the `/color` fewest live sessions are using. A session that already has a name
-(resumed, or after `/clear`) keeps it and only gets its colour back -- on resume
-the colour it last had, unless another live session holds it; a fork gets a
-fresh name of its own. The name is what
+the `/color` fewest live sessions are using. A resumed session keeps its name
+and gets back the colour it last had, unless another live session holds it; a
+fork gets a fresh name of its own. `/clear` starts a new session, so it gets a
+new name and a colour other than the one it had (a standing role or launch
+name stays). The name is what
 other sessions address it by (`ListAgents` / `SendMessage`), and fishmonger draws
 that terminal's tab and agent-view row in the same colour as its prompt bar.
 

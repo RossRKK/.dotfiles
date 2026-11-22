@@ -11,13 +11,20 @@ export const register: Register = (on) => {
     return started
   })
 
-  // /clear moves to a new transcript that keeps the title but not the colour, so the old one is read first.
+  // /clear starts a new session in the same process, which takes a new identity over the title Claude carries across.
   on('command.run', { command: 'clear' }, async ($, e, next) => {
-    const identity = await discover($, await $.session.id())
     const cleared = await next(e)
-    show($, identity)
+    show($, await fresh($, await $.session.id()))
     return cleared
   })
+}
+
+// A new session <id>'s name, and a colour other than the one its process held.
+async function fresh($: EngineInterface, id: string): Promise<Identity> {
+  return {
+    name: await output($, ['session-name', id]),
+    colour: await output($, ['claim-colour', '--fresh']),
+  }
 }
 
 // A title session <id>'s transcript holds is kept, and the colour it last had asked for again.
