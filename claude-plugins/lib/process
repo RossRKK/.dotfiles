@@ -1,0 +1,93 @@
+# Process queries for the mods' hooks, sourced. Read from /proc where the kernel
+# has one, else from ps and lsof (macOS); PROCESS_SOURCE=ps forces the latter so
+# Linux tests cover it. Kept to bash 3.2, as macOS's /bin/bash may run it.
+
+case ${PROCESS_SOURCE:-} in
+proc | ps) process_source=$PROCESS_SOURCE ;;
+'') if [ -r /proc/self/stat ]; then process_source=proc; else process_source='ps'; fi ;;
+*) echo "process: PROCESS_SOURCE must be proc or ps, not '$PROCESS_SOURCE'" >&2 && return 2 ;;
+esac
+
+# Prints "<pid> <name>" for <pid> and each of its ancestors below init.
+process_ancestry() {
+  "process_ancestry_$process_source" "$1"
+}
+
+# Prints a number that stays the same for as long as <pid> runs and tells it from
+# a later process on the same pid; prints nothing once it has exited.
+process_started() {
+  "process_started_$process_source" "$1"
+}
+
+# Prints "<child> <stdout target>" for each child of <pid>.
+process_outputs() {
+  "process_outputs_$process_source" "$1"
+}
+
+# Whether <name> is a claude process's; nix's binary is .claude-unwrapped, which
+# Linux truncates to 15 characters and macOS to 16.
+is_claude() {
+  case $1 in
+  claude | .claude-unwrapp*) return 0 ;;
+  *) return 1 ;;
+  esac
+}
+
+process_ancestry_proc() {
+  local pid=$1 name line
+  while [ "$pid" -gt 1 ] 2>/dev/null; do
+    name=$(cat "/proc/$pid/comm" 2>/dev/null) || return 0
+    printf '%s %s\n' "$pid" "$name"
+    # ppid follows the state after the LAST ")", since comm may contain one.
+    line=$(cat "/proc/$pid/stat" 2>/dev/null) || return 0
+    pid=$(printf '%s' "${line##*) }" | cut -d' ' -f2)
+  done
+}
+
+# starttime is field 22 of stat, i.e. the 20th after the parenthesised comm.
+process_started_proc() {
+  local line
+  line=$(cat "/proc/$1/stat" 2>/dev/null) || return 0
+  printf '%s' "${line##*) }" | cut -d' ' -f20
+}
+
+process_outputs_proc() {
+  local child output
+  for child in $(cat /proc/"$1"/task/*/children 2>/dev/null); do
+    output=$(readlink "/proc/$child/fd/1" 2>/dev/null) || continue
+    printf '%s %s\n' "$child" "$output"
+  done
+}
+
+# One ps for the whole walk; comm is last as it may hold spaces, and macOS gives its full path.
+process_ancestry_ps() {
+  ps -A -o pid= -o ppid= -o comm= | awk -v pid="$1" '
+    {
+      comm = $0
+      sub(/^[ \t]*[0-9]+[ \t]+[0-9]+[ \t]+/, "", comm)
+      parent[$1] = $2
+      name[$1] = comm
+      sub(/.*\//, "", name[$1])
+    }
+    END { for (p = pid; p > 1 && (p in parent); p = parent[p]) print p, name[p] }'
+}
+
+# The start time to the second as YYYYMMDDhhmmss, read in a fixed locale and zone
+# so every reader gets the same number.
+process_started_ps() {
+  { LC_ALL=C TZ=UTC0 ps -o lstart= -p "$1" 2>/dev/null || true; } | awk '
+    {
+      month = index("JanFebMarAprMayJunJulAugSepOctNovDec", $2)
+      gsub(":", "", $4)
+      if (month) printf "%04d%02d%02d%s\n", $5, (month + 2) / 3, $3, $4
+    }'
+}
+
+process_outputs_ps() {
+  local children
+  children=$(ps -A -o pid= -o ppid= | awk -v parent="$1" '$2 == parent { printf "%s%s", sep, $1; sep = "," }')
+  [ -n "$children" ] || return 0
+  # lsof fails when any of them has gone, still listing the rest.
+  { lsof -w -a -d 1 -Fn -p "$children" 2>/dev/null || true; } |
+    awk '/^p/ { pid = substr($0, 2) } /^n/ { print pid, substr($0, 2) }'
+}
