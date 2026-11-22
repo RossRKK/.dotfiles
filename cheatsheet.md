@@ -383,7 +383,7 @@ terminal 1 comes back: other terminals' jobs and the open files don't.
 
 | Key  | Action                                   |
 | ---- | ---------------------------------------- |
-| `gd` | Go to definition                         |
+| `gd` | Go to definition. On a markdown link (files and agent chats) to a URL, opens it in the browser; a link to a file or `#heading` goes there |
 | `gi` | Go to implementation                     |
 | `gr` | Go to references                         |
 | `gf` / `gF` | The builtins (nvim's own parsing, via `Ctrl-W f` / `Ctrl-W F`), opened in the **main window**. `gF` also jumps to the line (`foo.rs:42`, `foo.rs (42)`, …). Works from the terminal (enter terminal-normal mode with `Ctrl+N` first): jump to a path a program printed |
