@@ -1,6 +1,6 @@
 -- Telling "the clipboard holds text" from "the clipboard holds an image", and
--- reading the image (or copied files) from Windows, for the Ctrl+V mappings in
--- config/keymaps.lua and the agent chat's prompt (config/agent_chat.lua).
+-- reading the image (or copied files) from Windows or Wayland, for the Ctrl+V
+-- mappings in config/keymaps.lua and the agent chat's prompt (config/agent_chat.lua).
 --
 -- This can't be inferred from whether `getreg("+")` errors. Whether it does is
 -- a property of the *provider*, not of the clipboard: win32yank rejects image
@@ -97,13 +97,24 @@ local READ_WINDOWS = table.concat({
   "else { [Windows.Forms.Clipboard]::GetFileDropList() | ForEach-Object { 'file ' + $_ } }",
 }, " ")
 
---- @alias util.clipboard.Windows
+--- @alias util.clipboard.Content
 --- | { kind: "image", png: string }
 --- | { kind: "files", paths: string[] }
 
+--- Read the clipboard's image or copied files, calling `on_read` on the main loop with them
+--- (files as local paths), or nil for neither: from Windows on WSL, else from Wayland.
+--- @param on_read fun(content: util.clipboard.Content|nil)
+function M.read(on_read)
+  if vim.fn.has("wsl") == 1 then
+    M.read_windows(on_read)
+  else
+    M.read_wayland(on_read)
+  end
+end
+
 --- What READ_WINDOWS printed: an image's PNG bytes, or the Windows paths of files copied in Explorer.
 --- @param stdout string
---- @return util.clipboard.Windows|nil
+--- @return util.clipboard.Content|nil
 function M.parse_windows(stdout)
   local paths = {}
   for line in vim.gsplit(stdout, "\r?\n", { trimempty = true }) do
@@ -119,7 +130,7 @@ end
 
 --- Read the Windows clipboard's image or copied files, calling `on_read` on the main loop
 --- with them (copied files as WSL paths), or nil for neither.
---- @param on_read fun(content: util.clipboard.Windows|nil)
+--- @param on_read fun(content: util.clipboard.Content|nil)
 function M.read_windows(on_read)
   vim.system({ "powershell.exe", "-NoProfile", "-Command", READ_WINDOWS }, { text = true }, function(result)
     vim.schedule(function()
@@ -128,6 +139,55 @@ function M.read_windows(on_read)
         content.paths = vim.tbl_map(M.wsl_path, content.paths)
       end
       on_read(content)
+    end)
+  end)
+end
+
+--- Which of the types `wl-paste --list-types` printed to read: a PNG, else copied files' URIs.
+--- @param types string
+--- @return "image/png"|"text/uri-list"|nil
+function M.wayland_type(types)
+  local offered = {}
+  for mime in vim.gsplit(types, "\n", { trimempty = true }) do
+    offered[mime] = true
+  end
+  return (offered["image/png"] and "image/png") or (offered["text/uri-list"] and "text/uri-list") or nil
+end
+
+--- The clipboard's `mime` content as `wl-paste` gave it: an image's PNG bytes, or copied files' paths.
+--- @param mime "image/png"|"text/uri-list"
+--- @param data string
+--- @return util.clipboard.Content|nil
+function M.parse_wayland(mime, data)
+  if mime == "image/png" then
+    return data ~= "" and { kind = "image", png = data } or nil
+  end
+  local paths = {}
+  for uri in vim.gsplit(data, "\r?\n", { trimempty = true }) do
+    -- RFC 2483: a # line is a comment; only local files can be attached.
+    if uri:match("^file://") then
+      paths[#paths + 1] = vim.uri_to_fname(uri)
+    end
+  end
+  return #paths > 0 and { kind = "files", paths = paths } or nil
+end
+
+--- Read the Wayland clipboard's image or copied files, calling `on_read` on the main loop
+--- with them, or nil for neither.
+--- @param on_read fun(content: util.clipboard.Content|nil)
+function M.read_wayland(on_read)
+  local function done(content)
+    vim.schedule(function()
+      on_read(content)
+    end)
+  end
+  vim.system({ "wl-paste", "--list-types" }, { text = true }, function(listed)
+    local mime = listed.code == 0 and M.wayland_type(listed.stdout) or nil
+    if not mime then
+      return done(nil)
+    end
+    vim.system({ "wl-paste", "--no-newline", "--type", mime }, {}, function(result)
+      done(result.code == 0 and M.parse_wayland(mime, result.stdout) or nil)
     end)
   end)
 end

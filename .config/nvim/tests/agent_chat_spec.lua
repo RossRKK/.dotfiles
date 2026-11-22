@@ -433,7 +433,7 @@ describe("agent_chat.new", function()
 
   describe("pasting in its prompt", function()
     local clipboard = require("util.clipboard")
-    local text, read_windows = clipboard.text, clipboard.read_windows
+    local text, read = clipboard.text, clipboard.read
     local held_text, held_windows, session
     local clipboard_setting, provider = vim.o.clipboard, vim.g.clipboard
 
@@ -459,7 +459,7 @@ describe("agent_chat.new", function()
       clipboard.text = function()
         return held_text
       end
-      clipboard.read_windows = function(on_read)
+      clipboard.read = function(on_read)
         on_read(held_windows)
       end
       new()
@@ -468,7 +468,7 @@ describe("agent_chat.new", function()
     end)
 
     after_each(function()
-      clipboard.text, clipboard.read_windows = text, read_windows
+      clipboard.text, clipboard.read = text, read
       vim.o.clipboard, vim.g.clipboard = clipboard_setting, provider
       vim.g.loaded_clipboard_provider = nil
       vim.cmd.runtime("autoload/provider/clipboard.vim")

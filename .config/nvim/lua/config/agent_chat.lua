@@ -232,7 +232,7 @@ function stop(key)
 end
 
 --- Paste the clipboard into session `key`'s prompt: text goes in by `put_text`, unless it is only a
---- path to a file, which is attached, as are an image and files copied on Windows.
+--- path to a file, which is attached, as are a copied image and copied files.
 ---@param key integer
 ---@param put_text fun(text: string)
 function paste(key, put_text)
@@ -245,7 +245,7 @@ function paste(key, put_text)
     end
     return
   end
-  clipboard.read_windows(function(content)
+  clipboard.read(function(content)
     if not content then
       vim.notify("Nothing to paste: the clipboard holds no text, image or file", vim.log.levels.INFO)
     elseif content.kind == "files" then

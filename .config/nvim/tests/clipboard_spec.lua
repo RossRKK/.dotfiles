@@ -104,6 +104,76 @@ describe("clipboard.parse_windows", function()
   end)
 end)
 
+describe("clipboard.read", function()
+  local has, read_windows, read_wayland = vim.fn.has, clipboard.read_windows, clipboard.read_wayland
+
+  after_each(function()
+    vim.fn.has, clipboard.read_windows, clipboard.read_wayland = has, read_windows, read_wayland
+  end)
+
+  --- Which clipboard `read` reads when nvim is (`wsl`) or isn't on WSL.
+  local function reads_from(wsl)
+    local from
+    vim.fn.has = function(feature, ...) ---@diagnostic disable-line: duplicate-set-field, unused-local
+      return feature == "wsl" and (wsl and 1 or 0) or has(feature)
+    end
+    clipboard.read_windows = function()
+      from = "windows"
+    end
+    clipboard.read_wayland = function()
+      from = "wayland"
+    end
+    clipboard.read(function() end)
+    return from
+  end
+
+  it("reads Windows' clipboard on WSL", function()
+    assert.equals("windows", reads_from(true))
+  end)
+
+  -- The bug this guards: off WSL there is no powershell.exe, and spawning it raised ENOENT.
+  it("reads Wayland's clipboard off WSL", function()
+    assert.equals("wayland", reads_from(false))
+  end)
+end)
+
+describe("clipboard.wayland_type", function()
+  it("reads a PNG when one is offered, whatever else is", function()
+    assert.equals("image/png", clipboard.wayland_type("application/x-qt-image\nimage/png\nimage/bmp\n"))
+  end)
+
+  it("reads copied files' URIs when there is no PNG", function()
+    assert.equals("text/uri-list", clipboard.wayland_type("text/uri-list\ntext/plain\n"))
+  end)
+
+  it("reads nothing for neither", function()
+    assert.is_nil(clipboard.wayland_type("text/plain\n"))
+    assert.is_nil(clipboard.wayland_type(""))
+  end)
+end)
+
+describe("clipboard.parse_wayland", function()
+  it("reads an image as its PNG bytes", function()
+    local png = "\137PNG\r\n\26\n\0\0\0\13IHDR"
+    assert.same({ kind = "image", png = png }, clipboard.parse_wayland("image/png", png))
+  end)
+
+  it("reads copied files as their paths, skipping comments and other schemes", function()
+    assert.same(
+      { kind = "files", paths = { "/home/me/Shot 1.png", "/tmp/x.txt" } },
+      clipboard.parse_wayland(
+        "text/uri-list",
+        "# copied\r\nfile:///home/me/Shot%201.png\r\nhttps://example.com/y\r\nfile:///tmp/x.txt\r\n"
+      )
+    )
+  end)
+
+  it("is nil for an empty image or no local file", function()
+    assert.is_nil(clipboard.parse_wayland("image/png", ""))
+    assert.is_nil(clipboard.parse_wayland("text/uri-list", "https://example.com/y\n"))
+  end)
+end)
+
 describe("clipboard.path_in", function()
   it("is a Linux path", function()
     assert.equals("/tmp/shot.png", clipboard.path_in("/tmp/shot.png\n"))
