@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Prints the prompt-bar colour of the claude process this runs under: <preferred>
 # when no other live session holds it, or else the one it already claimed, or
-# else the colour fewest live sessions hold, claimed for it. Fails when there is
-# no claude above it.
+# else the colour fewest live sessions hold, claimed for it. With --fresh, the
+# colour fewest other live sessions hold other than the one it held, claimed in
+# its place. Fails when there is no claude above it.
 #
-#   claim-colour [<preferred>]
+#   claim-colour [<preferred> | --fresh]
 #
 # Each claim is $XDG_RUNTIME_DIR/claude-agents/<pid>.colour (fishmonger colours
 # the session's tab from it too); its recorded start time tells a live claim
@@ -22,7 +23,19 @@ main() {
   # Under a lock so sessions started together don't pick the same colour.
   exec 9>"$dir/colours.lock"
   flock 9
-  { free "$preferred" && record "$agent" "$preferred"; } || claimed "$agent" || claim "$agent"
+  if [ "$preferred" = --fresh ]; then
+    replace "$agent"
+  else
+    { free "$preferred" && record "$agent" "$preferred"; } || claimed "$agent" || claim "$agent"
+  fi
+}
+
+# Claims for <pid> a colour other than the one it holds, not counting its own claim.
+replace() {
+  local held
+  held=$(claimed "$1") || held=
+  rm -f "$dir/$1.colour"
+  claim "$1" "$held"
 }
 
 # Whether <colour> is in the palette and held by no live session.
@@ -39,10 +52,12 @@ claimed() {
     jq -er .colour "$dir/$1.colour"
 }
 
+# Claims for <pid> the colour fewest live sessions hold, other than <avoided>.
 claim() {
-  record "$1" "$(live_colours | jq -rRn --argjson palette "$palette" '
+  record "$1" "$(live_colours | jq -rRn --argjson palette "$palette" --arg avoided "${2-}" '
     [inputs] as $live
     | $palette | to_entries
+    | map(select(.value != $avoided))
     | min_by([(.value as $c | $live | map(select(. == $c)) | length), .key])
     | .value')"
 }

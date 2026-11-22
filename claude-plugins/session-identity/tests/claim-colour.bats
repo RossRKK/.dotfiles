@@ -103,3 +103,32 @@ prefer_in_claude() {
     sh -c "\"\$0\" green" "$0" </dev/null' "$claim" "$claims"
   [ "$output" = green ]
 }
+
+# Runs `claim-colour --fresh` under a stand-in claude that holds <colour>; prints its output.
+fresh_from() {
+  "$agent" -c 'printf "{\"colour\":\"%s\",\"pid_start\":%s}\n" "$2" "$(cut -d" " -f22 /proc/$$/stat)" >"$1/$$.colour"
+    sh -c "\"\$0\" --fresh" "$0" </dev/null' "$claim" "$claims" "$1"
+}
+
+@test "a fresh claim gives up the colour the session held for another" {
+  run fresh_from red
+  [ "$output" = blue ]
+}
+
+@test "a fresh claim skips colours other live sessions hold" {
+  live_claim $$ blue
+
+  run fresh_from red
+  [ "$output" = green ]
+}
+
+@test "a fresh claim replaces the session's own claim" {
+  run "$agent" -c 'printf "{\"colour\":\"red\",\"pid_start\":%s}\n" "$(cut -d" " -f22 /proc/$$/stat)" >"$1/$$.colour"
+    sh -c "\"\$0\" --fresh" "$0" </dev/null; echo "$$"' "$claim" "$claims"
+  [ "$(jq -r .colour "$claims/${lines[1]}.colour")" = blue ]
+}
+
+@test "a fresh claim for a session holding nothing is the usual first claim" {
+  run "$agent" -c 'sh -c "\"\$0\" --fresh" "$0" </dev/null' "$claim"
+  [ "$output" = red ]
+}
