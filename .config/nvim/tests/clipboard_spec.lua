@@ -99,41 +99,62 @@ describe("clipboard.parse_script_output", function()
     )
   end)
 
+  it("reads files copied in Finder as their paths", function()
+    assert.same(
+      { kind = "files", paths = { "/Users/me/Shot 1.png", "/tmp/x.txt" } },
+      clipboard.parse_script_output("file /Users/me/Shot 1.png\nfile /tmp/x.txt\n")
+    )
+  end)
+
   it("is nil for neither", function()
     assert.is_nil(clipboard.parse_script_output(""))
+    assert.is_nil(clipboard.parse_script_output("\n"))
   end)
 end)
 
 describe("clipboard.read", function()
-  local has, read_windows, read_wayland = vim.fn.has, clipboard.read_windows, clipboard.read_wayland
+  local has, notify, display = vim.fn.has, vim.notify, vim.env.WAYLAND_DISPLAY
+  local readers = { clipboard.read_windows, clipboard.read_mac, clipboard.read_wayland }
 
   after_each(function()
-    vim.fn.has, clipboard.read_windows, clipboard.read_wayland = has, read_windows, read_wayland
+    vim.fn.has, vim.notify, vim.env.WAYLAND_DISPLAY = has, notify, display
+    clipboard.read_windows, clipboard.read_mac, clipboard.read_wayland = unpack(readers)
   end)
 
-  --- Which clipboard `read` reads when nvim is (`wsl`) or isn't on WSL.
-  local function reads_from(wsl)
-    local from
+  --- Which clipboard `read` reads with these `features` (`has` true) and `$WAYLAND_DISPLAY`, and what it notified.
+  local function reads_from(features, wayland_display)
+    local from, notified
     vim.fn.has = function(feature, ...) ---@diagnostic disable-line: duplicate-set-field, unused-local
-      return feature == "wsl" and (wsl and 1 or 0) or has(feature)
+      return vim.tbl_contains(features, feature) and 1 or 0
     end
-    clipboard.read_windows = function()
-      from = "windows"
+    vim.env.WAYLAND_DISPLAY = wayland_display
+    vim.notify = function(msg, level, opts) ---@diagnostic disable-line: duplicate-set-field, unused-local
+      notified = level
     end
-    clipboard.read_wayland = function()
-      from = "wayland"
+    for _, source in ipairs({ "windows", "mac", "wayland" }) do
+      clipboard["read_" .. source] = function()
+        from = source
+      end
     end
     clipboard.read(function() end)
-    return from
+    return from, notified
   end
 
-  it("reads Windows' clipboard on WSL", function()
-    assert.equals("windows", reads_from(true))
-  end)
+  -- The bug this guards: spawning a reader the platform lacks (powershell.exe, wl-paste) raised ENOENT.
+  for _, case in ipairs({
+    { "Windows' on WSL, even under WSLg's Wayland", { "wsl", "unix" }, "wayland-0", "windows" },
+    { "the macOS pasteboard on a Mac", { "mac", "unix" }, nil, "mac" },
+    { "Wayland's under Wayland", { "unix" }, "wayland-1", "wayland" },
+  }) do
+    local name, features, wayland_display, source = unpack(case)
+    it("reads " .. name, function()
+      assert.same({ source }, { reads_from(features, wayland_display) })
+    end)
+  end
 
-  -- The bug this guards: off WSL there is no powershell.exe, and spawning it raised ENOENT.
-  it("reads Wayland's clipboard off WSL", function()
-    assert.equals("wayland", reads_from(false))
+  it("says so, spawning nothing, where it has no reader (X11)", function()
+    assert.same({ nil, vim.log.levels.WARN }, { reads_from({ "unix" }, "") })
+    assert.same({ nil, vim.log.levels.WARN }, { reads_from({ "unix" }, nil) })
   end)
 end)
 

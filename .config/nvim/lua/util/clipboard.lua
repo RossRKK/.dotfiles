@@ -1,5 +1,5 @@
 -- Telling "the clipboard holds text" from "the clipboard holds an image", and
--- reading the image (or copied files) from Windows or Wayland, for the Ctrl+V
+-- reading the image (or copied files) from Windows, macOS or Wayland, for the Ctrl+V
 -- mappings in config/keymaps.lua and the agent chat's prompt (config/agent_chat.lua).
 --
 -- This can't be inferred from whether `getreg("+")` errors. Whether it does is
@@ -97,22 +97,59 @@ local READ_WINDOWS = table.concat({
   "else { [Windows.Forms.Clipboard]::GetFileDropList() | ForEach-Object { 'file ' + $_ } }",
 }, " ")
 
+-- JXA over AppKit ships with macOS, unlike pngpaste; files first, as Finder adds their icons as an image.
+local READ_MAC = table.concat({
+  'ObjC.import("AppKit");',
+  "function run() {",
+  "  const pb = $.NSPasteboard.generalPasteboard;",
+  "  const urls = ObjC.unwrap(pb.readObjectsForClassesOptions($([$.NSURL]),",
+  "    $({ NSPasteboardURLReadingFileURLsOnlyKey: true })));",
+  '  if (urls && urls.length) return urls.map((u) => "file " + u.path.js).join("\\n");',
+  "  const image = $.NSImage.alloc.initWithPasteboard(pb);",
+  '  if (image.isNil()) return "";',
+  "  const png = $.NSBitmapImageRep.imageRepWithData(image.TIFFRepresentation)",
+  "    .representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $({}));",
+  '  return "png " + png.base64EncodedStringWithOptions(0).js;',
+  "}",
+}, "\n")
+
 --- @alias util.clipboard.Content
 --- | { kind: "image", png: string }
 --- | { kind: "files", paths: string[] }
 
+--- @alias util.clipboard.Source "windows"|"mac"|"wayland"
+
+local READERS = { windows = "read_windows", mac = "read_mac", wayland = "read_wayland" }
+
 --- Read the clipboard's image or copied files, calling `on_read` on the main loop with them
---- (files as local paths), or nil for neither: from Windows on WSL, else from Wayland.
+--- (files as local paths), or nil for neither. Where there is no reader (X11) it says so instead.
 --- @param on_read fun(content: util.clipboard.Content|nil)
 function M.read(on_read)
-  if vim.fn.has("wsl") == 1 then
-    M.read_windows(on_read)
-  else
-    M.read_wayland(on_read)
+  local source = M.source()
+  if not source then
+    vim.notify(
+      "Can't read a clipboard image or files here: only WSL, macOS and Wayland",
+      vim.log.levels.WARN
+    )
+    return
   end
+  M[READERS[source]](on_read)
 end
 
---- What READ_WINDOWS printed: an image's PNG bytes, or the Windows paths of files copied in Explorer.
+--- Whose clipboard to read an image from here: Windows on WSL, macOS, Wayland, or none known.
+--- @return util.clipboard.Source|nil
+function M.source()
+  if vim.fn.has("wsl") == 1 then
+    return "windows"
+  elseif vim.fn.has("mac") == 1 then
+    return "mac"
+  elseif (vim.env.WAYLAND_DISPLAY or "") ~= "" then
+    return "wayland"
+  end
+  return nil
+end
+
+--- What READ_WINDOWS or READ_MAC printed: an image's PNG bytes, or the paths of copied files.
 --- @param stdout string
 --- @return util.clipboard.Content|nil
 function M.parse_script_output(stdout)
@@ -139,6 +176,17 @@ function M.read_windows(on_read)
         content.paths = vim.tbl_map(M.wsl_path, content.paths)
       end
       on_read(content)
+    end)
+  end)
+end
+
+--- Read the macOS pasteboard's image or files copied in Finder, calling `on_read` on the main
+--- loop with them, or nil for neither.
+--- @param on_read fun(content: util.clipboard.Content|nil)
+function M.read_mac(on_read)
+  vim.system({ "osascript", "-l", "JavaScript", "-e", READ_MAC }, { text = true }, function(result)
+    vim.schedule(function()
+      on_read(result.code == 0 and M.parse_script_output(result.stdout) or nil)
     end)
   end)
 end
