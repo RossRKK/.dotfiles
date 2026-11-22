@@ -254,4 +254,32 @@ describe("a workspace tab", function()
       child("return { todo = P.todo_shown(), prompt = P.prompt_height() }")
     )
   end)
+
+  it("shares the editor area with a file opened beside an agent chat Ctrl+B Z put there", function()
+    local dir = repo("chat")
+    local readme = dir .. "/README.md"
+    vim.fn.writefile({ "hello" }, readme)
+    start()
+    open_from_start_screen(dir)
+    visit(1)
+    vim.fn.jobresize(job, 240, 48)
+    assert.is_true(vim.wait(5000, function()
+      return child("return vim.o.columns") == 240
+    end, 20))
+    child("P.stand_in_agent(); require('config.agent_chat').new(0)")
+    assert.is_true(vim.wait(5000, function()
+      return child("return P.prompt_height()") ~= vim.NIL
+    end, 20))
+    child("P.focus_chat(); require('fishmonger').maximise()")
+    assert.is_true(vim.wait(5000, function()
+      return child("return P.tree_with(...) ~= nil", readme)
+    end, 50))
+    child("P.open_from_tree(...)", readme)
+    assert.is_true(vim.wait(5000, function()
+      return child("return P.chat_and_file_widths(...)", readme) ~= vim.NIL
+    end, 50))
+    local widths = child("return P.chat_and_file_widths(...)", readme)
+    -- Pinned at its maximised width, the chat left the file a sliver.
+    assert.is_true(widths.file * 2 >= widths.chat, vim.inspect(widths))
+  end)
 end)

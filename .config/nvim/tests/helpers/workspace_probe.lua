@@ -29,6 +29,18 @@ local function chat_windows()
   return #sessions > 0 and sessions[#sessions].widget.win_nrs or {}
 end
 
+--- The width of the newest agent chat, and of the current tab's window showing `path`, or vim.NIL before one does.
+---@param path string
+---@return { chat: integer, file: integer }|vim.NIL
+function M.chat_and_file_widths(path)
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)) == path then
+      return { chat = vim.api.nvim_win_get_width(chat_windows().chat), file = vim.api.nvim_win_get_width(win) }
+    end
+  end
+  return vim.NIL
+end
+
 --- The newest agent chat's prompt height, or vim.NIL before its prompt is open.
 ---@return integer|vim.NIL
 function M.prompt_height()
