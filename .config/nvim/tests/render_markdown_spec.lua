@@ -84,3 +84,46 @@ describe("a table in an agent chat", function()
     assert.are.same({}, captures_at(2, 2))
   end)
 end)
+
+describe("a write to a rendered agent chat", function()
+  local buf
+
+  before_each(function()
+    vim.cmd("runtime! plugin/render-markdown.lua")
+    local spec = require("plugins.render-markdown")[1]
+    spec.config(nil, spec.opts)
+    vim.treesitter.language.register("markdown", "AgenticChat")
+    buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_win_set_buf(0, buf)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "Some **bold** text.", "", "```lua", "local x = 1", "```", "" })
+    vim.bo[buf].filetype = "AgenticChat"
+    vim.treesitter.start(buf, "markdown")
+    require("render-markdown").render({ buf = buf, force = true })
+    vim.wait(1000, function()
+      return vim.wo.conceallevel > 0
+    end)
+  end)
+
+  after_each(function()
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  -- Each reparse scans the whole chat, so one per streamed or replayed write grew quadratically.
+  it("leaves parsing the chat to the next redraw, though the chat is concealed", function()
+    assert.is_true(vim.wo.conceallevel > 0)
+    vim.cmd.redraw()
+    local parser = assert(vim.treesitter.get_parser(buf))
+    local parse, parses = parser.parse, 0
+    parser.parse = function(...)
+      parses = parses + 1
+      return parse(...)
+    end
+    -- As agentic writes a reply: append, then keep the chat scrolled to its end.
+    for i = 1, 3 do
+      vim.api.nvim_buf_set_lines(buf, -1, -1, false, { "reply line " .. i })
+      vim.cmd("normal! G0zb")
+    end
+    parser.parse = parse
+    assert.are.equal(0, parses)
+  end)
+end)

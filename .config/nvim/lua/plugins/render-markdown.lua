@@ -1,6 +1,6 @@
 -- render-markdown.nvim: markdown files and agent chats' replies (AgenticChat, which
 -- agentic parses as markdown) drawn as rendered markdown, under one config.
-local rerender_on_write -- defined below the spec
+local rerender_on_write, drop_conceal_lines -- defined below the spec
 
 local file_types = { "markdown", "AgenticChat" }
 
@@ -21,6 +21,7 @@ local spec = {
     },
     config = function(_, opts)
       require("render-markdown").setup(opts)
+      drop_conceal_lines("markdown")
       -- lazy fires FileType again once loaded, so this also takes the chat that loaded it.
       vim.api.nvim_create_autocmd("FileType", {
         pattern = "AgenticChat",
@@ -51,6 +52,16 @@ function rerender_on_write(buf)
       end)
     end,
   })
+end
+
+--- Drop the conceal_lines render-markdown disables anyway: while `lang`'s query has any, each write to a concealed buffer re-parses all of it.
+---@param lang string
+function drop_conceal_lines(lang)
+  local sources = vim.tbl_map(function(file)
+    return table.concat(vim.fn.readfile(file), "\n")
+  end, vim.treesitter.query.get_files(lang, "highlights"))
+  local query = table.concat(sources, "\n"):gsub('%(#set! conceal_lines ""%)', "")
+  vim.treesitter.query.set(lang, "highlights", query)
 end
 
 return spec
