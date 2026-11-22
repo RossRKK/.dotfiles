@@ -7,6 +7,7 @@ return {
     -- Fork carrying the fishmonger-hosting patches on its main until they go upstream.
     "RossRKK/agentic.nvim",
     branch = "main",
+    dev = true,
     lazy = true,
     ---@type agentic.PartialUserConfig
     opts = {
