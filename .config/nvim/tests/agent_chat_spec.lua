@@ -4,6 +4,9 @@
 
 local assert = require("luassert")
 
+-- The title tint blends with tokyonight's own helper.
+vim.opt.runtimepath:prepend(vim.fn.stdpath("data") .. "/lazy/tokyonight.nvim")
+
 local agent_chat, fishmonger
 local created, shown, hidden, destroyed, rendered, stopped
 
@@ -256,7 +259,11 @@ describe("agent_chat.new", function()
       report("acp-1", "calm-otter")
 
       assert.equals("EndOfBuffer:,AgenticTitle:AgentChatTitleRed", prompt_winhighlight())
-      assert.equals(require("fishmonger.agent").colours.red, ("#%06x"):format(vim.api.nvim_get_hl(0, { name = "AgentChatTitleRed" }).bg))
+      local red = require("fishmonger.agent").colours.red
+      local title = vim.api.nvim_get_hl(0, { name = "AgentChatTitleRed" })
+      assert.equals(red, ("#%06x"):format(title.fg))
+      local normal_bg = ("#%06x"):format(vim.api.nvim_get_hl(0, { name = "Normal", link = false }).bg)
+      assert.equals(require("tokyonight.util").blend(red, 0.25, normal_bg), ("#%06x"):format(title.bg))
     end)
 
     it("takes a /color typed by hand from the transcript when there is no claim", function()
