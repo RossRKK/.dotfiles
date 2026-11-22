@@ -1009,6 +1009,13 @@ session ends or you dismiss them.
 | `Enter`           | Open the task's output in a pane above: a normal buffer (search, yank, motions) that follows new output while the cursor is on the last line (`G`); `q` closes |
 | `x`               | Dismiss the task                                          |
 
+**Subagent progress.** While a Claude session has subagents, the
+`claude-plugins/subagent-progress` mod draws a band above its prompt with one
+row per agent: its description, `repo:branch` (its worktree's when isolated),
+commits since the HEAD it started on with the latest subject and age,
+uncommitted files, and how long it has run. A finished agent's row is ticked
+and stays five minutes.
+
 **Referenced files.** `Ctrl+B f` opens a list under the terminal of the files its
 agent's session has read, edited or pointed at (`path:line` in its replies),
 newest first and each once, at the line it last named. It follows the terminal's

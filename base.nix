@@ -162,6 +162,7 @@ in
       "${dotfilesDir}/claude-plugins/agent-status"
       "${dotfilesDir}/claude-plugins/line-end-marks"
       "${dotfilesDir}/claude-plugins/session-identity"
+      "${dotfilesDir}/claude-plugins/subagent-progress"
     ];
   };
   programs.ripgrep.enable = true;
