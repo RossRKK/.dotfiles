@@ -331,6 +331,44 @@ describe("agent_chat.new", function()
     assert.same({ "hell" }, vim.api.nvim_buf_get_lines(input, 0, -1, true))
   end)
 
+  describe("Ctrl keys in its prompt", function()
+    local input
+
+    before_each(function()
+      new()
+      input = created[1].session.widget.buf_nrs.input
+      vim.api.nvim_set_current_win(created[1].session.widget.win_nrs.input)
+    end)
+
+    after_each(function()
+      pcall(vim.keymap.del, "n", "<C-b>")
+    end)
+
+    it("run the key's normal-mode mapping, typing nothing", function()
+      local ran_in
+      vim.keymap.set("n", "<C-b>", function()
+        ran_in = vim.api.nvim_get_mode().mode
+      end)
+
+      vim.api.nvim_feedkeys(vim.keycode("ihello<C-b>"), "x", false)
+
+      assert.equals("n", ran_in)
+      assert.same({ "hello" }, vim.api.nvim_buf_get_lines(input, 0, -1, true))
+    end)
+
+    it("type nothing for a key with no mapping that insert mode would type", function()
+      vim.api.nvim_feedkeys(vim.keycode("ihi<C-b><C-f><C-z><C-a>x"), "x", false)
+
+      assert.same({ "hix" }, vim.api.nvim_buf_get_lines(input, 0, -1, true))
+    end)
+
+    it("keep insert's editing keys", function()
+      vim.api.nvim_feedkeys(vim.keycode("ihello world<C-w>x"), "x", false)
+
+      assert.same({ "hello x" }, vim.api.nvim_buf_get_lines(input, 0, -1, true))
+    end)
+  end)
+
   describe("Ctrl+C", function()
     local function generating(n)
       created[n].session.is_generating = true

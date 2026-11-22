@@ -19,7 +19,7 @@ function M.setup(opts)
   options = vim.tbl_extend("force", options, opts)
 end
 
-local host, host_first, newest, start_spec, stop, paste, attach, paint, repaint_all, title_hl, set_title_hl -- defined below their callers
+local host, host_first, newest, start_spec, stop, paste, attach, pass_ctrl_keys, route_ctrl_key, paint, repaint_all, title_hl, set_title_hl -- defined below their callers
 
 -- A session's name and colour arrive as agent-status and Claude report them.
 vim.api.nvim_create_autocmd("User", {
@@ -171,6 +171,8 @@ function host(spec, place)
     end, { buffer = session.widget.buf_nrs.input, desc = "Agent prompt: put text, or attach an image or file" })
   end
 
+  pass_ctrl_keys(session.widget.buf_nrs.input)
+
   -- Ctrl+C stops what this chat has running, as in Claude Code: its reply, then the sub-agents left running.
   for _, panel in pairs(session.widget.buf_nrs) do
     vim.keymap.set({ "n", "i" }, "<C-c>", function()
@@ -257,6 +259,54 @@ function paste(key, put_text)
       attach(key, { file })
     end
   end)
+end
+
+-- Insert's own Ctrl keys that edit the prompt, not type into it; a normal mapping still wins.
+local editing_ctrl_keys = {
+  ["<C-g>"] = true,
+  ["<C-h>"] = true,
+  ["<C-j>"] = true,
+  ["<C-o>"] = true,
+  ["<C-r>"] = true,
+  ["<C-u>"] = true,
+  ["<C-w>"] = true,
+}
+
+--- Every Ctrl+letter insert mode in `buf` doesn't map goes through `route_ctrl_key`, so none
+--- types a control character or a completion into the prompt. <C-i> and <C-m> are Tab and Enter.
+---@param buf integer
+function pass_ctrl_keys(buf)
+  for letter in ("abcdefghjklnopqrstuvwxyz"):gmatch(".") do
+    local lhs = "<C-" .. letter .. ">"
+    local mapped = vim.api.nvim_buf_call(buf, function()
+      return vim.fn.maparg(lhs, "i") ~= ""
+    end)
+    if not mapped then
+      vim.keymap.set("i", lhs, function()
+        return route_ctrl_key(lhs)
+      end, {
+        buffer = buf,
+        expr = true,
+        remap = true,
+        desc = "Agent prompt: the key's normal-mode mapping, else nothing",
+      })
+    end
+  end
+end
+
+--- What Ctrl key `lhs` does in the prompt: its normal-mode mapping, as from a side terminal;
+--- else insert's own meaning in the completion menu or for a key that edits; else nothing.
+---@param lhs string
+---@return string
+function route_ctrl_key(lhs)
+  if vim.fn.maparg(lhs, "n") ~= "" then
+    return "<C-\\><C-n>" .. lhs
+  end
+  -- Keys that start with the mapping's own lhs run the builtin, not the mapping again.
+  if vim.fn.pumvisible() == 1 or editing_ctrl_keys[lhs] then
+    return lhs
+  end
+  return ""
 end
 
 --- Attach `paths` to session `key`'s next prompt, saying whether it took any.
