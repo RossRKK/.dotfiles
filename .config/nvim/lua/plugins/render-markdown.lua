@@ -18,6 +18,9 @@ local spec = {
       file_types = file_types,
       -- The chat is read while typing in the prompt, so it renders in every mode.
       render_modes = true,
+      -- Headings and bullets keep their markdown markers, which read as plainly as any icon.
+      heading = { icons = {}, sign = false },
+      bullet = { enabled = false },
     },
     config = function(_, opts)
       require("render-markdown").setup(opts)

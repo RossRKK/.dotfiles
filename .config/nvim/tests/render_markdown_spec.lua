@@ -127,3 +127,49 @@ describe("a write to a rendered agent chat", function()
     assert.are.equal(0, parses)
   end)
 end)
+
+describe("headings and bullets in a rendered agent chat", function()
+  local buf
+
+  --- The text or concealment render-markdown draws over (0-based) `row`, from column 0.
+  local function drawn_over_marker(row)
+    local drawn = {}
+    for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buf, -1, { row, 0 }, { row, 0 }, { details = true })) do
+      local details = mark[4]
+      if details.virt_text or details.conceal or details.sign_text then
+        table.insert(drawn, details)
+      end
+    end
+    return drawn
+  end
+
+  before_each(function()
+    vim.cmd("runtime! plugin/render-markdown.lua")
+    require("render-markdown").setup(require("plugins.render-markdown")[1].opts)
+    vim.treesitter.language.register("markdown", "AgenticChat")
+    buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_win_set_buf(0, buf)
+    -- The table's border shows when the render has landed.
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "### Title", "", "- item", "", "| a | b |", "| - | - |", "" })
+    -- Off the cursor's line, which render-markdown leaves raw.
+    vim.api.nvim_win_set_cursor(0, { 7, 0 })
+    vim.bo[buf].filetype = "AgenticChat"
+    vim.treesitter.start(buf, "markdown")
+    require("render-markdown").render({ buf = buf, force = true })
+    vim.wait(1000, function()
+      return #vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, {}) > 0
+    end)
+  end)
+
+  after_each(function()
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  it("shows the heading's ### as written", function()
+    assert.are.same({}, drawn_over_marker(0))
+  end)
+
+  it("shows the bullet's - as written", function()
+    assert.are.same({}, drawn_over_marker(2))
+  end)
+end)
