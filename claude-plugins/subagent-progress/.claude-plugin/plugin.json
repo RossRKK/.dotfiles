@@ -1,0 +1,6 @@
+{
+  "name": "subagent-progress",
+  "version": "0.1.0",
+  "description": "A band above the prompt with one row per running subagent: its branch, commits since it started, uncommitted files and elapsed time",
+  "types": "./types/index.d.ts"
+}
