@@ -16,8 +16,8 @@ return {
       agent_name = function(session_id)
         return require("config.agent_chat").agent_name(session_id)
       end,
-      -- No emoji or icon glyphs in the chat's headings, titles and spinner; words and plain marks instead.
-      chat_icons = { user = "", agent = "" },
+      -- No emoji or icon glyphs in the chat's titles, marks and spinner; words and plain marks
+      -- instead. The user and agent headings keep agentic's icons.
       message_icons = { thinking = ">", finished = "✓", stopped = "■", error = "✗" },
       diagnostic_icons = { error = "E", warn = "W", info = "I", hint = "H" },
       spinner_chars = {

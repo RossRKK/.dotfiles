@@ -777,12 +777,22 @@ describe("the agentic config", function()
     return false
   end
 
-  it("draws no emoji or icon glyphs in the chat's headings, titles, buffer names and spinner", function()
+  it("heads the user's and the agent's messages with agentic's icons", function()
+    require("tests.helpers.plugins").add("agentic.nvim")
+    local opts = require("plugins.agentic")[1].opts
+    local config = vim.tbl_deep_extend("force", require("agentic.config_default"), opts)
+
+    assert.same(require("agentic.config_default").chat_icons, config.chat_icons)
+    assert.is_true(pictographic(config.chat_icons.user))
+    assert.is_true(pictographic(config.chat_icons.agent))
+  end)
+
+  it("draws no emoji or icon glyphs in the chat's other headings, titles, buffer names and spinner", function()
     require("tests.helpers.plugins").add("agentic.nvim")
     local opts = require("plugins.agentic")[1].opts
     local config = vim.tbl_deep_extend("force", require("agentic.config_default"), opts)
     local shown = {}
-    for _, group in ipairs({ "chat_icons", "message_icons", "diagnostic_icons" }) do
+    for _, group in ipairs({ "message_icons", "diagnostic_icons" }) do
       vim.list_extend(shown, vim.tbl_values(config[group]))
     end
     for _, frames in pairs(config.spinner_chars) do
