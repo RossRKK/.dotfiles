@@ -49,6 +49,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `todo_spec.lua` | the todo toggle opens below the main window (else the current non-panel window) and focuses it; the split closes for anything but the greeter put in the window it sits under (a file, a terminal, an unlisted or scratch buffer, from any window), not for the greeter's return, a buffer in another window, or a float; a file opened in the split itself (`:e`, a set buffer) moves to the greeter's window and the split closes, reloading the list doesn't |
 | `windows_spec.lua` | main-window routing: a file window first, else a terminal in the main area (never the side panel or a float); `open` lands a file there at a line and column, a line past the end clamped |
 | `neotree_leak_spec.lua` | the pinned neo-tree doesn't leak timers/process handles across renders. Loads the real plugin (and its git status): it guards the lazy pin, not our code. `NEOTREE_PATH=<checkout>` tests another build |
+| `lazy_lock_spec.lua` | `lazy-lock.json` pins every `dev = true` plugin, so machines without `~/dev` checkouts restore a known-good commit |
 
 The side-terminal and branch-review logic now live in external plugins, each
 with its own test suite (developed locally under `~/dev` via lazy's `dev` path):
