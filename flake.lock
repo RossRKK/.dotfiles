@@ -1,5 +1,22 @@
 {
   "nodes": {
+    "agentic": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1795434791,
+        "narHash": "sha256-keQeyPW3g4nYsIz1WVVcKjDCfTV6AFCVRgjCgK4VX1o=",
+        "owner": "RossRKK",
+        "repo": "agentic.nvim",
+        "rev": "107eb2aa2cc5c2e43a8f4c0e9a1c4667cfe1ea7a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "RossRKK",
+        "ref": "main",
+        "repo": "agentic.nvim",
+        "type": "github"
+      }
+    },
     "claude-code": {
       "inputs": {
         "nixpkgs": "nixpkgs",
@@ -16,6 +33,54 @@
       "original": {
         "owner": "sadjow",
         "repo": "claude-code-nix",
+        "type": "github"
+      }
+    },
+    "fishmonger": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1795431356,
+        "narHash": "sha256-Hw/gORgvoGCnnOqfW5wr2BdrcVgBUrFEzPTdAbNcews=",
+        "owner": "RossRKK",
+        "repo": "fishmonger.nvim",
+        "rev": "92ab94600641877fe9ac617e7b0b5ecce8367a0e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "RossRKK",
+        "repo": "fishmonger.nvim",
+        "type": "github"
+      }
+    },
+    "graph-view-toml": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1754346016,
+        "narHash": "sha256-g8ZVxr471bPfzSu/TZf+kWl9I1vDcVPAEsvNroiGkbg=",
+        "owner": "Owen-Dechow",
+        "repo": "graph_view_toml_parser",
+        "rev": "e52ddcbae563c924a19faf998f862ae61d13a777",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Owen-Dechow",
+        "repo": "graph_view_toml_parser",
+        "type": "github"
+      }
+    },
+    "graph-view-yaml": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1754344203,
+        "narHash": "sha256-nZyAHAoulTLwq4IVLlWd0kZ9je+9Upe7jY3apAt3anw=",
+        "owner": "Owen-Dechow",
+        "repo": "graph_view_yaml_parser",
+        "rev": "ecc5ba0a0b8c3a6eb3e7fa5a2caeeee2263729c3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Owen-Dechow",
+        "repo": "graph_view_yaml_parser",
         "type": "github"
       }
     },
@@ -63,6 +128,23 @@
         "type": "github"
       }
     },
+    "neo-tree": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793134409,
+        "narHash": "sha256-JZcExx1BS4LfGlxnOYGbv8iSpE+IWgKgMI2wlhsZHtU=",
+        "owner": "nvim-neo-tree",
+        "repo": "neo-tree.nvim",
+        "rev": "bb9779f532ef9ec62486a840fb5db44591aeff0f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nvim-neo-tree",
+        "ref": "main",
+        "repo": "neo-tree.nvim",
+        "type": "github"
+      }
+    },
     "neovim": {
       "flake": false,
       "locked": {
@@ -77,6 +159,22 @@
         "owner": "noib3",
         "ref": "libvterm-to-libghostty",
         "repo": "neovim",
+        "type": "github"
+      }
+    },
+    "nitpick": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793886936,
+        "narHash": "sha256-OEsdWbwgehcnwwfcvl+nHVWHjdKtcMCajjojnlFXDIk=",
+        "owner": "RossRKK",
+        "repo": "nitpick.nvim",
+        "rev": "aba89c44e1d05be36b1903ddd79c4e3e8d5a3120",
+        "type": "github"
+      },
+      "original": {
+        "owner": "RossRKK",
+        "repo": "nitpick.nvim",
         "type": "github"
       }
     },
@@ -167,16 +265,42 @@
         "type": "github"
       }
     },
+    "render-markdown": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794898926,
+        "narHash": "sha256-hOLbiYom9j3yVoSRPNWrfZ3rpa2vdJ3HxvFaV9Qw3Dc=",
+        "owner": "MeanderingProgrammer",
+        "repo": "render-markdown.nvim",
+        "rev": "a67f826164c38c836fc6060f32b275c4c43317a7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "MeanderingProgrammer",
+        "repo": "render-markdown.nvim",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
+        "agentic": "agentic",
         "claude-code": "claude-code",
+        "fishmonger": "fishmonger",
+        "graph-view-toml": "graph-view-toml",
+        "graph-view-yaml": "graph-view-yaml",
         "home-manager": "home-manager",
         "kache": "kache",
+        "neo-tree": "neo-tree",
         "neovim": "neovim",
+        "nitpick": "nitpick",
         "nixpkgs": "nixpkgs_2",
         "nixpkgs-neovide": "nixpkgs-neovide",
         "nixpkgs-unstable": "nixpkgs-unstable",
-        "plasma-manager": "plasma-manager"
+        "plasma-manager": "plasma-manager",
+        "render-markdown": "render-markdown",
+        "triage": "triage",
+        "videre": "videre",
+        "wrappers": "wrappers"
       }
     },
     "rust-overlay": {
@@ -233,6 +357,58 @@
       "original": {
         "owner": "numtide",
         "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
+    "triage": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1795105381,
+        "narHash": "sha256-Gt7JMlKw6oVVdo/emLODFL2PDdr1P/qA6NzayX82iNA=",
+        "owner": "RossRKK",
+        "repo": "triage.nvim",
+        "rev": "7f423d9055b7259f30854c7946a628c576f15660",
+        "type": "github"
+      },
+      "original": {
+        "owner": "RossRKK",
+        "repo": "triage.nvim",
+        "type": "github"
+      }
+    },
+    "videre": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794761861,
+        "narHash": "sha256-9OS656fgvYl/XLfRyMQJf6jb4tcSP6dJ51J0cDzix7o=",
+        "owner": "Owen-Dechow",
+        "repo": "videre.nvim",
+        "rev": "c9de0e17f3a2f790a8fce15e4354953e143c8545",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Owen-Dechow",
+        "repo": "videre.nvim",
+        "type": "github"
+      }
+    },
+    "wrappers": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795379121,
+        "narHash": "sha256-ozYI9QzZHThJ6gek0zw3U7VWtbij7GWMoIyKeVUHB04=",
+        "owner": "nix-community",
+        "repo": "nix-wrapper-modules",
+        "rev": "c35c43d2e5be66fe1172a1772fe81d1fa0a6ac96",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nix-wrapper-modules",
         "type": "github"
       }
     }

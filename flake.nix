@@ -40,10 +40,30 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.home-manager.follows = "home-manager";
     };
+    # Wraps neovim with its plugins and config (nvim-package.nix).
+    wrappers = {
+      url = "github:nix-community/nix-wrapper-modules";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    # nvim plugins nixpkgs lacks, or ships too old. Bump one with
+    # `nix flake update <name>` + hms; docs/nvim-nix-migration.md.
+    agentic = { url = "github:RossRKK/agentic.nvim/main"; flake = false; };
+    fishmonger = { url = "github:RossRKK/fishmonger.nvim"; flake = false; };
+    nitpick = { url = "github:RossRKK/nitpick.nvim"; flake = false; };
+    triage = { url = "github:RossRKK/triage.nvim"; flake = false; };
+    neo-tree = { url = "github:nvim-neo-tree/neo-tree.nvim/main"; flake = false; };
+    videre = { url = "github:Owen-Dechow/videre.nvim"; flake = false; };
+    graph-view-yaml = { url = "github:Owen-Dechow/graph_view_yaml_parser"; flake = false; };
+    graph-view-toml = { url = "github:Owen-Dechow/graph_view_toml_parser"; flake = false; };
+    # nixpkgs' leaves breakindentopt changed once rendering is toggled off (tests/render_markdown_spec.lua).
+    render-markdown = { url = "github:MeanderingProgrammer/render-markdown.nvim"; flake = false; };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-neovide, home-manager, plasma-manager, claude-code, kache, neovim, ... }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-neovide, home-manager, plasma-manager, claude-code, kache, neovim, wrappers, ... }@inputs:
     let
+      # The nvim every host runs, built for the given pkgs.
+      nvimFor = pkgs: (wrappers.lib.evalModule (import ./nvim-package.nix inputs)).config.wrap { inherit pkgs; };
+
       # Linux hosts (personal, work) take atmos/poethepoet/opentofu from
       # unstable, see the nixpkgs-unstable input comment above.
       pkgsLinux = system:
@@ -88,6 +108,9 @@
       ];
       };
     in {
+      packages.x86_64-linux.nvim = nvimFor (pkgsLinux "x86_64-linux");
+      packages.aarch64-darwin.nvim = nvimFor (pkgsDarwin "aarch64-darwin");
+
       # Symbols agents print (Claude Code's checklists, ↵ line ends, timers) that
       # Neovide's font.normal chain must draw without falling back to colour emoji.
       checks.x86_64-linux.neovide-glyph-coverage =
