@@ -16,6 +16,10 @@
     # Neovide alone, so bumping it rebuilds nothing else (kache follows unstable):
     # 0.16.2 fails to parse the API info of the 0.13 neovim built here.
     nixpkgs-neovide.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    # nvim's plugins and their treesitter parsers alone (nvim-package.nix): stable's
+    # froze when 26.05 branched, older than the commits lazy.nvim ran. Bumping it
+    # rebuilds nothing else: `nix flake update nixpkgs-nvim-plugins` + hms.
+    nixpkgs-nvim-plugins.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";

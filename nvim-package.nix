@@ -11,7 +11,15 @@ inputs:
 }:
 let
   fromInput = pname: input: config.nvim-lib.mkPlugin pname inputs.${input};
-  inherit (pkgs) vimPlugins;
+  # From their own nixpkgs input, see flake.nix; neovim itself stays on the system's.
+  # Unfree allowed as for the system's pkgs: nixpkgs marks git-conflict.nvim unfree.
+  inherit
+    (import inputs.nixpkgs-nvim-plugins {
+      inherit (pkgs.stdenv.hostPlatform) system;
+      config.allowUnfree = true;
+    })
+    vimPlugins
+    ;
 
   # Named as lazy.nvim names them: their repo's basename.
   plugins = with vimPlugins; {
