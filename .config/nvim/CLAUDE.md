@@ -17,7 +17,9 @@ cd ~/.config/nvim && make test
 ```
 
 It runs headless via plenary's busted harness and exits non-zero on failure.
-A single file: `make test FILE=tests/ide_spec.lua`.
+A single file: `make test FILE=tests/ide_spec.lua`. Against a nix build of
+nvim: `make test NVIM_BIN=<build>/bin/nvim`; against a plugin checkout:
+`NVIM_DEV_PLUGINS=fishmonger.nvim make test` (see `../../docs/nvim-nix-migration.md`).
 
 Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 
@@ -47,20 +49,25 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `message_log_spec.lua` | each nvim's messages (multi-line text intact) go via 'verbosefile' to its own log named by start time and pid; only the newest previous logs are kept, other files in the log dir untouched |
 | `todo_spec.lua` | the todo toggle opens below the main window (else the current non-panel window) and focuses it; the split closes for anything but the greeter put in the window it sits under (a file, a terminal, an unlisted or scratch buffer, from any window), not for the greeter's return, a buffer in another window, or a float; a file opened in the split itself (`:e`, a set buffer) moves to the greeter's window and the split closes, reloading the list doesn't |
 | `windows_spec.lua` | main-window routing: a file window first, else a terminal in the main area (never the side panel or a float); `open` lands a file there at a line and column, a line past the end clamped |
-| `neotree_leak_spec.lua` | the pinned neo-tree doesn't leak timers/process handles across renders. Loads the real plugin (and its git status): it guards the lazy pin, not our code. `NEOTREE_PATH=<checkout>` tests another build |
+| `neotree_leak_spec.lua` | the pinned neo-tree doesn't leak timers/process handles across renders. Loads the real plugin (and its git status): it guards the pin, not our code. `NVIM_DEV_PLUGINS=neo-tree.nvim=<checkout>` tests another build |
+| `plugin_dirs_spec.lua` | under the nix build, each plugin loads from its store path, or from a checkout `NVIM_DEV_PLUGINS` names (`name` under `~/dev`, or `name=dir`); a missing checkout, a name the build lacks and a plugin the build lacks are errors, never a fallback |
 | `lazy_lock_spec.lua` | `lazy-lock.json` pins every `dev = true` plugin, so machines without `~/dev` checkouts restore a known-good commit |
 
 The side-terminal and branch-review logic now live in external plugins, each
-with its own test suite (developed locally under `~/dev` via lazy's `dev` path):
+with its own test suite and flake (`nix develop -c make test`), developed
+under `~/dev` and loaded from there with `NVIM_DEV_PLUGINS`:
 [fishmonger.nvim](https://github.com/RossRKK/fishmonger.nvim) (the side terminal),
 [triage.nvim](https://github.com/RossRKK/triage.nvim) (per-file review status +
 verdict rollup),
 and [nitpick.nvim](https://github.com/RossRKK/nitpick.nvim) (inline GitHub comments).
 
-`tests/minimal_init.lua` loads this config plus plenary (and puts fishmonger's
-modules on the runtimepath, for its real glyph widths), and deliberately does
-**not** load lazy.nvim — no plugin `config()` runs. A spec that needs a plugin
-object fakes it (keeping the real arity of any stubbed `vim.*` function).
+`tests/minimal_init.lua` loads this checkout's config plus plenary (and puts
+fishmonger's modules on the runtimepath, for its real glyph widths), and
+deliberately does **not** load lazy.nvim — no plugin `config()` runs. A spec
+that needs a plugin object fakes it (keeping the real arity of any stubbed
+`vim.*` function); one that runs a real plugin puts it on the runtimepath with
+`require("tests.helpers.plugins").add(name)`, which finds it where the nvim
+under test does.
 
 Two traps when writing specs:
 
@@ -84,8 +91,9 @@ purpose — mocking it would test the mock.
   itself lives in `util/sidebar.lua` for the same reason. `util/worktree.lua` is
   the git side of the same idea: it turns a branch into a worktree under
   `<repo>/.worktrees/` and hands the directory to `workspace.open`.
-- `lua/plugins/` — one file per plugin, lazy.nvim specs. Three of our own live
-  as external plugins under `~/dev` (lazy `dev` path), each declared in a small
+- `lua/plugins/` — one file per plugin, lazy.nvim specs. Every plugin comes
+  from the nix build (`../../nvim-package.nix`; add a new plugin there too).
+  Three of our own live as external plugins under `~/dev`, each declared in a small
   spec here: `fishmonger.lua` (the side terminal, set up in that spec's
   `config`), and `review.lua` (branch review mode = triage.nvim +
   nitpick.nvim, whose neo-tree glyphs are registered in `explorer.lua`).
