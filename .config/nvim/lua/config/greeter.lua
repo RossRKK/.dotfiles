@@ -812,14 +812,15 @@ function M.pr_status(pr)
   return chunks
 end
 
---- The PR block: "#N title", the status line, then the description, wrapped to `width` and cut to `max_lines` (the file list wants
---- the room more -- the whole body is a <C-o> away in the browser, or
---- nitpick's overview).
+--- The PR block: "#N title", the status line, then the description rendered as
+--- markdown over `buf`, cut to `max_lines` rows (the file list wants the room
+--- more -- the whole body is a <C-o> away in the browser, or nitpick's overview).
 ---@param pr table `gh pr view` JSON
 ---@param width integer
 ---@param max_lines integer
+---@param buf integer the greeter's buffer
 ---@return table[] items
-function M.pr_items(pr, width, max_lines)
+function M.pr_items(pr, width, max_lines, buf)
   local dim = "SnacksDashboardDesc"
   local items = {
     line({
@@ -830,9 +831,32 @@ function M.pr_items(pr, width, max_lines)
     { padding = 1 },
   }
 
-  -- PR templates leave HTML comments behind; they're instructions to the
-  -- author, not description. Then collapse blank runs to one.
-  local body = (pr.body or ""):gsub("\r", ""):gsub("<!%-%-.-%-%->", "")
+  local lines = M.description(pr.body)
+  if #lines == 0 then
+    items[#items + 1] = line({ { "no description", hl = dim } })
+    return items
+  end
+  local rows = 0
+  for _, l in ipairs(lines) do
+    local lead = l:match("^%s*")
+    rows = rows + math.max(1, #M.wrap(l, math.max(10, width - #lead)))
+  end
+  items[#items + 1] =
+    require("util.dashboard_markdown").item(buf, lines, width, math.min(rows, max_lines))
+  if rows > max_lines then
+    items[#items + 1] =
+      { text = { { ("\u{2026} %d more lines"):format(rows - max_lines), hl = dim } } }
+  end
+  return items
+end
+
+--- A PR body as the markdown the greeter shows: no template comments (instructions
+--- to the author, not description), blank runs collapsed to one, and each fenced
+--- block one placeholder line -- a diagram or code is noise in an overview.
+---@param body string?
+---@return string[]
+function M.description(body)
+  body = (body or ""):gsub("\r", ""):gsub("<!%-%-.-%-%->", "")
   local lines, blank, fence = {}, true, nil
   for raw in (body .. "\n"):gmatch("([^\n]*)\n") do
     local marker, lang = raw:match("^%s*(```+)%s*([%w_+-]*)")
@@ -840,16 +864,13 @@ function M.pr_items(pr, width, max_lines)
       marker, lang = raw:match("^%s*(~~~+)%s*([%w_+-]*)")
     end
     if fence then
-      -- Inside a fenced block: a diagram or code wrapped as prose is noise in
-      -- an overview, so the whole block is the one placeholder line below.
       if marker and marker:sub(1, 1) == fence:sub(1, 1) and #marker >= #fence then
         fence = nil
       end
     elseif marker then
       fence = marker
       blank = false
-      lines[#lines + 1] =
-        { text = ("[%s block]"):format(lang ~= "" and lang or "code"), dim = true }
+      lines[#lines + 1] = ("_[%s block]_"):format(lang ~= "" and lang or "code")
     elseif raw:match("^%s*$") then
       if not blank then
         lines[#lines + 1] = ""
@@ -857,37 +878,13 @@ function M.pr_items(pr, width, max_lines)
       blank = true
     else
       blank = false
-      -- Keep list/quote indentation visible; wrap continuation lines flush.
-      local lead = raw:match("^%s*") or ""
-      for _, w in ipairs(M.wrap(raw, math.max(10, width - #lead))) do
-        lines[#lines + 1] = { text = lead .. w, heading = raw:match("^%s*#") ~= nil }
-      end
+      lines[#lines + 1] = raw
     end
   end
   if lines[#lines] == "" then
     lines[#lines] = nil
   end
-
-  if #lines == 0 then
-    items[#items + 1] = line({ { "no description", hl = dim } })
-    return items
-  end
-  for i, l in ipairs(lines) do
-    if i > max_lines then
-      items[#items + 1] =
-        { text = { { ("\u{2026} %d more lines"):format(#lines - max_lines), hl = dim } } }
-      break
-    end
-    if l == "" then
-      items[#items + 1] = { text = { { "" } } }
-    else
-      -- Left-aligned as a block: centring each line of prose separately makes
-      -- a ragged column that's hard to read.
-      local hl = l.dim and dim or l.heading and "Title" or "Normal"
-      items[#items + 1] = { text = { { l.text, hl = hl } } }
-    end
-  end
-  return items
+  return lines
 end
 
 --- A greeter line of non-empty counts: "<glyph> 2 need you  ·  1 for your
@@ -1059,8 +1056,14 @@ function M.sections(root, buf, tab, report)
       if entry and entry.pr and rep and entry.branch == rep.branch then
         local height, width = pane_size(buf)
         -- A third of what's below the header, so the file list keeps its share.
-        items = M.pr_items(entry.pr, width, math.max(3, math.floor((height - 12) / 3)))
+        items = M.pr_items(entry.pr, width, math.max(3, math.floor((height - 12) / 3)), buf)
         items[#items + 1] = { padding = 1 }
+      end
+      -- No description drawn this time round: nothing for the last one's float to cover.
+      if not vim.iter(items):any(function(item)
+        return item.markdown ~= nil
+      end) then
+        require("util.dashboard_markdown").close(buf)
       end
       if not reviewing(root) then
         -- From the review queue's background refresh (no fetch of its own),

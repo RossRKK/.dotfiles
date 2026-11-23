@@ -260,7 +260,7 @@ describe("greeter.pr_items", function()
       return item.text
           and table.concat(vim.tbl_map(function(c)
             return c[1]
-          end, item.text))
+          end, type(item.text) == "string" and { { item.text } } or item.text))
         or "<pad>"
     end, items)
   end
@@ -273,37 +273,162 @@ describe("greeter.pr_items", function()
     body = "<!-- template: delete me -->\r\n## Why\r\n\r\n\r\nBecause.\r\n  - a point\r\n",
   }
 
-  it("leads with the number and title, then status, then the description", function()
-    local t = texts(greeter.pr_items(pr, 80, 10))
+  it("leads with the number and title, then status, then the description as markdown", function()
+    local items = greeter.pr_items(pr, 80, 10, 0)
+    local t = texts(items)
     assert.equals("#42 Make it faster", t[1])
     assert.equals("open", t[2])
-    assert.same({ "<pad>", "## Why", "", "Because.", "  - a point" }, vim.list_slice(t, 3))
+    assert.equals("<pad>", t[3])
+    assert.same({ "## Why", "", "Because.", "  - a point" }, items[4].markdown)
+  end)
+
+  it("reserves a dashboard row for each row the description wraps to", function()
+    local items =
+      greeter.pr_items(vim.tbl_extend("force", pr, { body = "aaa bbb ccc\n\nddd" }), 10, 10, 0)
+    -- "aaa bbb" / "ccc", the blank, "ddd": four rows, the text's three newlines.
+    assert.equals("\n\n\n", items[4].text)
   end)
 
   it("strips template comments and collapses blank runs", function()
-    local t = texts(greeter.pr_items(pr, 80, 10))
-    for _, s in ipairs(t) do
+    for _, s in ipairs(greeter.pr_items(pr, 80, 10, 0)[4].markdown) do
       assert.is_nil(s:find("template", 1, true))
     end
   end)
 
   it("cuts a long description and counts the rest", function()
     local long = vim.tbl_extend("force", pr, { body = "one\ntwo\nthree\nfour" })
-    local t = texts(greeter.pr_items(long, 80, 2))
-    assert.same({ "one", "two", "\u{2026} 2 more lines" }, vim.list_slice(t, 4))
+    local items = greeter.pr_items(long, 80, 2, 0)
+    assert.equals("\n", items[4].text)
+    assert.equals("\u{2026} 2 more lines", texts(items)[5])
   end)
 
   it("collapses a fenced block to one placeholder line", function()
     local fenced = vim.tbl_extend("force", pr, {
       body = "Intro\n```mermaid\nflowchart TB\n  a --> b\n```\nOutro\n~~~\nraw\n~~~",
     })
-    local t = texts(greeter.pr_items(fenced, 80, 10))
-    assert.same({ "Intro", "[mermaid block]", "Outro", "[code block]" }, vim.list_slice(t, 4))
+    assert.same(
+      { "Intro", "_[mermaid block]_", "Outro", "_[code block]_" },
+      greeter.pr_items(fenced, 80, 10, 0)[4].markdown
+    )
   end)
 
   it("says so when there is no description", function()
-    local t = texts(greeter.pr_items(vim.tbl_extend("force", pr, { body = "" }), 80, 5))
+    local t = texts(greeter.pr_items(vim.tbl_extend("force", pr, { body = "" }), 80, 5, 0))
     assert.equals("no description", t[4])
+  end)
+end)
+
+-- The description is drawn by the real render-markdown, under this config's
+-- opts, in a float over the rows the dashboard reserves for it.
+describe("greeter's PR description", function()
+  require("tests.helpers.plugins").add("render-markdown.nvim")
+  local overlays = require("util.dashboard_markdown")._overlays
+  local greeter_buf, win, dash, updates
+
+  local function floats()
+    return vim.tbl_filter(function(w)
+      return vim.api.nvim_win_get_config(w).relative ~= ""
+    end, vim.api.nvim_list_wins())
+  end
+
+  --- Draw the description item as snacks would, at row 2, column 4 of the greeter.
+  local function draw(body)
+    local pr = { number = 1, title = "t", state = "OPEN", body = body }
+    greeter.pr_items(pr, 40, 10, greeter_buf)[4].render(dash, { 2, 3 })
+    -- render() draws once snacks has written the rows.
+    assert(vim.wait(1000, function()
+      local overlay = overlays[greeter_buf]
+      return overlay ~= nil
+        and overlay.win ~= nil
+        and vim.deep_equal(
+          vim.api.nvim_buf_get_lines(overlay.buf, 0, -1, false),
+          greeter.description(body)
+        )
+    end))
+  end
+
+  before_each(function()
+    vim.cmd("runtime! plugin/render-markdown.lua")
+    require("render-markdown").setup(require("plugins.render-markdown")[1].opts)
+    greeter_buf = vim.api.nvim_create_buf(true, true)
+    vim.api.nvim_buf_set_lines(greeter_buf, 0, -1, false, vim.fn["repeat"]({ "" }, 20))
+    win = vim.api.nvim_get_current_win()
+    vim.api.nvim_win_set_buf(win, greeter_buf)
+    updates = 0
+    dash = {
+      win = win,
+      update = function()
+        updates = updates + 1
+      end,
+    }
+  end)
+
+  after_each(function()
+    vim.cmd("%bwipeout!")
+  end)
+
+  it("is a markdown buffer that render-markdown renders, over the reserved rows", function()
+    draw("## Why\n\nIt is **much** faster.")
+    local float = assert(floats()[1])
+    local buf = vim.api.nvim_win_get_buf(float)
+    assert.equals("markdown", vim.bo[buf].filetype)
+    assert.same(
+      { "## Why", "", "It is **much** faster." },
+      vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    )
+    local config = vim.api.nvim_win_get_config(float)
+    assert.same(
+      { win, 40, 3, false },
+      { config.win, config.width, config.height, config.focusable }
+    )
+    -- At the greeter's row 2, column 5, where snacks put the reserved rows' first line.
+    vim.cmd.redraw()
+    local at = vim.fn.screenpos(win, 2, 5)
+    assert.same({ at.row, at.col }, vim.fn.win_screenpos(float))
+    local ns = vim.api.nvim_get_namespaces()["render-markdown.nvim"]
+    assert(
+      vim.wait(1000, function()
+        return #vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, {}) > 0
+      end),
+      "render-markdown drew nothing"
+    )
+    -- The bold's asterisks are concealed: rendered, not raw.
+    assert.equals(3, vim.wo[float].conceallevel)
+  end)
+
+  it("moves its one float on a redraw rather than stacking another", function()
+    draw("one")
+    draw("two")
+    assert.equals(1, #floats())
+    assert.same(
+      { "two" },
+      vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(floats()[1]), 0, -1, false)
+    )
+  end)
+
+  it("goes when the greeter is hidden and is redrawn when it is shown again", function()
+    draw("one")
+    vim.api.nvim_win_set_buf(win, vim.api.nvim_create_buf(true, false))
+    assert.equals(0, #floats())
+
+    vim.api.nvim_win_set_buf(win, greeter_buf)
+    assert(vim.wait(1000, function()
+      return updates == 1
+    end))
+  end)
+
+  it("goes when the greeter draws no description", function()
+    draw("one")
+    require("util.dashboard_markdown").close(greeter_buf)
+    assert.equals(0, #floats())
+  end)
+
+  it("frees its markdown buffer with the greeter", function()
+    draw("one")
+    local buf = overlays[greeter_buf].buf
+    vim.api.nvim_buf_delete(greeter_buf, { force = true })
+    assert.is_false(vim.api.nvim_buf_is_valid(buf))
+    assert.equals(0, #floats())
   end)
 end)
 
