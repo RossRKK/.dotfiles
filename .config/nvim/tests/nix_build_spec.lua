@@ -20,15 +20,22 @@ describe("util.nix_build", function()
 
   it("has no build info in an nvim that isn't the nix build", function()
     vim.g.nix_info_plugin_name = nil
-    assert.is_nil(require("util.nix_build").info)
+    assert.is_nil(require("util.nix_build").build)
   end)
 
-  it("has the wrapper's info plugin in the nix build", function()
-    local info = { plugins = { start = {}, lazy = {} }, settings = { config_directory = "/nix/store/x-nvim" } }
+  it("reads the build from the wrapper's info plugin in the nix build", function()
     package.preload["fake-nix-info"] = function()
-      return info
+      return {
+        info = { plugin_dirs = { ["snacks.nvim"] = "/nix/store/p-nvim-plugins/snacks.nvim" } },
+        settings = { config_directory = "/nix/store/c-nvim" },
+        progpath = "/nix/store/w-nvim/bin/nvim",
+      }
     end
     vim.g.nix_info_plugin_name = "fake-nix-info"
-    assert.equals(info, require("util.nix_build").info)
+    assert.same({
+      plugin_dirs = { ["snacks.nvim"] = "/nix/store/p-nvim-plugins/snacks.nvim" },
+      config_dir = "/nix/store/c-nvim",
+      nvim = "/nix/store/w-nvim/bin/nvim",
+    }, require("util.nix_build").build)
   end)
 end)

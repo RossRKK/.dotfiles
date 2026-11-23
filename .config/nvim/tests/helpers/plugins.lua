@@ -3,13 +3,13 @@
 -- config/lazy.lua resolves it), else lazy.nvim's own install.
 local M = {}
 
-local nix_build = require("util.nix_build").info
+local build = require("util.nix_build").build
 
 ---@type fun(plugin: { name: string }): string
 local dir_of
 local plugin_dirs = require("config.plugin_dirs")
-if nix_build then
-  dir_of = plugin_dirs.for_build(nix_build, vim.env.NVIM_DEV_PLUGINS)
+if build then
+  dir_of = plugin_dirs.for_build(build, vim.env.NVIM_DEV_PLUGINS)
 else
   local dev = plugin_dirs.parse_dev(vim.env.NVIM_DEV_PLUGINS, vim.fn.expand("~/dev"))
   -- lazy.nvim's dev = true plugins load from ~/dev when checked out there.
@@ -29,6 +29,12 @@ end
 ---@return string
 function M.dir(name)
   return dir_of({ name = name })
+end
+
+--- The nvim under test, for specs that start the full config in a child.
+---@return string
+function M.nvim()
+  return build and build.nvim or "nvim"
 end
 
 --- Prepend each plugin to the runtimepath, so it wins over anything already there.

@@ -1,12 +1,12 @@
-local nix_build = require("util.nix_build").info
+local build = require("util.nix_build").build
 
-if nix_build then
+if build then
   -- Every plugin comes from the nix build (nvim-package.nix): lazy.nvim only
   -- decides when each loads, from its store path, and never fetches or writes.
   require("lazy").setup("plugins", {
     change_detection = { enabled = false },
     dev = {
-      path = require("config.plugin_dirs").for_build(nix_build, vim.env.NVIM_DEV_PLUGINS),
+      path = require("config.plugin_dirs").for_build(build, vim.env.NVIM_DEV_PLUGINS),
       patterns = { "" },
       fallback = false,
     },
