@@ -22,7 +22,7 @@ return {
       formatters = {
         prettierd = {
           env = {
-            PRETTIERD_DEFAULT_CONFIG = vim.fn.stdpath("config") .. "/prettierd-default.json",
+            PRETTIERD_DEFAULT_CONFIG = require("util.config_dir") .. "/prettierd-default.json",
           },
         },
       },

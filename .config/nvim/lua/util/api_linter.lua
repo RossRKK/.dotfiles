@@ -10,7 +10,7 @@ local M = {}
 
 ---@type api_linter.Paths
 M.paths = {
-  config = vim.fn.stdpath("config") .. "/api-linter.yaml",
+  config = require("util.config_dir") .. "/api-linter.yaml",
   -- Linked by home-manager (base.nix).
   common_protos = vim.fn.stdpath("data") .. "/googleapis-protos",
 }

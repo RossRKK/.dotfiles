@@ -36,7 +36,9 @@ return {
       local function install_parsers()
         require("nvim-treesitter").install(parsers)
       end
-      if vim.fn.executable("tree-sitter") == 1 then
+      if require("util.nix_build").info then
+        -- The nix build ships these parsers (nvim-package.nix); nothing to compile.
+      elseif vim.fn.executable("tree-sitter") == 1 then
         install_parsers()
       else
         vim.api.nvim_create_autocmd("User", {
