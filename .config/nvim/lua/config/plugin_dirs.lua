@@ -1,0 +1,61 @@
+-- Where lazy.nvim loads each plugin from under the nix build (nvim-package.nix):
+-- its store path, or a checkout named in NVIM_DEV_PLUGINS for developing it.
+local M = {}
+
+---@alias plugin_dirs.Dev table<string, string> plugin name -> checkout to load instead of the store
+
+--- NVIM_DEV_PLUGINS is a comma-separated list of `name` (the checkout at
+--- `<dev_root>/<name>`) or `name=dir` (any checkout, e.g. a worktree).
+---@param value string|nil
+---@param dev_root string
+---@return plugin_dirs.Dev
+function M.parse_dev(value, dev_root)
+  local dev = {}
+  for _, entry in ipairs(vim.split(value or "", ",", { trimempty = true })) do
+    local item = vim.trim(entry)
+    local name, dir = item:match("^([^=]+)=(.+)$")
+    if name then
+      dev[name] = dir
+    elseif item ~= "" then
+      dev[item] = dev_root .. "/" .. item
+    end
+  end
+  return dev
+end
+
+--- A lazy.nvim `dev.path`. Errors rather than falling back, so a missing plugin
+--- or checkout is never silently replaced by something else.
+---@param nix_dirs table<string, string> plugin name -> its store path
+---@param dev plugin_dirs.Dev
+---@return fun(plugin: { name: string }): string
+function M.resolver(nix_dirs, dev)
+  for name in pairs(dev) do
+    if not nix_dirs[name] then
+      error("NVIM_DEV_PLUGINS: " .. name .. " isn't a plugin in the nix build", 0)
+    end
+  end
+  return function(plugin)
+    local checkout = dev[plugin.name]
+    if checkout then
+      if vim.fn.isdirectory(checkout) == 0 then
+        error("NVIM_DEV_PLUGINS: no checkout of " .. plugin.name .. " at " .. checkout, 0)
+      end
+      return checkout
+    end
+    return nix_dirs[plugin.name]
+      or error(plugin.name .. " isn't in the nix build: add it to nvim-package.nix", 0)
+  end
+end
+
+--- The resolver for a nix build (util.nix_build) and a NVIM_DEV_PLUGINS value.
+---@param nix_build { plugins: { start: table<string, string>, lazy: table<string, string> } }
+---@param dev_value string|nil
+---@return fun(plugin: { name: string }): string
+function M.for_build(nix_build, dev_value)
+  return M.resolver(
+    vim.tbl_extend("error", nix_build.plugins.start, nix_build.plugins.lazy),
+    M.parse_dev(dev_value, vim.fn.expand("~/dev"))
+  )
+end
+
+return M
