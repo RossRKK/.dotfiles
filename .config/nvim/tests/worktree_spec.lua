@@ -497,7 +497,7 @@ end)
 -- (a numbered tabpage, :tcd into the checkout), with a terminal job running there.
 describe("worktree.remove", function()
   local dir, repo, wt, saved_confirm
-  vim.opt.runtimepath:append(vim.fn.stdpath("data") .. "/lazy/snacks.nvim")
+  require("tests.helpers.plugins").add("snacks.nvim")
 
   local function git(cwd, ...)
     local cmd = { "git", "-c", "user.name=t", "-c", "user.email=t@t", ... }
@@ -597,10 +597,7 @@ describe("worktree.remove", function()
 
   -- Deleting the tree before its tab makes neo-tree `:bdelete` the landed tab's buffer.
   it("leaves plugin scratch buffers to close with the tab, sparing the tab it lands in", function()
-    local lazy = vim.fn.stdpath("data") .. "/lazy/"
-    for _, plugin in ipairs({ "nui.nvim", "plenary.nvim", "neo-tree.nvim" }) do
-      vim.opt.runtimepath:prepend(lazy .. plugin)
-    end
+    require("tests.helpers.plugins").add("nui.nvim", "plenary.nvim", "neo-tree.nvim")
     require("neo-tree").setup({
       log_to_file = false,
       enable_git_status = false,
@@ -644,7 +641,7 @@ end)
 -- Every kind of <M-b>w row through snacks' real git_branch formatter, which
 -- indexes fields (the commit subject) a row can be built without.
 describe("worktree.format_row", function()
-  vim.opt.runtimepath:prepend(vim.fn.stdpath("data") .. "/lazy/snacks.nvim")
+  require("tests.helpers.plugins").add("snacks.nvim")
   require("snacks")
   local dir, repo
 

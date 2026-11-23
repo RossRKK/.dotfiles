@@ -12,12 +12,13 @@ end
 
 local here = vim.fs.dirname(debug.getinfo(1, "S").source:sub(2))
 local nvim_cfg = vim.fs.normalize(here .. "/..")
-local gitsigns = vim.fn.stdpath("data") .. "/lazy/gitsigns.nvim"
-local triage = vim.fs.normalize("~/dev/triage.nvim")
-for _, p in ipairs({ nvim_cfg, gitsigns, triage }) do
-  assert(vim.uv.fs_stat(p), "missing " .. p)
-  vim.opt.rtp:prepend(p)
+vim.opt.rtp:prepend(nvim_cfg)
+package.path = nvim_cfg .. "/?.lua;" .. package.path
+local plugins = require("tests.helpers.plugins")
+for _, name in ipairs({ "gitsigns.nvim", "triage.nvim" }) do
+  assert(vim.uv.fs_stat(plugins.dir(name)), "missing " .. plugins.dir(name))
 end
+plugins.add("gitsigns.nvim", "triage.nvim")
 
 -- Repo: `main` has three lines; `topic` deletes the middle one and commits it.
 -- The working file then equals HEAD, so a HEAD-based diff has zero hunks and

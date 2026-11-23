@@ -44,6 +44,7 @@ end
 --- Start a child nvim on its start screen, with no Claude in its terminals.
 local function start()
   local sock, listening = root .. "/nvim.sock", root .. "/listening"
+  local nix_build = require("util.nix_build").info
   job = vim.fn.jobstart({
     "env",
     "-u",
@@ -52,9 +53,15 @@ local function start()
     "AGENT_WORKTREES",
     "-u",
     "TMUX",
+    "-u",
+    "VIM",
+    "-u",
+    "VIMRUNTIME",
     "XDG_STATE_HOME=" .. root .. "/state",
     "CLAUDE_CONFIG_DIR=" .. root .. "/claude",
-    "nvim",
+    -- This checkout's config on the nvim under test (lazy.nvim's nvim ignores it and reads ~/.config/nvim).
+    "NVIM_CONFIG_DIR=" .. vim.fn.fnamemodify(probe, ":h:h:h"),
+    nix_build and nix_build.progpath or "nvim",
     "--listen",
     sock,
     -- The socket file exists from bind(), before listen(); --cmd runs only once the server accepts.

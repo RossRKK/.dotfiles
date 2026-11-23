@@ -5,7 +5,7 @@
 local assert = require("luassert")
 
 -- The title tint blends with tokyonight's own helper.
-vim.opt.runtimepath:prepend(vim.fn.stdpath("data") .. "/lazy/tokyonight.nvim")
+require("tests.helpers.plugins").add("tokyonight.nvim")
 
 local agent_chat, fishmonger
 local created, shown, hidden, destroyed, rendered, stopped
@@ -778,7 +778,7 @@ describe("the agentic config", function()
   end
 
   it("draws no emoji or icon glyphs in the chat's headings, titles, buffer names and spinner", function()
-    vim.opt.runtimepath:prepend(vim.fn.expand("~/dev/agentic.nvim"))
+    require("tests.helpers.plugins").add("agentic.nvim")
     local opts = require("plugins.agentic")[1].opts
     local config = vim.tbl_deep_extend("force", require("agentic.config_default"), opts)
     local shown = {}
@@ -803,7 +803,7 @@ describe("the agentic config", function()
   end)
 
   it("summarises a sub-agent's activity on its Agent call rather than listing its calls", function()
-    vim.opt.runtimepath:prepend(vim.fn.expand("~/dev/agentic.nvim"))
+    require("tests.helpers.plugins").add("agentic.nvim")
     local config = vim.tbl_deep_extend("force", require("agentic.config_default"), require("plugins.agentic")[1].opts)
 
     assert.equals("summary", config.tool_calls.subagent_activity)

@@ -2,10 +2,7 @@
 
 local assert = require("luassert")
 
-local lazy = vim.fn.stdpath("data") .. "/lazy/"
-for _, dir in ipairs({ lazy .. "tokyonight.nvim", lazy .. "render-markdown.nvim" }) do
-  vim.opt.runtimepath:prepend(dir)
-end
+require("tests.helpers.plugins").add("tokyonight.nvim", "render-markdown.nvim")
 
 -- As config/options.lua sets them, before the render-markdown spec reads them for its raw view.
 vim.o.wrap = true

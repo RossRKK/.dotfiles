@@ -2,10 +2,7 @@
 
 local assert = require("luassert")
 
-local lazy = vim.fn.stdpath("data") .. "/lazy/"
-for _, dir in ipairs({ lazy .. "nvim-web-devicons", lazy .. "bufferline.nvim" }) do
-  vim.opt.runtimepath:prepend(dir)
-end
+require("tests.helpers.plugins").add("nvim-web-devicons", "bufferline.nvim")
 
 describe("the bufferline beside the workspace tabs", function()
   local ws, root, columns

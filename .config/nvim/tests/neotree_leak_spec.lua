@@ -2,16 +2,12 @@
 -- handles across renders. v3.x (as of 2026-10) starts a fresh, self-rearming
 -- resize-monitor timer chain on every render and never closes git process
 -- handles; a 4.5h session reached ~340 concurrent chains (~600 timers/s, ~2GB
--- RSS). Exercises the plugin as installed by lazy, so it guards the pin rather
--- than our config. NEOTREE_PATH overrides the checkout, to test another build.
+-- RSS). Exercises the plugin as installed, so it guards the pin rather than our
+-- config. NVIM_DEV_PLUGINS=neo-tree.nvim=<checkout> tests another build.
 
 local assert = require("luassert")
 
-local lazy = vim.fn.stdpath("data") .. "/lazy/"
-local neotree = vim.env.NEOTREE_PATH or (lazy .. "neo-tree.nvim")
-for _, dir in ipairs({ lazy .. "nui.nvim", lazy .. "plenary.nvim", neotree }) do
-  vim.opt.runtimepath:prepend(dir)
-end
+require("tests.helpers.plugins").add("nui.nvim", "plenary.nvim", "neo-tree.nvim")
 
 --- Live libuv handles by type, counting only those not already closing.
 ---@return table<string, integer>

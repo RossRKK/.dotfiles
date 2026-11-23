@@ -4,7 +4,7 @@
 
 local assert = require("luassert")
 
-vim.opt.runtimepath:prepend(vim.fn.stdpath("data") .. "/lazy/hardtime.nvim")
+require("tests.helpers.plugins").add("hardtime.nvim")
 
 local spec = require("plugins.hardtime")[1]
 spec.config(spec, spec.opts)

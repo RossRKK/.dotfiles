@@ -5,15 +5,7 @@
 
 local assert = require("luassert")
 
-local lazy = vim.fn.stdpath("data") .. "/lazy/"
-for _, dir in ipairs({
-  lazy .. "nui.nvim",
-  lazy .. "plenary.nvim",
-  lazy .. "nvim-web-devicons",
-  lazy .. "neo-tree.nvim",
-}) do
-  vim.opt.runtimepath:prepend(dir)
-end
+require("tests.helpers.plugins").add("nui.nvim", "plenary.nvim", "nvim-web-devicons", "neo-tree.nvim")
 vim.cmd("runtime! plugin/neo-tree.lua") -- defines :Neotree, which sidebar.open uses
 
 require("plugins.explorer")[1].config()

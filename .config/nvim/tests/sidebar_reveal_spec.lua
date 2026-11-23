@@ -4,10 +4,7 @@
 
 local assert = require("luassert")
 
-local lazy = vim.fn.stdpath("data") .. "/lazy/"
-for _, dir in ipairs({ lazy .. "nui.nvim", lazy .. "plenary.nvim", lazy .. "neo-tree.nvim" }) do
-  vim.opt.runtimepath:prepend(dir)
-end
+require("tests.helpers.plugins").add("nui.nvim", "plenary.nvim", "neo-tree.nvim")
 
 local sidebar = require("util.sidebar")
 
