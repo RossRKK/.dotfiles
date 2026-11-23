@@ -7,6 +7,13 @@ for _, dir in ipairs({ lazy .. "tokyonight.nvim", lazy .. "render-markdown.nvim"
   vim.opt.runtimepath:prepend(dir)
 end
 
+-- As config/options.lua sets them, before the render-markdown spec reads them for its raw view.
+vim.o.wrap = true
+vim.o.linebreak = true
+vim.o.breakindent = true
+vim.o.showbreak = "↪ "
+vim.o.breakindentopt = "sbr"
+
 describe("a table in an agent chat", function()
   local buf, palette
 
@@ -171,5 +178,101 @@ describe("headings and bullets in a rendered agent chat", function()
 
   it("shows the bullet's - as written", function()
     assert.are.same({}, drawn_over_marker(2))
+  end)
+end)
+
+describe("wrapped quotes and list items, rendered", function()
+  local buf, win
+
+  local lines = {
+    "> quoted words that run on past the window edge here",
+    ">",
+    "> - item words that run on past the window edge here",
+    "- plain item words that run on past the window edge",
+    "",
+  }
+
+  --- `win`'s screen rows as drawn, trailing blanks trimmed.
+  local function screen_rows()
+    local pos = vim.api.nvim_win_get_position(win)
+    local rows = {}
+    for row = 1, vim.api.nvim_win_get_height(win) do
+      local cells = {}
+      for col = 1, vim.api.nvim_win_get_width(win) do
+        table.insert(cells, vim.fn.screenstring(pos[1] + row, pos[2] + col))
+      end
+      local text = table.concat(cells):gsub("%s+$", "")
+      table.insert(rows, text)
+    end
+    return rows
+  end
+
+  before_each(function()
+    vim.cmd("runtime! plugin/render-markdown.lua")
+    local spec = require("plugins.render-markdown")[1]
+    spec.config(nil, spec.opts)
+    vim.treesitter.language.register("markdown", "AgenticChat")
+    pcall(vim.cmd, "only!")
+    win = vim.api.nvim_open_win(0, true, { split = "right", width = 40 })
+    vim.wo[win].number = false
+    vim.wo[win].relativenumber = false
+    vim.wo[win].signcolumn = "no"
+    buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_win_set_buf(win, buf)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    -- Off every wrapped line, which render-markdown would leave raw under the cursor.
+    vim.api.nvim_win_set_cursor(win, { #lines, 0 })
+  end)
+
+  after_each(function()
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  --- Render `buf` as `filetype` and wait for the quote bar to land.
+  local function render(filetype)
+    vim.bo[buf].filetype = filetype
+    vim.treesitter.start(buf, "markdown")
+    require("render-markdown").render({ buf = buf, force = true })
+    vim.wait(1000, function()
+      return #vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, {}) > 0
+    end)
+    vim.cmd.redraw()
+  end
+
+  it("repeat the quote bar and hang items in an agent chat, with no wrap marker", function()
+    vim.wo[win].showbreak = require("plugins.agentic")[1].opts.windows.chat.win_opts.showbreak
+    render("AgenticChat")
+    assert.are.same({
+      "▋ quoted words that run on past the",
+      "▋ window edge here",
+      "▋",
+      "▋ - item words that run on past the",
+      "▋   window edge here",
+      "- plain item words that run on past the",
+      "  window edge",
+    }, vim.list_slice(screen_rows(), 1, 7))
+  end)
+
+  it("repeat the quote bar over the wrap marker, and hang items, in a markdown file", function()
+    render("markdown")
+    assert.are.same({
+      "▋ quoted words that run on past the",
+      "▋ window edge here",
+      "▋",
+      "▋ - item words that run on past the",
+      "▋   window edge here",
+      "- plain item words that run on past the",
+      "↪ window edge",
+    }, vim.list_slice(screen_rows(), 1, 7))
+  end)
+
+  it("leave the window's own line-break options once rendering is toggled off", function()
+    render("markdown")
+    require("render-markdown").buf_disable()
+    -- Turning rendering off lands, like rendering, on a later event-loop turn.
+    vim.wait(1000, function()
+      return #vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, {}) == 0
+    end)
+    assert.are.equal("sbr", vim.wo[win].breakindentopt)
   end)
 end)

@@ -4,6 +4,9 @@ local rerender_on_write, drop_conceal_lines -- defined below the spec
 
 local file_types = { "markdown", "AgenticChat" }
 
+-- The markdown ftplugin's list pattern, each item also matched behind quote markers, and a quote's markers alone.
+local list_or_quote_prefix = [=[^\s*\%(>\s\?\)*\%(\d\+\.\|[-*+]\)\s\+\|^\s*\%(>\s\?\)\+\|^\[^\ze[^\]]\+\]:\&^.\{4\}]=]
+
 local spec = {
   {
     "MeanderingProgrammer/render-markdown.nvim",
@@ -21,11 +24,22 @@ local spec = {
       -- Headings and bullets keep their markdown markers, which read as plainly as any icon.
       heading = { icons = {}, sign = false },
       bullet = { enabled = false },
+      -- The bar overlays the indent that breakindentopt's list:-1 hangs a wrapped quote or item by.
+      quote = { repeat_linebreak = true },
+      win_options = {
+        breakindentopt = { default = vim.o.breakindentopt, rendered = "list:-1,sbr" },
+      },
     },
     config = function(_, opts)
       require("render-markdown").setup(opts)
       drop_conceal_lines("markdown")
-      -- lazy fires FileType again once loaded, so this also takes the chat that loaded it.
+      -- lazy fires FileType again once loaded, so these also take the buffer that loaded it.
+      vim.api.nvim_create_autocmd("FileType", {
+        pattern = file_types,
+        callback = function(args)
+          vim.bo[args.buf].formatlistpat = list_or_quote_prefix
+        end,
+      })
       vim.api.nvim_create_autocmd("FileType", {
         pattern = "AgenticChat",
         callback = function(args)
