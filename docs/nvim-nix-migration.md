@@ -185,11 +185,11 @@ agentic's upstream Makefile reads `NVIM`, so there it's
 
 ## Migration
 
-Branch `rkk/nix-plugins` (dotfiles) and `rkk/flake` (each fork), not yet on
-main. Until the switch, the Lua's nix branch is dead code on the machines, so
-merging changes nothing for the running lazy nvim.
+Steps 1-6 are on main (dotfiles and each fork). A machine runs the nix build
+from its first `hms` after that; until then its lazy nvim runs the live config,
+where the nix branch is dead code.
 
-1. **Fork flakes** (`rkk/flake` in each fork). Each fork's tests run with
+1. **Fork flakes** (each fork's main). Each fork's tests run with
    plenary etc. from its own flake. They still fall back to the lazy install,
    until the cleanup.
 2. **Plugin lookup** (`config/plugin_dirs.lua` + spec, `util/nix_build.lua`).
@@ -198,11 +198,11 @@ merging changes nothing for the running lazy nvim.
 4. **Tests find plugins wherever the nvim under test does** (helper,
    `minimal_init`, specs, Makefile).
 5. **The nix build** (`flake.nix` inputs, `nvim-package.nix`,
-   `packages.<system>.nvim`). This is buildable and testable, but no host
-   installs it yet.
-6. **Switch** (not done): `base.nix` installs `self.packages.<system>.nvim` in
-   place of `neovim`, and Ross runs `hms` on each machine. Before then:
-   `make test NVIM_BIN=<build>` on the merged main.
+   `packages.<system>.nvim`).
+6. **Switch** (done): `base.nix` installs `pkgs.nvim` (the same build, through
+   an overlay) in place of `neovim`. Each machine switches on its next `hms`;
+   afterwards delete `~/.local/state/nvim-nix-try` (the try-out link) where it
+   exists.
 7. **Cleanup**, once every machine has switched: drop the lazy-install branch
    of `config/lazy.lua` and `tests/helpers/plugins.lua`, `lazy-lock.json`,
    `tests/lazy_lock_spec.lua`, the forks' lazy-install fallbacks, and
@@ -222,4 +222,5 @@ merging changes nothing for the running lazy nvim.
    too, with the current nvim. Its stub never resets `v:shell_error`, so the
    result depends on earlier tests. `nix flake check` there is red until it's
    fixed.
-4. **macOS** builds are declared but unverified.
+4. **macOS** evaluates (aether's activation package and `packages.aarch64-darwin.nvim`)
+   but hasn't been built.
