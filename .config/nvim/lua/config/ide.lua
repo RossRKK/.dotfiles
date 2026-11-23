@@ -9,8 +9,8 @@
 -- Detection reads argv directly (not cwd), so it's valid from the very first
 -- VimEnter regardless of which plugin's handler runs first.
 --
--- Window geometry (edge placement and sizing) is owned by edgy; see
--- lua/plugins/edgy.lua.
+-- Window geometry is owned by edgy on the left (lua/plugins/edgy.lua) and
+-- fishmonger on the right (lua/plugins/fishmonger.lua).
 
 local M = {}
 

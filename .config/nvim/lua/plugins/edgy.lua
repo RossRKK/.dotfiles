@@ -1,11 +1,7 @@
--- Window layout manager. edgy pins panels to the screen edges and owns their
--- placement and sizing, replacing the hand-rolled width math (ide.term_width),
--- the WinResized enforcer, and the manual outline-stacking splits.
---
--- Layout: the explorer on the LEFT, the side terminal on the RIGHT, the
--- editor in the middle. The terminal's tmux-style tab manager (fishmonger)
--- is unchanged -- it only ever shows one terminal window at a time, which edgy
--- just positions in the right edgebar.
+-- Window layout manager for the LEFT edge: edgy pins the explorer there and
+-- owns its placement and sizing. The right column is fishmonger's own
+-- (plugins/fishmonger.lua): edgy matches windows by buffer filetype, so it
+-- lost the panel whenever it showed anything but a terminal (an agent chat).
 
 -- Manual resizes (drag, :resize, neo-tree auto-expand) are written into edgy's
 -- per-window size override by util/edgy_pin.lua, so they stick instead of
@@ -13,6 +9,7 @@
 local edgy_pin = require("util.edgy_pin")
 
 local function reset_sizes()
+  require("fishmonger").reset_width()
   -- Turn off neo-tree's auto-expand-width first: otherwise it keeps widening the
   -- panel to fit the longest name and fights the width we're resetting to.
   local mgr = require("neo-tree.sources.manager")
@@ -29,20 +26,6 @@ end
 
 local function is_explorer(buf)
   return vim.b[buf].neo_tree_source == "filesystem"
-end
-
---- The height of this tabpage's fishmonger list that publishes it in window variable `var`.
----@param var string
----@return fun(): integer
-local function list_height(var)
-  return function()
-    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-      if vim.w[win][var] then
-        return vim.w[win][var]
-      end
-    end
-    return 1
-  end
 end
 
 return {
@@ -73,7 +56,7 @@ return {
       -- Panels snap to size. The glide is distracting, and every frame of it is
       -- a resize that edgy_pin has to recognise and ignore.
       animate = { enabled = false },
-      -- Arrow-key resizing for edge windows, through edgy's own resize so the
+      -- Arrow-key resizing for the explorer, through edgy's own resize so the
       -- new size lands straight in its override. Right/Up grow, Left/Down shrink.
       keys = {
         ["<C-Right>"] = function(win)
@@ -94,7 +77,6 @@ return {
         -- max(this, each window's override or view size). Opening sizes sit on
         -- the views below; these just stop a panel being dragged to nothing.
         left = { size = 10 },
-        right = { size = 10 },
       },
       left = {
         -- The file tree, sole occupant of the column (the symbols outline is a
@@ -107,53 +89,6 @@ return {
           -- Opening width; neo-tree's `e` (toggle_auto_expand_width) and drags
           -- then override it via edgy_pin -- see explorer.lua.
           size = { width = 35 },
-        },
-      },
-      right = {
-        -- The fishmonger side panel: the window it marks w:fishmonger_side, so a
-        -- terminal opened in the editor area (<C-b>t) stays there. Exclude floats
-        -- so lazygit (a float) and a zoomed panel are never pulled into the
-        -- edgebar. fishmonger draws its own tmux-style tab
-        -- strip as the window's winbar, so edgy only needs to adopt and size
-        -- this window.
-        --
-        -- `winbar = false` is load-bearing: it's the one value that makes edgy
-        -- leave the option alone (true installs edgy's own titlebar expression,
-        -- and edgy's default is true). Without it, every Edgy.Window construction
-        -- for this window overwrites fishmonger's winbar with edgy's -- which,
-        -- for a view with no title, renders as an empty strip. That construction
-        -- is not once-per-window: edgy caches Edgy.Window objects in a
-        -- WEAK-VALUED table keyed by window handle, so a garbage collection drops
-        -- the entry and the next layout update rebuilds it and re-applies `wo`.
-        -- Hence the tab strip vanishing at unpredictable moments rather than on
-        -- any one action.
-        {
-          ft = "fishmonger",
-          wo = { winbar = false },
-          size = { width = 0.4 }, -- opening width, ~40% of the screen
-          filter = function(_, win)
-            return vim.w[win].fishmonger_side and vim.api.nvim_win_get_config(win).relative == ""
-          end,
-        },
-        -- fishmonger's background-task list, under the panel. Sized by the
-        -- height fishmonger asks for: a fixed one here would undo fishmonger's
-        -- resize on every layout pass, and the list hopped between the two.
-        {
-          ft = "fishmonger-tasks",
-          wo = { winbar = false },
-          size = { height = list_height("fishmonger_tasks_height") },
-          filter = function(_, win)
-            return vim.w[win].fishmonger_side
-          end,
-        },
-        -- fishmonger's referenced-files list (<C-b>f), sized the same way.
-        {
-          ft = "fishmonger-files",
-          wo = { winbar = false },
-          size = { height = list_height("fishmonger_files_height") },
-          filter = function(_, win)
-            return vim.w[win].fishmonger_side
-          end,
         },
       },
     },

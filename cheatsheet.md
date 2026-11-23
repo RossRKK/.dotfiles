@@ -197,22 +197,24 @@ keys exist only in todo files, where they take over neotest's `Space+T`.
 | `Space+T]` / `Space+T[` | Next / previous tag                          |
 | `Enter` / `Shift+Enter` | (insert) Next item / indented next item      |
 
-### Layout (edgy)
+### Layout
 
-The IDE layout is pinned by [edgy](https://github.com/folke/edgy.nvim): explorer +
-outline on the **left**, the side terminal on the **right**, the editor in the
-middle. edgy sets each panel's *opening* size, then tracks whatever you resize
-it to — so `Ctrl+w` resizes and the arrow keys below all stick (after a
-brief warm-up on open). Keys work while focused inside an edge window (explorer,
-outline, terminal):
+The IDE layout: the explorer on the **left**, the side terminal on the
+**right**, the editor in the middle. [edgy](https://github.com/folke/edgy.nvim)
+pins the explorer; the side terminal's column is fishmonger's own, with
+everything stacked in it (an agent chat and its prompt, panes, the task and
+referenced-files lists). Each side opens at its opening size (the side panel
+at 40% of the screen, following screen resizes) and keeps whatever you resize
+it to, by `Ctrl+w`, a drag or the arrow keys below, until `Space+wr`. Keys work
+in normal mode while focused inside the explorer or the side panel:
 
 | Key                     | Action                                  |
 | ----------------------- | --------------------------------------- |
 | `Ctrl+Right` / `Ctrl+Left` | Grow / shrink the edge's width       |
-| `Ctrl+Up` / `Ctrl+Down`    | Grow / shrink height (stacked panels)|
-| `Space+wr`                 | Reset all panels to opening sizes    |
-| `]w` / `[w`                | Next / prev window in the edgebar    |
-| `Q`                        | Close the whole edgebar              |
+| `Ctrl+Up` / `Ctrl+Down`    | Grow / shrink the height of the window you are in |
+| `Space+wr`                 | Reset both edges to opening sizes    |
+| `]w` / `[w`                | Explorer: next / prev window in the edgebar |
+| `Q`                        | Explorer: close the whole edgebar    |
 
 Because edgy follows resizes now, neo-tree's `e` (auto-expand-width, fit the
 longest name) works again — it no longer fights the panel width. `Space+wr`
@@ -973,7 +975,7 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B c`    | New tab in the next free slot                     |
 | `Ctrl+B t`    | Open a terminal in the current window (the most recent tab not on screen) |
 | `Ctrl+B o`    | Jump to the next terminal window                  |
-| `Ctrl+B "` / `Ctrl+B %` | Split the terminal below / right into a new shell (in the side column, edgy stacks both) |
+| `Ctrl+B "` / `Ctrl+B %` | Split the terminal below / right into a new shell (from the side panel, the pane stays in its column) |
 | `Ctrl+B x`    | Kill the pane: its shell and its window           |
 | `Ctrl+B arrows` | Move to the pane in that direction (`Ctrl+K` from the top terminal pane goes to the program instead) |
 | `Ctrl+B z`    | Zoom: the current window (terminal, editor or explorer) fills the screen; again (or entering another split) puts it back |

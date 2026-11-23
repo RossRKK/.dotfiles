@@ -1,13 +1,12 @@
 -- fishmonger: the tmux-style side-terminal tab manager, split out as a local
--- plugin (dev = ~/dev, see config/lazy.lua). edgy (edgy.lua) governs its side
--- panel via the w:fishmonger_side window marker.
+-- plugin (dev = ~/dev, see config/lazy.lua). It owns the right-hand column:
+-- placement, width and resizes (edgy keeps only the left edge, see edgy.lua).
 return {
   {
     "RossRKK/fishmonger.nvim",
     dev = true,
     config = function()
-      -- fishmonger owns its own default width; edgy (see edgy.lua) adopts the
-      -- side panel by its window marker and re-governs sizing in this config.
+      -- width: 40% of the screen, re-read on every screen resize.
       -- shell: bare "fish" (jobstart resolves it via $PATH) rather than a
       -- hardcoded path, so this works whether fish lives at /usr/bin,
       -- /opt/homebrew/bin, or elsewhere.
@@ -18,6 +17,9 @@ return {
       -- Wrapped into background.slice where systemd allows (util/background.lua).
       local background = require("util.background")
       require("fishmonger").setup({
+        width = function()
+          return math.floor(vim.o.columns * 0.4)
+        end,
         shell = background.command("fish", background.user_manager()),
         project_name = function(tab)
           return require("config.workspace").display_name(tab)

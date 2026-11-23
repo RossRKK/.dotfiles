@@ -339,6 +339,49 @@ describe("an agent chat in the side panel", function()
     assert.same(docked, settled(docked))
   end)
 
+  it("keeps the referenced-files list Ctrl+B f opens in the panel's column", function()
+    chat_in_panel()
+    child("P.focus_chat(); require('fishmonger').files()")
+    local want = vim.tbl_extend("force", docked, {
+      right = "col[AgenticChat, AgenticInput, fishmonger-files]",
+      chat = { 64, 33 },
+    })
+    assert.same(want, settled(want))
+  end)
+
+  it("keeps a pane Ctrl+B \" splits from the chat in the panel's column", function()
+    chat_in_panel()
+    child("P.focus_chat(); require('fishmonger').split('below')")
+    local panel = settled({})
+    assert.is_truthy(panel.right:find("fishmonger", 1, true), panel.right)
+    assert.same(64, panel.chat[1])
+  end)
+
+  it("follows the screen's width back after a resize", function()
+    chat_in_panel()
+    resize(100)
+    resize(160)
+    assert.same(docked, settled(docked))
+  end)
+
+  it("widens with Ctrl+Right pressed in the chat, and goes back with Space+wr", function()
+    chat_in_panel()
+    child("P.focus_chat(); vim.cmd('stopinsert')")
+    child("vim.api.nvim_input('<C-Right>')")
+    local wider = vim.tbl_extend("force", docked, { chat = { 66, 35 }, prompt = { 66, 10 } })
+    assert.same(wider, settled(wider))
+    child("vim.api.nvim_input('<Space>wr')")
+    assert.same(docked, settled(docked))
+  end)
+
+  it("heightens the prompt with Ctrl+Up pressed in it", function()
+    chat_in_panel()
+    child("vim.api.nvim_set_current_win(P.prompt_window()); vim.cmd('stopinsert')")
+    child("vim.api.nvim_input('<C-Up>')")
+    local taller = vim.tbl_extend("force", docked, { chat = { 64, 33 }, prompt = { 64, 12 } })
+    assert.same(taller, settled(taller))
+  end)
+
   it(
     "goes to the editor area and back with Ctrl+B Z when the prompt is wider than the editor",
     function()
