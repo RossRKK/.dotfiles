@@ -156,13 +156,27 @@ in
   programs.btop.enable = true;
   programs.claude-code = {
     enable = true;
-    # A string, not a nix path, so --plugin-dir sees edits without a switch.
-    plugins = [
-      "${dotfilesDir}/claude-plugins/agent-status"
-      "${dotfilesDir}/claude-plugins/line-end-marks"
-      "${dotfilesDir}/claude-plugins/session-identity"
-      "${dotfilesDir}/claude-plugins/subagent-progress"
-    ];
+    # Mods via CLAUDE_CODE_PLUGIN_DIRS, not the module's `plugins`: those become
+    # --plugin-dir flags before the user's args, which `claude plugin test` refuses.
+    package = pkgs.symlinkJoin {
+      name = "claude-code";
+      paths = [ pkgs.claude-code ];
+      nativeBuildInputs = [ pkgs.makeWrapper ];
+      # Strings, not nix paths, so edits load without a switch.
+      postBuild = ''
+        wrapProgram $out/bin/claude --suffix CLAUDE_CODE_PLUGIN_DIRS : ${
+          lib.escapeShellArg (
+            lib.concatMapStringsSep ":" (name: "${dotfilesDir}/claude-plugins/${name}") [
+              "agent-status"
+              "line-end-marks"
+              "session-identity"
+              "subagent-progress"
+            ]
+          )
+        }
+      '';
+      inherit (pkgs.claude-code) meta;
+    };
   };
   programs.ripgrep.enable = true;
   programs.fd.enable = true;

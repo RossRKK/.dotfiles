@@ -1,6 +1,6 @@
 # The ACP adapter agentic.nvim drives Claude Code through, at a release newer
 # than nixpkgs' 0.36.1, running the `claude` given so its sessions load the same
-# --plugin-dir mods and login as the TUI.
+# mods (CLAUDE_CODE_PLUGIN_DIRS) and login as the TUI.
 {
   claude-agent-acp,
   fetchFromGitHub,
