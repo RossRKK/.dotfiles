@@ -57,7 +57,8 @@ My neovim config has a shortcut to jump to a line when in the form
 `path/to/file[:line]`. This path must be from the repo root. When referencing
 files include these paths so it is easy for me to jump where you're referencing.
 
-My to do list is in `~/todo.md`.
+My to do list is in `~/todo.md`. Add items to it but only under the "Claude"
+heading. You can use this file to check the status of my work and priorities.
 
 To show me a file inside nvim (`$NVIM` set), run `nvim-open <path>[:line[:col]]`.
 
