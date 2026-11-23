@@ -52,6 +52,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `neotree_leak_spec.lua` | the pinned neo-tree doesn't leak timers/process handles across renders. Loads the real plugin (and its git status): it guards the pin, not our code. `NVIM_DEV_PLUGINS=neo-tree.nvim=<checkout>` tests another build |
 | `plugin_dirs_spec.lua` | under the nix build, each plugin loads from its dir in the build, or from a checkout `NVIM_DEV_PLUGINS` names (`name` under `~/dev`, or `name=dir`, linked under the plugin's name when its directory has another); a missing checkout, a name the build lacks and a plugin the build lacks are errors, never a fallback |
 | `nix_build_spec.lua` | the nix build is read from the wrapper's info plugin (plugin dirs, config dir, nvim), and is absent in any other nvim |
+| `lua_path_spec.lua` | the nvim under test keeps Lua's default search paths (`./?.lua`, `./?.so`) with `LUA_PATH`/`LUA_CPATH` unset |
 | `plugin_loading_spec.lua` | the full config, in the nvim under test: lazy can tell every plugin by its directory's name, so a `require()`d plugin loads with its spec's opts (agentic's, checked) |
 | `lazy_lock_spec.lua` | `lazy-lock.json` pins every `dev = true` plugin, so machines without `~/dev` checkouts restore a known-good commit |
 

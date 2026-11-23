@@ -93,6 +93,17 @@ in
   hosts.node.nvim-host.enable = false;
   hosts.ruby.nvim-host.enable = false;
 
+  # ";;" keeps LuaJIT's default search paths (./?.lua etc.) under the module's
+  # LUA_PATH/LUA_CPATH suffix, which replace them when unset; as nixpkgs' lua wrapper does.
+  envDefault.LUA_PATH = {
+    data = ";;";
+    before = [ "NIX_PROPAGATED_LUA_PATH" ];
+  };
+  envDefault.LUA_CPATH = {
+    data = ";;";
+    before = [ "NIX_PROPAGATED_LUA_CPATH" ];
+  };
+
   specs.loader = vimPlugins.lazy-nvim;
 
   # Parsers and their queries, collated into pack/*/start: on the runtimepath from the start.
