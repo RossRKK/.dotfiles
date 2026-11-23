@@ -214,10 +214,8 @@ change:
    commits read today) and push.
 5. Other machines: `git pull` + `hms`.
 
-`lazy-lock.json`, `tests/lazy_lock_spec.lua` and the untracked
-`util/dev_pins.lua` + `tests/dev_pins_spec.lua` exist to keep `~/dev` plugins
-pinned. `flake.lock` does that now, so they're deleted at the switch. Decide
-whether `dev_pins` should land at all before then.
+`lazy-lock.json` and `tests/lazy_lock_spec.lua` exist to keep `~/dev` plugins
+pinned. `flake.lock` does that now, so they're deleted at the switch.
 
 ## 5. Dev workflow against `~/dev` checkouts
 
