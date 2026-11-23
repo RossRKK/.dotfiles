@@ -45,4 +45,6 @@ require("lazy").setup("plugins", {
   -- rocks support would keep trying (and failing) to build via hererocks. We use
   -- image.nvim's magick_cli processor, so no luarock is needed -- disable rocks.
   rocks = { enabled = false },
+  -- Pins live in flake.lock; a lockfile in the config dir would be committed.
+  lockfile = vim.fn.stdpath("state") .. "/lazy-lock.json",
 })

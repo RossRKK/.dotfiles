@@ -54,7 +54,6 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `nix_build_spec.lua` | the nix build is read from the wrapper's info plugin (plugin dirs, config dir, nvim), and is absent in any other nvim |
 | `lua_path_spec.lua` | the nvim under test keeps Lua's default search paths (`./?.lua`, `./?.so`) with `LUA_PATH`/`LUA_CPATH` unset |
 | `plugin_loading_spec.lua` | the full config, in the nvim under test: lazy can tell every plugin by its directory's name, so a `require()`d plugin loads with its spec's opts (agentic's, checked) |
-| `lazy_lock_spec.lua` | `lazy-lock.json` pins every `dev = true` plugin, so machines without `~/dev` checkouts restore a known-good commit |
 
 The side-terminal and branch-review logic now live in external plugins, each
 with its own test suite and flake (`nix develop -c make test`), developed

@@ -7,6 +7,6 @@
 - Edits to this config must always be designed to work in WSL, native nixos and
   mac os. This is so that the consuming machines stay compatible
 - Edits to this repo, and the related neovim plugins, should always be
-  committed, merged to main and pushed. The lazy pins for plugins should be
-  updated to ensure compatibility. This is so the latest version of the
-  config and its dependencies are available to all machines
+  committed, merged to main and pushed, with the plugins' flake.lock inputs
+  updated to match. This is so the latest version of the config and its
+  dependencies are available to all machines
