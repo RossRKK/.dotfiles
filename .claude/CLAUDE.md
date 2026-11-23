@@ -88,7 +88,8 @@ comment or a conversation -- add a one-line entry here with a short why.
   `command: [sh, -c]`, Helm templates), no Python piped to an interpreter from
   bash (`python - <<EOF`, multi-line `python -c`, `| python`), and never Python
   in bash in YAML. Write a script file that takes arguments and call it: it can
-  be linted, tested and read. Prefer python over bash.
+  be linted, tested and read. Prefer python over bash. Prefer python over
+  argparse, except where it is simpler to not have to introduce a dependency.
 - Invalid states should be unrepresentable: enums, newtypes and literal unions,
   not strings or bool-plus-optional combinations.
 - No sentinel values for "absent" (`""`, `-1`, `0`): use an option type. Proto
