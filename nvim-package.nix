@@ -88,6 +88,11 @@ in
   # NVIM_CONFIG_DIR runs another checkout's config (a worktree, ~/.dotfiles) on these plugins.
   settings.config_directory = lib.generators.mkLuaInline ''os.getenv("NVIM_CONFIG_DIR") or ${builtins.toJSON "${./.config/nvim}"}'';
 
+  # No remote-plugin hosts: no plugin here needs one, and the nixpkgs neovim before this ran none.
+  hosts.python3.nvim-host.enable = false;
+  hosts.node.nvim-host.enable = false;
+  hosts.ruby.nvim-host.enable = false;
+
   specs.loader = vimPlugins.lazy-nvim;
 
   # Parsers and their queries, collated into pack/*/start: on the runtimepath from the start.

@@ -149,9 +149,8 @@ in
 
   # These modules only write config files when their `settings` options are
   # set, so plain `enable` just installs the package and the out-of-store
-  # symlinks below (lazygit) stay authoritative. Neovim deliberately
-  # stays a plain package: programs.neovim's wrapper always generates an
-  # init.lua, which collides with the symlinked ~/.config/nvim.
+  # symlinks below (lazygit) stay authoritative. Neovim isn't programs.neovim:
+  # it's the flake's own build with its plugins and config (nvim-package.nix).
   programs.lazygit.enable = true;
   programs.htop.enable = true;
   programs.btop.enable = true;
@@ -230,10 +229,9 @@ in
   home.packages =
     with pkgs;
     [
-      # Plain package on purpose (see comment above programs.lazygit): the
-      # programs.neovim wrapper would generate an init.lua that collides with
-      # the symlinked ~/.config/nvim.
-      neovim
+      # Plugins and the .config/nvim Lua built in (nvim-package.nix), so pulled
+      # config changes reach nvim only on a switch.
+      nvim
       # agentic.nvim's Claude Code chat (plugins/agentic.lua), over ACP.
       (callPackage ./claude-agent-acp.nix { claude = config.programs.claude-code.finalPackage; })
 
@@ -296,8 +294,7 @@ in
       nixfmt # official nixfmt (RFC 166)
     ]
     ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
-      # The nix neovim wrapper puts wl-copy on its own PATH; install it user-wide
-      # too so anything outside the wrapper (terminals, scripts) gets a clipboard provider.
+      # nvim's clipboard provider on Wayland, and anything else's (terminals, scripts).
       # Wayland-only, so skip it on hosts (e.g. macOS) that can't build it.
       wl-clipboard
       # claude-plugins/lib/process reads stdout targets with it off /proc, which

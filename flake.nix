@@ -65,8 +65,10 @@
 
   outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-neovide, home-manager, plasma-manager, claude-code, kache, neovim, wrappers, ... }@inputs:
     let
-      # The nvim every host runs, built for the given pkgs.
-      nvimFor = pkgs: (wrappers.lib.evalModule (import ./nvim-package.nix inputs)).config.wrap { inherit pkgs; };
+      # pkgs.nvim: the nvim every host runs (nvim-package.nix), with neovim.nix's neovim.
+      nvimOverlay = final: prev: {
+        nvim = (wrappers.lib.evalModule (import ./nvim-package.nix inputs)).config.wrap { pkgs = final; };
+      };
 
       # Linux hosts (personal, work) take atmos/poethepoet/opentofu from
       # unstable, see the nixpkgs-unstable input comment above.
@@ -95,6 +97,7 @@
             src = neovim;
             releases = [ pkgs-unstable.neovim-unwrapped ];
           })
+          nvimOverlay
         ];
         };
 
@@ -109,11 +112,12 @@
           src = neovim;
           releases = [ ];
         })
+        nvimOverlay
       ];
       };
     in {
-      packages.x86_64-linux.nvim = nvimFor (pkgsLinux "x86_64-linux");
-      packages.aarch64-darwin.nvim = nvimFor (pkgsDarwin "aarch64-darwin");
+      packages.x86_64-linux.nvim = (pkgsLinux "x86_64-linux").nvim;
+      packages.aarch64-darwin.nvim = (pkgsDarwin "aarch64-darwin").nvim;
 
       # Symbols agents print (Claude Code's checklists, ↵ line ends, timers) that
       # Neovide's font.normal chain must draw without falling back to colour emoji.
