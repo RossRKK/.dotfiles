@@ -50,7 +50,7 @@ export const register: Register = (on) => {
     return (
       <Box flexDirection="column" width={e.props.bodyColumns}>
         {shown.map((run) => describeRun(run, now)).map(({ isDone, description, details }) => (
-          <Text wrap="truncate-end" dimColor={isDone}>
+          <Text wrap="wrap" dimColor={isDone}>
             <Text color={isDone ? 'success' : 'warning'}>{isDone ? '✓ ' : '● '}</Text>
             <Text weight="bold">{description}</Text>
             {` · ${details.join(' · ')}`}

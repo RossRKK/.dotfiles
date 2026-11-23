@@ -142,3 +142,18 @@ test('an agent first seen by its tool call is tracked from then', async ($, on) 
 
   expect(await rows($, 'terminal')).toEqual(['● fix the parser · dotfiles:rkk/parser · no commits · 1 uncommitted · 1s'])
 })
+
+test('a row wider than the band wraps onto more rows instead of being cut off', async ($, on) => {
+  const { clock } = engine(on, { branch: 'rkk/a-branch-name-long-enough-to-overflow-a-narrow-terminal', ahead: 0, changed: [] })
+
+  await $.turn.start(turn('a1'))
+  await clock.advance(REFRESH_DELAY_MS)
+
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 40 }, surface })
+    const [row] = await ui.findAll({ type: 'Text', text: /·/ })
+    expect(row?.props.wrap).toBe('wrap')
+    expect(row?.text).toBe('● fix the parser · dotfiles:rkk/a-branch-name-long-enough-to-overflow-a-narrow-terminal · no commits · clean · 1s')
+    await ui.unmount()
+  }
+})
