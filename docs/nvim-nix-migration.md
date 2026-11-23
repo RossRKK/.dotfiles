@@ -11,7 +11,7 @@ loader. It never clones, updates or writes.
 | Question | Decision |
 | --- | --- |
 | Wrapper | [nix-wrapper-modules](https://github.com/nix-community/nix-wrapper-modules)' neovim module. nixCats, its predecessor by the same author, is in maintenance mode. |
-| Plugin versions | nixpkgs' (the `nixpkgs` input, 26.05), except where a flake input is needed (below). Tests catch regressions. |
+| Plugin versions | nixpkgs-unstable's, from their own `nixpkgs-nvim-plugins` input, except where a flake input is needed (below). Tests catch regressions. neovim and the rest of the system stay on stable. |
 | Lua config | Wrapped into the build. `NVIM_CONFIG_DIR` runs another checkout's config on the same plugins, for development. |
 | Loader | **lazy.nvim, fed from the store** (see "Why not lze"). |
 | Forks | Flake inputs. Each fork repo has its own flake for its test suite. |
@@ -25,8 +25,8 @@ Eighteen test sites call `require("plugins.x")[1].opts` or `.config()`, and
 `config/greeter.lua` waits on lazy's `User VeryLazy`, so the rewrite would mean
 2.5k lines of live config plus the tests. lazy.nvim's documented settings for
 nix-provided plugins avoid all of that. Every plugin is a "dev" plugin
-(`dev.patterns = { "" }`) whose `dev.path` is its store path, and lazy's
-rtp/packpath reset is off. Prior art: nixCats' `lazyCat.lua` and the settings its
+(`dev.patterns = { "" }`) whose `dev.path` is its directory in the build, and
+lazy's rtp/packpath reset is off. Prior art: nixCats' `lazyCat.lua` and the settings its
 README lists. Switching to lze later stays possible as a separate refactor.
 
 ## Layout
@@ -37,20 +37,36 @@ nvim-package.nix   the wrapper module: plugins, parsers, config_directory
 neovim.nix         unchanged: the neovim-unwrapped build being wrapped
 .config/nvim/      the Lua config, copied into the build
   lua/config/lazy.lua         nix branch: lazy loads from the store
-  lua/config/plugin_dirs.lua  store path or NVIM_DEV_PLUGINS checkout per plugin
-  lua/util/nix_build.lua      the wrapper's info plugin, nil under plain lazy
+  lua/config/plugin_dirs.lua  the build's dir or a NVIM_DEV_PLUGINS checkout per plugin
+  lua/util/nix_build.lua      the build, read from the wrapper's info plugin; nil under plain lazy
   lua/util/config_dir.lua     the running config's dir (not stdpath("config"))
 ```
 
-`nvim-package.nix` puts every plugin in `pack/*/opt` (`lazy = true`), so lazy
-alone decides what loads when. Plugin dependencies nixpkgs declares go there too
-(`pluginDeps = "lazy"`). The plugins are named as lazy names them; only
-`LuaSnip` needs a `pname`. A plugin that's in the Lua specs but missing from
-the build stops nvim with "X isn't in the nix build: add it to
-nvim-package.nix". It never falls back to a download.
+`nvim-package.nix` gives the wrapper only lazy.nvim and the parsers as
+packages. Every other plugin goes into a link farm, `<farm>/<name>` per plugin,
+whose dirs reach the config through the info plugin (`info.plugin_dirs`). lazy
+alone decides what loads when, as with its own installs:
+
+- **Each dir must be named as lazy names the plugin.** lazy tells which plugin
+  a `require()`d module belongs to by the name of the directory above `lua/`.
+  A bare store path (`<hash>-vimplugin-agentic.nvim-<date>`) matches no plugin,
+  so lazy returns the module *without loading the plugin*: its spec's opts and
+  config never run. The first try-out build had exactly this bug (agentic on
+  defaults: emoji headings, no Claude name, no rendering). A `NVIM_DEV_PLUGINS`
+  checkout in a directory of another name (a worktree) is loaded through a link
+  named for the plugin, under `stdpath("cache")/dev-plugins`.
+  `tests/plugin_loading_spec.lua` guards both.
+- **Not wrapper packages.** In a pack dir the plugins' Lua rocks would join
+  neovim's Lua environment. With unstable's plugins on stable's neovim, that
+  clashes (two luajits). lazy's own installs never had rocks either.
+
+A plugin that's in the Lua specs but missing from the build stops nvim with "X
+isn't in the nix build: add it to nvim-package.nix". It never falls back to a
+download.
 
 Treesitter: the 24 parsers in `plugins/treesitter.lua` come from
-`nvim-treesitter.withPlugins` and land, collated, in `pack/*/start`. Under the
+`nvim-treesitter.grammarPlugins` (parsers and their queries), collated in
+`pack/*/start`; nvim-treesitter itself is in the farm. Under the
 build, `plugins/treesitter.lua` skips `install()`. Parsers left in
 `~/.local/share/nvim/site/parser` come later on the runtimepath (checked), so
 they're harmless; delete them when convenient.
@@ -65,22 +81,37 @@ edits go.
 
 ## Where each plugin comes from
 
-nixpkgs for everything except these flake inputs. Each was first locked to the
-commit `lazy-lock.json` runs today, so the switch doesn't change them:
+`nixpkgs-nvim-plugins` (unstable) for everything except these flake inputs. Each
+was first locked to the commit `lazy-lock.json` runs today, so the switch
+doesn't change them:
 
 | Input | Why not nixpkgs |
 | --- | --- |
 | `agentic`, `fishmonger`, `nitpick`, `triage` | Ross's forks / plugins |
-| `neo-tree` (`main`) | `tests/neotree_leak_spec.lua` fails on nixpkgs' 3.x (45 live handles vs 31) |
-| `render-markdown` | nixpkgs' (2026-05) leaves `breakindentopt` changed once rendering is toggled off (`render_markdown_spec`) |
+| `neo-tree` (`main`) | `tests/neotree_leak_spec.lua` fails on nixpkgs' 3.42.0, stable and unstable (45 live handles vs 31) |
+| `render-markdown` | nixpkgs' v8.14.0, stable and unstable, leaves `breakindentopt` changed once rendering is toggled off (`render_markdown_spec`) |
 | `videre`, `graph-view-yaml`, `graph-view-toml` | not in nixpkgs |
 
-**Version drift.** The pinned `nixpkgs` (`1e8bc65`) is older than most of
-`lazy-lock.json`, so the switch moves most other plugins *back* by up to eight
-months (snacks 2026-05 → 2026-03, nvim-treesitter 2026-10 → 2026-04,
-lspconfig → v2.9). The full suite passes on these versions with the inputs
-above. Anything the suite doesn't cover will show up in use. The fix is either
-another input or `nix flake update nixpkgs`.
+**Version drift** against `lazy-lock.json`, at `nixpkgs-nvim-plugins`
+`619c39f` (2026-11-22), by GitHub's compare of the two commits: 27 identical, 4
+newer (cmp-nvim-lsp, nvim-cmp, nvim-surround, nvim-treesitter), and 13 older.
+nixpkgs packages tagged releases where lazy followed branch heads:
+
+| Plugin | Commits behind |
+| --- | --- |
+| nvim-web-devicons (v0.100) | 124 |
+| gitsigns.nvim | 80 |
+| nvim-lspconfig (v2.12.0) | 55 |
+| image.nvim (v1.5.1) | 17 |
+| LuaSnip (v2.5.0) | 14 |
+| nui.nvim (0.4.0) | 10 |
+| rustaceanvim (v9.2.2) | 6 |
+| lazy.nvim (v11.17.5) | 4 |
+| checkmate.nvim (v0.12.1) | 2 |
+| neotest, nvim-nio | 1 each |
+
+(neo-tree and render-markdown are behind too, but come from inputs.) The full
+suite passes with these. If one regresses in use, make it an input as well.
 
 ## Updating a plugin
 
@@ -93,8 +124,8 @@ A fork (or any input):
    ("nvim: pin agentic's <fix>") and push.
 4. `hms` on each machine, then restart nvim.
 
-nixpkgs plugins move with `nix flake update nixpkgs`, which also moves the rest
-of the home configuration.
+nixpkgs plugins move with `nix flake update nixpkgs-nvim-plugins`, which moves
+nothing else.
 
 ## Developing against the build
 
