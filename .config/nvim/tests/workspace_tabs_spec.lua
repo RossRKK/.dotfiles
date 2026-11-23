@@ -283,3 +283,110 @@ describe("a workspace tab", function()
     assert.is_true(widths.file * 2 >= widths.chat, vim.inspect(widths))
   end)
 end)
+
+describe("an agent chat in the side panel", function()
+  before_each(function()
+    root = vim.fs.normalize(vim.fn.resolve(vim.fn.tempname()))
+    vim.fn.mkdir(root, "p")
+  end)
+
+  after_each(function()
+    pcall(vim.fn.jobstop, job)
+    vim.fn.delete(root, "rf")
+  end)
+
+  --- Resize the child's screen to `columns` and wait for it to see that.
+  ---@param columns integer
+  local function resize(columns)
+    vim.fn.jobresize(job, columns, 48)
+    assert.is_true(vim.wait(5000, function()
+      return child("return vim.o.columns") == columns
+    end, 20))
+  end
+
+  --- A workspace tab with an agent chat in its side panel, on a 160-column screen.
+  local function chat_in_panel()
+    start()
+    open_from_start_screen(repo("chat"))
+    visit(1)
+    child("P.stand_in_agent(); require('config.agent_chat').new(0)")
+    assert.is_true(vim.wait(5000, function()
+      return child("return P.prompt_height()") ~= vim.NIL
+    end, 20))
+  end
+
+  --- The panel once it settles on `want`, else as it last was.
+  ---@param want table
+  ---@return table
+  local function settled(want)
+    vim.wait(5000, function()
+      return vim.deep_equal(child("return P.panel()"), want)
+    end, 20)
+    return child("return P.panel()")
+  end
+
+  -- 40% of 160 columns; the prompt at agentic's 10 rows.
+  local docked = {
+    right = "col[AgenticChat, AgenticInput]",
+    columns = 160,
+    cmdheight = 0,
+    chat = { 64, 35 },
+    prompt = { 64, 10 },
+  }
+
+  it("opens docked at the panel's width with agentic's prompt under the chat", function()
+    chat_in_panel()
+    assert.same(docked, settled(docked))
+  end)
+
+  it(
+    "goes to the editor area and back with Ctrl+B Z when the prompt is wider than the editor",
+    function()
+      chat_in_panel()
+      child("P.focus_chat()")
+      assert.same({ true }, { child("return pcall(require('fishmonger').maximise)") })
+      child("P.focus_chat()")
+      assert.same({ true }, { child("return pcall(require('fishmonger').maximise)") })
+      assert.same(
+        { right = docked.right, prompt = 10, tree = 35 },
+        child(
+          "return { right = P.panel().right, prompt = P.prompt_height(), tree = vim.api.nvim_win_get_width(require('neo-tree.sources.manager').get_state('filesystem').winid) }"
+        )
+      )
+    end
+  )
+
+  -- Wide enough that Ctrl+B Z takes the editor rather than the prompt.
+  describe("on a wide screen", function()
+    local wide =
+      vim.tbl_extend("force", docked, { columns = 240, chat = { 96, 35 }, prompt = { 96, 10 } })
+
+    it("docks back with Ctrl+B Z pressed from its prompt in the editor area", function()
+      chat_in_panel()
+      resize(240)
+      child("P.focus_chat(); require('fishmonger').maximise()")
+      child("vim.api.nvim_set_current_win(P.prompt_window()); require('fishmonger').maximise()")
+      assert.same(wide, settled(wide))
+    end)
+
+    it("goes to the editor area with Ctrl+B Z while zoomed, and docks back", function()
+      chat_in_panel()
+      resize(240)
+      child("P.focus_chat(); require('fishmonger').zoom(); require('fishmonger').maximise()")
+      assert.is_true(child("return P.panel().chat ~= vim.NIL"))
+      child("P.focus_chat(); require('fishmonger').maximise()")
+      assert.same(wide, settled(wide))
+    end)
+
+    it("is laid out for the screen it unzooms on", function()
+      chat_in_panel()
+      resize(240)
+      child("P.focus_chat(); require('fishmonger').zoom()")
+      resize(200)
+      child("require('fishmonger').zoom()")
+      local want =
+        vim.tbl_extend("force", docked, { columns = 200, chat = { 80, 35 }, prompt = { 80, 10 } })
+      assert.same(want, settled(want))
+    end)
+  end)
+end)

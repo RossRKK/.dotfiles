@@ -56,6 +56,12 @@ function M.todo_shown()
   return todo.window(0, todo.FILE) ~= nil
 end
 
+--- The newest agent chat's prompt window.
+---@return integer
+function M.prompt_window()
+  return assert(chat_windows().input)
+end
+
 --- Focus the newest agent chat's chat window.
 function M.focus_chat()
   vim.api.nvim_set_current_win(assert(chat_windows().chat))
@@ -69,18 +75,42 @@ function M.chat(tab)
   return ok and chat or vim.NIL
 end
 
+--- A window tree from winlayout() with each window shown as its buffer's filetype.
+---@param node table
+---@return string
+local function tree(node)
+  if node[1] == "leaf" then
+    local ft = vim.bo[vim.api.nvim_win_get_buf(node[2])].filetype
+    return ft == "" and "editor" or ft
+  end
+  return node[1] .. "[" .. table.concat(vim.tbl_map(tree, node[2]), ", ") .. "]"
+end
+
 --- A tabpage's window tree with each window shown as its buffer's filetype.
 ---@param tab integer
 ---@return string
 function M.shape(tab)
-  local function walk(node)
-    if node[1] == "leaf" then
-      local ft = vim.bo[vim.api.nvim_win_get_buf(node[2])].filetype
-      return ft == "" and "editor" or ft
-    end
-    return node[1] .. "[" .. table.concat(vim.tbl_map(walk, node[2]), ", ") .. "]"
+  return tree(vim.fn.winlayout(vim.api.nvim_tabpage_get_number(tab)))
+end
+
+--- The current tab's right-hand column, and the screen and sizes an agent chat in the side panel is judged by.
+---@return { right: string, columns: integer, cmdheight: integer, chat: integer[]|vim.NIL, prompt: integer[]|vim.NIL }
+function M.panel()
+  local layout = vim.fn.winlayout()
+  local wins = chat_windows()
+  local function size(win)
+    return win
+        and vim.api.nvim_win_is_valid(win)
+        and { vim.api.nvim_win_get_width(win), vim.api.nvim_win_get_height(win) }
+      or vim.NIL
   end
-  return walk(vim.fn.winlayout(vim.api.nvim_tabpage_get_number(tab)))
+  return {
+    right = tree(layout[1] == "row" and layout[2][#layout[2]] or layout),
+    columns = vim.o.columns,
+    cmdheight = vim.o.cmdheight,
+    chat = size(wins.chat),
+    prompt = size(wins.input),
+  }
 end
 
 --- Whether every window a workspace tab gets is up in `tab`.

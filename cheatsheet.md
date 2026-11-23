@@ -977,7 +977,7 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B x`    | Kill the pane: its shell and its window           |
 | `Ctrl+B arrows` | Move to the pane in that direction (`Ctrl+K` from the top terminal pane goes to the program instead) |
 | `Ctrl+B z`    | Zoom: the current window (terminal, editor or explorer) fills the screen; again (or entering another split) puts it back |
-| `Ctrl+B Z`    | Maximise: the side terminal takes the main window and the panel closes (explorer stays); again, from that terminal, docks it back and the file returns |
+| `Ctrl+B Z`    | Maximise: the side terminal takes the main window and the panel closes (explorer stays); again, from that terminal (or an agent chat's prompt), docks it back and the file returns. From a zoomed window it unzooms first |
 | `Ctrl+B &`    | Kill the current tab                              |
 | `Ctrl+B . N`  | Move the current tab to slot N (`.` then `1-9`)   |
 | `Ctrl+B m N`  | Move the current tab to workspace N (the number on its label; you follow it) |

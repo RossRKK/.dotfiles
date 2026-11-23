@@ -200,6 +200,17 @@ function host(spec, place)
         live.widget:hide()
       end
     end,
+    -- The prompt and panels agentic split around the chat, so fishmonger treats them as the tab's own.
+    windows = function()
+      local live = registry.get(key)
+      local wins = {}
+      for name, win in pairs(live and live.widget.win_nrs or {}) do
+        if name ~= "chat" then
+          wins[#wins + 1] = win
+        end
+      end
+      return wins
+    end,
     -- Claude's session now, which /clear moves on from the ACP session's.
     session = function()
       local live = registry.get(key)
