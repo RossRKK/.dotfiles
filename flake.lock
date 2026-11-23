@@ -3,11 +3,11 @@
     "agentic": {
       "flake": false,
       "locked": {
-        "lastModified": 1795442657,
-        "narHash": "sha256-DmbFuU0N/r2e9J53hMV3aSFLxGAK0HvP7fHTKyd+mnk=",
+        "lastModified": 1795447813,
+        "narHash": "sha256-SuX4VHIFRBbee2bZZrRfsJNx3kap9bcHo4/0YQxX1vY=",
         "owner": "RossRKK",
         "repo": "agentic.nvim",
-        "rev": "9ae057a883d705f0b96a24bfff98fad457256493",
+        "rev": "2889eb15841d4e102087ce384140c0f9dbd30076",
         "type": "github"
       },
       "original": {
