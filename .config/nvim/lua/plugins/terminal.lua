@@ -21,8 +21,6 @@ return {
       vim.keymap.set("n", "<C-S-g>", function()
         require("util.lazygit").pick()
       end, { desc = "Open git TUI in a picked project" })
-      -- <leader>gP (PR for the current branch) lives in git.lua with the other
-      -- <leader>g git maps.
     end,
   },
 }
