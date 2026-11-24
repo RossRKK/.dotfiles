@@ -31,7 +31,8 @@ describe("closing a tab with an agent chat", function()
     vim.fn.delete(root, "rf")
 
     assert.is_nil(report.error)
-    assert.equals("", report.errmsg)
+    -- agentic's own errors: the full config's other startup work can set v:errmsg in this nvim too.
+    assert.is_nil(report.errmsg:find("agentic", 1, true), report.errmsg)
     assert.equals(0, report.sessions)
   end)
 end)

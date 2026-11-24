@@ -177,9 +177,15 @@ to it. It's a stack of windows, top to bottom:
    for), merge state and checks, each failed or running check its own row
    that `gd` opens. Edit the title (the current stack row) or the description
    (below the rule) in place and `:w` or `Ctrl+S` saves them to GitHub; it
-   refuses if GitHub's copy changed since it loaded. It refreshes itself when
-   the branch or HEAD moves, unless it holds unsaved edits. `:NitpickPr [n]`
-   opens any PR the same way.
+   refuses if GitHub's copy changed since it loaded. Under the description,
+   the conversation, newest activity first: comments on the PR, reviews'
+   summaries and threads on the code (file:line, then the end of the diff);
+   resolved threads collapse to their file:line, bot-only threads are hidden
+   and counted. Your own comments edit in place too, saved by the same `:w`.
+   `Space+ra` on a thread replies (in it for one on the code, else a comment to
+   its author), `Space+rc` comments on the PR, both in the compose box. It
+   refreshes itself when the branch or HEAD moves, unless it holds unsaved
+   edits. `:NitpickPr [n]` opens any PR the same way.
 3. **Review queue** — the [review queue](#review-queue-spacerq) and
    [my PRs](#my-prs-spacerm) counts, held to their height. It doesn't depend on
    the branch.
