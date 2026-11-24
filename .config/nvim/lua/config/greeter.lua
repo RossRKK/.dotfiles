@@ -3,10 +3,12 @@
 --
 -- workspace.open() used to leave a plain empty buffer there, which told you
 -- nothing and did nothing. Instead the window shows the review queue's counts,
--- held to their height, with the todo list (config/todo.lua) filling the area
--- under it. It comes back whenever the buffer list empties out again
--- (<leader>X, or closing the last buffer), so "no buffers open" is a status
--- screen rather than a dead end. The windows under it are companions
+-- held to their height. Under it, for a branch with a PR, sit the diff size
+-- and PR stack (its rows pick a PR) and the PR itself, a gh:// buffer that
+-- snacks.nvim renders; then the todo list (config/todo.lua), which takes the
+-- area when there is no PR. It comes back whenever the buffer list empties out
+-- again (<leader>X, or closing the last buffer), so "no buffers open" is a
+-- status screen rather than a dead end. The windows under it are companions
 -- (config/windows.lua): a file opened over the greeter puts them away.
 --
 -- The queue's buffer is a real, listed one, pinned to the front of the
@@ -16,8 +18,8 @@
 -- you land when the last buffer closes. plugins/buffers.lua does the pinning
 -- and the filtering -- it keys off the b:greeter_root set below.
 --
--- The branch report (triage.report, plugins/review.lua) is fetched here too:
--- it names the workspace's tab and the OS title, and resolves the PR that
+-- The branch report (triage.report, plugins/review.lua) behind the size and the
+-- PR also names the workspace's tab and the OS title, and its PR is the base
 -- triage reviews against.
 --
 -- Distinct from plugins/dashboard.lua, which is the bare-`nvim` startup greeter
@@ -72,10 +74,10 @@ function M.is_disposable(buf)
 end
 
 -- The greeter's text highlights.
-local DIM, KEY = "Comment", "Special"
+local DIM, KEY, TITLE = "Comment", "Special", "Title"
 
--- Window options of the queue's window, local to the greeter in it so a file shown there gets its own.
-local QUEUE_WO = {
+-- Window options of the greeter's own windows, local to its buffers so a file shown there gets its own.
+local PANE_WO = {
   number = false,
   relativenumber = false,
   signcolumn = "no",
@@ -87,7 +89,8 @@ local QUEUE_WO = {
   spell = false,
 }
 
-local new_buffer
+local new_buffer, lay_out, refresh_pr, part_window, place, pr_buffer, pr_uri, named
+local stack_buffer, new_stack_buffer
 
 --- Show this workspace's greeter in `win` (default: the current window).
 ---
@@ -115,32 +118,76 @@ function M.open(win)
   M.arrange(win, require("config.todo").FILE)
 end
 
---- Lay the greeter out from `win`, which shows it: the queue held to its lines,
---- the todo list under it taking the rest.
+--- Lay the greeter out from `win`, which shows it, with the todo list under it.
 ---@param win integer
 ---@param todo_file string
 function M.arrange(win, todo_file)
-  local buf = vim.api.nvim_win_get_buf(win)
-  for option, value in pairs(QUEUE_WO) do
-    vim.wo[win][0][option] = value
-  end
-  M.draw(buf, M.queue_rows(vim.b[buf].greeter_root))
+  local tab = vim.api.nvim_win_get_tabpage(win)
   local todo = require("config.todo")
-  local todo_win = todo.window(vim.api.nvim_win_get_tabpage(win), todo_file)
-    or todo.open_below(win, todo_file)
-  -- Unfixed, it is the window that takes whatever the queue leaves.
-  vim.wo[todo_win].winfixheight = false
-  require("config.windows").hold_height(win, vim.api.nvim_buf_line_count(buf))
+  if not todo.window(tab, todo_file) then
+    local todo_win =
+      todo.open_below(part_window(tab, "pr") or part_window(tab, "stack") or win, todo_file)
+    -- It belongs to the greeter, whichever of its windows it was opened under.
+    require("config.windows").mark_companion(todo_win, win)
+  end
+  lay_out(win, todo_file)
 end
 
---- Redraw every greeter on screen, its window held to its new line count.
+--- Redraw every greeter on screen, with whatever todo list its tab still shows.
 function M.redraw()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
-    local buf = vim.api.nvim_win_get_buf(win)
-    if M.is_greeter(buf) then
-      M.draw(buf, M.queue_rows(vim.b[buf].greeter_root))
-      require("config.windows").hold_height(win, vim.api.nvim_buf_line_count(buf))
+    -- Valid still: laying one out closes windows this list was taken with.
+    if vim.api.nvim_win_is_valid(win) and M.is_greeter(vim.api.nvim_win_get_buf(win)) then
+      lay_out(win, require("config.todo").FILE)
     end
+  end
+end
+
+--- Fill `win`'s greeter and the windows under it: the queue held to its lines,
+--- then, for a branch with a PR, the stack held to its rows and the PR taking
+--- the room, the todo list keeping a share. Without a PR the todo list takes it.
+---@param win integer
+---@param todo_file string
+function lay_out(win, todo_file)
+  local buf = vim.api.nvim_win_get_buf(win)
+  local root = vim.b[buf].greeter_root
+  local tab = vim.api.nvim_win_get_tabpage(win)
+  M.draw(buf, M.queue_rows(root))
+  local pr = M.branch_pr(root)
+  local pr_buf, fresh = nil, false
+  if pr then
+    pr_buf, fresh = pr_buffer(pr)
+  end
+  local stack_buf = pr and stack_buffer(root, vim.api.nvim_win_get_width(win))
+  local todo_win = require("config.todo").window(tab, todo_file)
+  if todo_win then
+    vim.wo[todo_win].winfixheight = pr_buf ~= nil
+  end
+
+  local pr_anchor = todo_win and { split = "above", win = todo_win }
+    or { split = "below", win = part_window(tab, "stack") or win }
+  local pr_win, shown = place(tab, "pr", pr_buf, win, pr_anchor)
+  if shown and not fresh then
+    require("snacks.gh.buf").attached[pr_buf]:update()
+  end
+  if shown == "opened" and todo_win then
+    local share = vim.api.nvim_win_get_height(pr_win) + vim.api.nvim_win_get_height(todo_win)
+    vim.api.nvim_win_set_height(todo_win, math.max(6, math.floor(share / 3)))
+  end
+  local stack_anchor = pr_win and { split = "above", win = pr_win }
+    or { split = "below", win = win }
+  local stack_win = place(tab, "stack", stack_buf, win, stack_anchor)
+
+  for option, value in pairs(PANE_WO) do
+    vim.wo[win][0][option] = value
+    if stack_win then
+      vim.wo[stack_win][0][option] = value
+    end
+  end
+  require("config.windows").hold_height(win, vim.api.nvim_buf_line_count(buf))
+  if stack_win then
+    vim.api.nvim_win_set_height(stack_win, vim.api.nvim_buf_line_count(stack_buf))
+    vim.wo[stack_win].winfixheight = true
   end
 end
 
@@ -154,6 +201,214 @@ function M.queue_rows(root)
     return row ~= false
   end, { M.queue_line(rq.counts(root)) or false, M.mine_line(rq.counts(root, "mine")) or false })
   return #rows > 0 and rows or { { { "\u{f4af} nothing waiting on you", DIM } } }
+end
+
+--- The PR of the branch `root` has checked out, once the report and the PR
+--- fetch both answer for the same branch (they disagree across a checkout).
+---@param root string normalized workspace root
+---@return table? pr `gh pr view` JSON
+function M.branch_pr(root)
+  local entry, report = M.prs[root], reports[root]
+  return entry and report and entry.branch == report.branch and entry.pr or nil
+end
+
+--- The stack window's rows: the diff size, then the stack the branch's PR is
+--- in, from the review queue's list of my open PRs (no fetch of its own).
+---@param root string normalized workspace root
+---@param width integer
+---@return greeter.Chunk[][] rows, table<integer, reviewqueue.PR> prs the PR on each row
+function M.stack_rows(root, width)
+  local report = reports[root] or nil
+  local rows, prs = {}, {}
+  if not report then
+    return rows, prs
+  end
+  rows[#rows + 1] = M.size_line(report, M.attrs[root] or {})
+  local rq = require("util.reviewqueue")
+  local key = rq.key(root)
+  local mine = key and rq.cache[key] and rq.cache[key].mine
+  local stack = mine and require("util.pr_stack").of(mine, report.branch)
+  for i, row in ipairs(stack and M.stack_items(stack, width) or {}) do
+    rows[#rows + 1] = row
+    prs[#rows] = stack.rows[i] and stack.rows[i].pr
+  end
+  return rows, prs
+end
+
+--- Switch to the workspace tab whose worktree has `pr`'s branch, else check the
+--- PR out in `root`.
+---@param root string normalized workspace root
+---@param pr reviewqueue.PR
+function M.go_to_pr(root, pr)
+  vim.system(
+    { "git", "worktree", "list", "--porcelain" },
+    { cwd = root, text = true },
+    function(res)
+      vim.schedule(function()
+        local path = res.code == 0 and require("util.worktree").parse_worktrees(res.stdout)[pr.head]
+        local tab = path and require("config.workspace").find(path)
+        if tab then
+          vim.api.nvim_set_current_tabpage(tab)
+          return
+        end
+        vim.system(
+          { "gh", "pr", "checkout", tostring(pr.number) },
+          { cwd = root, text = true },
+          function(out)
+            if out.code ~= 0 then
+              vim.schedule(function()
+                vim.notify(
+                  ("gh pr checkout %d: %s"):format(pr.number, vim.trim(out.stderr or "")),
+                  vim.log.levels.ERROR
+                )
+              end)
+            end
+          end
+        )
+      end)
+    end
+  )
+end
+
+--- Refresh the PR shown for `root`'s branch.
+---@param root string normalized workspace root
+function refresh_pr(root)
+  local pr = M.branch_pr(root)
+  local buf = pr and named(pr_uri(pr))
+  local attached = buf and require("snacks.gh.buf").attached[buf]
+  if attached then
+    attached:update()
+  end
+end
+
+-- The windows under the queue, by the part of the greeter they show.
+---@alias greeter.Part "stack"|"pr"
+
+--- `tab`'s window showing `part`, if it has one.
+---@param tab integer
+---@param part greeter.Part
+---@return integer?
+function part_window(tab, part)
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+    if vim.w[win].greeter_part == part then
+      return win
+    end
+  end
+end
+
+--- Show `buf` as `tab`'s `part`, opening its window at `anchor` (nvim_open_win
+--- split config) as a companion of `under`; no `buf` closes the window.
+---@param tab integer
+---@param part greeter.Part
+---@param buf integer?
+---@param under integer the queue's window
+---@param anchor vim.api.keyset.win_config
+---@return integer? win, ("opened"|"swapped")? shown whether `buf` newly came into view
+function place(tab, part, buf, under, anchor)
+  local win = part_window(tab, part)
+  if not buf then
+    if win then
+      vim.api.nvim_win_close(win, false)
+    end
+    return nil
+  end
+  if win then
+    if vim.api.nvim_win_get_buf(win) == buf then
+      return win
+    end
+    vim.api.nvim_win_set_buf(win, buf)
+    return win, "swapped"
+  end
+  win = vim.api.nvim_open_win(buf, false, anchor)
+  require("config.windows").mark_companion(win, under)
+  vim.w[win].greeter_part = part
+  return win, "opened"
+end
+
+--- `pr`'s gh:// buffer, rendered by snacks.nvim's gh module: snacks' refresh
+--- after an action and its window, write and detach autocmds match the name.
+---@param pr table `gh pr view` JSON
+---@return integer buf, boolean fresh attached just now, so already rendering
+function pr_buffer(pr)
+  local uri = pr_uri(pr)
+  local buf = named(uri)
+  if not buf then
+    buf = vim.api.nvim_create_buf(false, false)
+    vim.api.nvim_buf_set_name(buf, uri)
+  end
+  local gh = require("snacks.gh.buf")
+  if gh.attached[buf] then
+    return buf, false
+  end
+  gh.attach(buf)
+  return buf, true
+end
+
+--- The gh:// uri snacks.nvim names `pr`'s buffer by.
+---@param pr table `gh pr view` JSON
+---@return string
+function pr_uri(pr)
+  local repo, number = pr.url:match("^https?://[^/]+/([^/]+/[^/]+)/pull/(%d+)")
+  return ("gh://%s/pr/%s"):format(repo, number)
+end
+
+--- The buffer named `name`, if there is one.
+---@param name string
+---@return integer?
+function named(name)
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_get_name(buf) == name then
+      return buf
+    end
+  end
+end
+
+-- The stack buffer per workspace root, and the PR on each of its rows.
+local stack_buffers = {} ---@type table<string, integer>
+local stack_prs = {} ---@type table<integer, table<integer, reviewqueue.PR>>
+
+--- `root`'s stack buffer drawn at `width`, or nil when it has no rows.
+---@param root string
+---@param width integer
+---@return integer?
+function stack_buffer(root, width)
+  local rows, prs = M.stack_rows(root, width)
+  if #rows == 0 then
+    return nil
+  end
+  local buf = stack_buffers[root]
+  if not (buf and vim.api.nvim_buf_is_valid(buf)) then
+    buf = new_stack_buffer(root)
+  end
+  M.draw(buf, rows)
+  stack_prs[buf] = prs
+  return buf
+end
+
+--- A stack buffer for `root`, whose rows act as a picker of their PRs.
+---@param root string
+---@return integer
+function new_stack_buffer(root)
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].filetype = "greeter_stack"
+  vim.bo[buf].modifiable = false
+  local function row_pr()
+    return stack_prs[buf][vim.api.nvim_win_get_cursor(0)[1]]
+  end
+  vim.keymap.set("n", "G", function()
+    local pr = row_pr()
+    if pr then
+      vim.ui.open(pr.url)
+    end
+  end, { buffer = buf, desc = "Open the PR in the browser" })
+  vim.keymap.set("n", "<cr>", function()
+    local pr = row_pr()
+    if pr then
+      M.go_to_pr(root, pr)
+    end
+  end, { buffer = buf, desc = "Go to the PR's workspace, else check it out here" })
+  stack_buffers[root] = buf
+  return buf
 end
 
 ---@alias greeter.Chunk { [1]: string, [2]: string? } text and its highlight group
@@ -258,8 +513,14 @@ function M.cache_report(root, report, attrs)
   if vim.deep_equal(reports[root], report) and vim.deep_equal(M.attrs[root], attrs) then
     return
   end
+  local old = reports[root]
   reports[root] = report
   M.attrs[root] = attrs
+  -- A checkout or a commit moves what the PR shows too: its commits, checks and size.
+  if old and report and (old.branch ~= report.branch or old.head ~= report.head) then
+    refresh_pr(root)
+  end
+  M.redraw()
   -- The tab labels carry the same "<repo> - <branch>" name
   -- (workspace.display_name reads this cache), so a fresh report -- the
   -- first one, or a checkout moving the branch -- has to repaint them too.
@@ -305,7 +566,7 @@ local pr_fetching = {}
 -- clock, not ours, so a minute-old answer is fine between toggles.
 local PR_TTL_MS = 60 * 1000
 
---- Fetch the PR for `branch` into M.prs[root].
+--- Fetch the PR for `branch` into M.prs[root] and redraw on a change.
 ---@param root string workspace root
 ---@param branch string the branch the PR's head is
 ---@param force? boolean skip the TTL (review mode was just turned on)
@@ -319,7 +580,7 @@ function M.fetch_pr(root, branch, force)
   end
   pr_fetching[root] = true
   vim.system(
-    { "gh", "pr", "view", branch, "--json", "number,state,baseRefName" },
+    { "gh", "pr", "view", branch, "--json", "number,state,baseRefName,url" },
     { cwd = root, text = true },
     function(res)
       vim.schedule(function()
@@ -331,7 +592,11 @@ function M.fetch_pr(root, branch, force)
           pr = ok and type(decoded) == "table" and decoded or false
         end
         local was = cached and cached.branch == branch and M.pr_base(root, branch)
+        local changed = not (cached and cached.branch == branch and vim.deep_equal(cached.pr, pr))
         M.prs[root] = { branch = branch, at = vim.uv.now(), pr = pr }
+        if changed then
+          M.redraw()
+        end
         -- triage reviews against the PR's base (pr_base): a review started
         -- before this answer, or a parent merging and GitHub retargeting the
         -- PR, has to move to the new base.
@@ -548,13 +813,6 @@ function M.live_roots()
   return live
 end
 
---- A dim text line, indented to sit under the header.
----@param chunks table[] snacks text chunks
----@return table item
-local function line(chunks)
-  return { text = chunks, align = "center" }
-end
-
 --- The diff size by review tier (util/diffsize) of the files the report lists,
 --- the merge-result diff against the review base. Nil when nothing changed.
 ---
@@ -562,7 +820,7 @@ end
 --- the PR's plus any work not pushed yet, which GitHub's would lag behind.
 ---@param report table TriageReport
 ---@param attrs table<string, diffsize.Attrs>
----@return table? item
+---@return greeter.Chunk[]?
 function M.size_line(report, attrs)
   if #report.files == 0 then
     return nil
@@ -573,11 +831,7 @@ function M.size_line(report, attrs)
     local lines = f.lines or { additions = 0, deletions = 0 }
     return { path = f.rel, additions = lines.additions, deletions = lines.deletions }
   end, report.files)
-  local chunks = {}
-  for i, c in ipairs(diffsize.chunks(diffsize.summarize(changes, attrs), "SnacksDashboardDesc")) do
-    chunks[i] = { c[1], hl = c[2] }
-  end
-  return line(chunks)
+  return diffsize.chunks(diffsize.summarize(changes, attrs), DIM)
 end
 
 --- A greeter line of non-empty counts: "<glyph> 2 need you  ·  1 for your
@@ -657,21 +911,20 @@ local function fit(text, width)
   return vim.fn.strcharpart(text, 0, math.max(0, width - 1)) .. "\u{2026}"
 end
 
---- The stack section's rows, top of the stack first: the checked-out PR's
+--- The stack's rows, top of the stack first: the checked-out PR's
 --- marker filled, each with its <leader>rm tier (or "draft") and a checks
 --- glyph, then the trunk the bottom PR targets. A PR not stacked on the row
 --- under it (a fork) names what it is on.
 ---@param stack pr_stack.Stack
 ---@param width integer columns the rows may take
----@return table[] items
+---@return greeter.Chunk[][]
 function M.stack_items(stack, width)
-  local dim = "SnacksDashboardDesc"
   local tiers = require("util.reviewqueue").MINE_TIERS
   local function status(row)
     if row.pr.draft then
-      return "draft", dim
+      return "draft", DIM
     end
-    local tier = tiers[row.verdict.tier] or { label = "?", hl = dim }
+    local tier = tiers[row.verdict.tier] or { label = "?", hl = DIM }
     return tier.label, tier.hl
   end
   local num_w, status_w = 0, 0
@@ -680,7 +933,7 @@ function M.stack_items(stack, width)
     status_w = math.max(status_w, vim.fn.strdisplaywidth((status(row))))
   end
 
-  local items = {}
+  local rows = {}
   for i, row in ipairs(stack.rows) do
     local below = stack.rows[i + 1]
     local on = (below and below.pr.head or stack.trunk) ~= row.pr.base and ("  on " .. row.pr.base)
@@ -691,23 +944,18 @@ function M.stack_items(stack, width)
     local pad = (" "):rep(title_w - vim.fn.strdisplaywidth(title) - vim.fn.strdisplaywidth(on))
     local label, label_hl = status(row)
     local check = CHECK_GLYPHS[row.pr.checks or ""] or { " " }
-    items[#items + 1] = {
-      text = {
-        {
-          row.current and "\u{25c9} " or "\u{25cb} ",
-          hl = row.current and "SnacksDashboardKey" or dim,
-        },
-        { ("#%-" .. num_w .. "d  "):format(row.pr.number), hl = "SnacksDashboardKey" },
-        { title, hl = row.current and "SnacksDashboardHeader" or "Normal" },
-        { on, hl = dim },
-        { pad .. "  " },
-        { label .. (" "):rep(status_w - vim.fn.strdisplaywidth(label)) .. "  ", hl = label_hl },
-        { check[1], hl = check[2] },
-      },
+    rows[#rows + 1] = {
+      { row.current and "\u{25c9} " or "\u{25cb} ", row.current and KEY or DIM },
+      { ("#%-" .. num_w .. "d  "):format(row.pr.number), KEY },
+      { title, row.current and TITLE or "Normal" },
+      { on, DIM },
+      { pad .. "  " },
+      { label .. (" "):rep(status_w - vim.fn.strdisplaywidth(label)) .. "  ", label_hl },
+      { check[1], check[2] },
     }
   end
-  items[#items + 1] = { text = { { "\u{2570} " .. stack.trunk, hl = dim } } }
-  return items
+  rows[#rows + 1] = { { "\u{2570} " .. stack.trunk, DIM } }
+  return rows
 end
 
 --- Put the cursor on this workspace's greeter, building it if the workspace
@@ -796,17 +1044,19 @@ function M.setup()
   -- list. The bufferline filters it off every other project's bar, so it is
   -- invisible rather than wrong -- but a long session would accumulate one per
   -- project ever opened, and <leader>h would reuse a buffer belonging to a tab
-  -- that no longer exists. Reap the ones whose root no tab is rooted at, and
-  -- the git-directory watchers with them (see unwatch_closed).
+  -- that no longer exists. Reap the ones whose root no tab is rooted at, their
+  -- stack buffers and the git-directory watchers with them (see unwatch_closed).
   vim.api.nvim_create_autocmd("TabClosed", {
     group = group,
     callback = function()
       local live = M.live_roots()
-      for root, buf in pairs(M.buffers) do
-        if not live[root] then
-          M.buffers[root] = nil
-          if vim.api.nvim_buf_is_valid(buf) then
-            pcall(vim.api.nvim_buf_delete, buf, { force = true })
+      for _, buffers in ipairs({ M.buffers, stack_buffers }) do
+        for root, buf in pairs(buffers) do
+          if not live[root] then
+            buffers[root] = nil
+            if vim.api.nvim_buf_is_valid(buf) then
+              pcall(vim.api.nvim_buf_delete, buf, { force = true })
+            end
           end
         end
       end

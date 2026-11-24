@@ -121,12 +121,6 @@ describe("greeter.draw", function()
 end)
 
 describe("greeter.size_line", function()
-  local function text(item)
-    return table.concat(vim.tbl_map(function(c)
-      return c[1]
-    end, item.text))
-  end
-
   local function file(rel, lines)
     return { path = "/repo/" .. rel, rel = rel, status = "changed", lines = lines }
   end
@@ -326,12 +320,8 @@ describe("greeter.fetch", function()
 end)
 
 describe("greeter.stack_items", function()
-  local function texts(items)
-    return vim.tbl_map(function(item)
-      return table.concat(vim.tbl_map(function(c)
-        return c[1]
-      end, item.text))
-    end, items)
+  local function texts(rows)
+    return vim.tbl_map(text, rows)
   end
 
   --- A stack row: `pr` over a plain waiting PR, `extra` over the row.
@@ -383,5 +373,215 @@ describe("greeter.stack_items", function()
     assert.matches("PR 3  on a", t[1])
     assert.is_nil(t[2]:find(" on ", 1, true))
     assert.is_nil(t[3]:find(" on ", 1, true))
+  end)
+end)
+
+-- The windows under the queue for a branch with a PR. The PR buffer is attached
+-- by a stand-in for snacks.gh.buf: the real one renders from the GitHub API.
+describe("greeter's PR windows", function()
+  local reports = require("util.branch_reports")
+  local todo_file = vim.fs.normalize(vim.fn.tempname() .. "-todo.md")
+  local repo = vim.fs.normalize(vim.fn.tempname())
+  local saved, gh, root, win
+
+  local function git(...)
+    local res = vim.system({ "git", "-C", repo, ... }):wait()
+    assert(res.code == 0, res.stderr)
+  end
+  vim.fn.mkdir(repo, "p")
+  git("init", "-q")
+  git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init")
+  git("worktree", "add", "-q", "-b", "a", repo .. "/wt-a")
+
+  local function mine(number, head, base)
+    return {
+      pr = {
+        number = number,
+        title = "PR " .. number,
+        head = head,
+        base = base,
+        url = "https://github.com/o/r/pull/" .. number,
+      },
+      verdict = { tier = 5 },
+    }
+  end
+
+  --- The branch's PR as the greeter fetched it.
+  local function pr(number)
+    return { number = number, state = "OPEN", url = "https://github.com/o/r/pull/" .. number }
+  end
+
+  local function report(head)
+    return {
+      branch = "b",
+      head = head,
+      files = { { path = repo .. "/x.rs", rel = "x.rs", lines = { additions = 3, deletions = 1 } } },
+    }
+  end
+
+  before_each(function()
+    vim.cmd("silent! tabonly!")
+    vim.cmd("silent! only!")
+    vim.cmd.tcd(vim.fn.fnameescape(repo))
+    require("config.windows").setup()
+    root = repo
+    saved = {
+      file = todo.FILE,
+      counts = rq.counts,
+      key = rq.key,
+      gh = package.loaded["snacks.gh.buf"],
+      open = vim.ui.open,
+    }
+    todo.FILE = todo_file
+    rq.counts = function() end
+    rq.key = function()
+      return "/repo"
+    end
+    rq.cache["/repo"] = { mine = { mine(1, "a", "main"), mine(2, "b", "a") } }
+    gh = { attached = {} }
+    function gh.attach(buf)
+      local attached = { updates = 0 }
+      function attached.update(self)
+        self.updates = self.updates + 1
+      end
+      gh.attached[buf] = attached
+      return attached
+    end
+    package.loaded["snacks.gh.buf"] = gh
+    reports[root] = report("abc")
+    greeter.attrs[root] = {}
+    greeter.prs[root] = { branch = "b", at = 0, pr = pr(2) }
+    win = vim.api.nvim_get_current_win()
+  end)
+
+  after_each(function()
+    todo.FILE, rq.counts, rq.key, vim.ui.open = saved.file, saved.counts, saved.key, saved.open
+    package.loaded["snacks.gh.buf"] = saved.gh
+    rq.cache, reports[root], greeter.attrs[root], greeter.prs[root] = {}, nil, nil, nil
+    vim.api.nvim_del_augroup_by_name("main_companions")
+    vim.cmd("silent! tabonly!")
+    vim.cmd("silent! only!")
+  end)
+
+  --- This tab's windows top to bottom, each as its buffer's name or filetype.
+  local function column()
+    local wins = vim.api.nvim_tabpage_list_wins(0)
+    table.sort(wins, function(a, b)
+      return vim.fn.win_screenpos(a)[1] < vim.fn.win_screenpos(b)[1]
+    end)
+    return vim.tbl_map(function(w)
+      local buf = vim.api.nvim_win_get_buf(w)
+      local name = vim.api.nvim_buf_get_name(buf)
+      return name == todo_file and "todo" or name ~= "" and name or vim.bo[buf].filetype
+    end, wins),
+      wins
+  end
+
+  it("stacks the queue, the stack, the PR and the todo list, top to bottom", function()
+    greeter.open(win)
+    local names, wins = column()
+    assert.same({ "greeter", "greeter_stack", "gh://o/r/pr/2", "todo" }, names)
+    assert.is_not_nil(gh.attached[vim.api.nvim_win_get_buf(wins[3])])
+    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[2]), 0, -1, false)
+    assert.matches("^%+3 %-1", lines[1])
+    assert.matches("^\u{25c9} #2  PR 2", lines[2])
+    assert.matches("^\u{25cb} #1  PR 1", lines[3])
+    assert.equals("\u{2570} main", lines[4])
+  end)
+
+  it("holds the stack to its rows and the todo list to a share, the PR taking the rest", function()
+    greeter.open(win)
+    local _, wins = column()
+    assert.equals(4, vim.api.nvim_win_get_height(wins[2]))
+    assert.same(
+      { true, false, true },
+      { vim.wo[wins[2]].winfixheight, vim.wo[wins[3]].winfixheight, vim.wo[wins[4]].winfixheight }
+    )
+    assert.is_true(vim.api.nvim_win_get_height(wins[3]) > vim.api.nvim_win_get_height(wins[4]))
+  end)
+
+  it("has only the todo list under the queue for a branch without a PR", function()
+    greeter.prs[root].pr = false
+    greeter.open(win)
+    local names, wins = column()
+    assert.same({ "greeter", "todo" }, names)
+    assert.is_false(vim.wo[wins[2]].winfixheight)
+  end)
+
+  it("puts the stack and the PR away when the branch's PR goes", function()
+    greeter.open(win)
+    greeter.prs[root].pr = false
+    greeter.redraw()
+    local names, wins = column()
+    assert.same({ "greeter", "todo" }, names)
+    assert.is_false(vim.wo[wins[2]].winfixheight)
+  end)
+
+  it("shows the branch's new PR in the same window", function()
+    greeter.open(win)
+    local _, before = column()
+    greeter.prs[root].pr = pr(3)
+    greeter.redraw()
+    local names, after = column()
+    assert.equals("gh://o/r/pr/3", names[3])
+    assert.equals(before[3], after[3])
+  end)
+
+  it("refreshes a PR rendered before when it comes back into the window", function()
+    greeter.open(win)
+    local _, wins = column()
+    local attached = gh.attached[vim.api.nvim_win_get_buf(wins[3])]
+    greeter.prs[root].pr = pr(3)
+    greeter.redraw()
+    greeter.prs[root].pr = pr(2)
+    greeter.redraw()
+    assert.equals(1, attached.updates)
+  end)
+
+  it("refreshes the PR when the branch's HEAD moves, and only then", function()
+    greeter.open(win)
+    local _, wins = column()
+    local attached = gh.attached[vim.api.nvim_win_get_buf(wins[3])]
+    greeter.cache_report(root, report("abc"), {})
+    assert.equals(0, attached.updates)
+    greeter.cache_report(root, report("def"), {})
+    assert.equals(1, attached.updates)
+  end)
+
+  it("opens a stack row's PR in the browser with G", function()
+    local opened
+    vim.ui.open = function(path, _)
+      opened = path
+      return nil, nil
+    end
+    greeter.open(win)
+    local _, wins = column()
+    vim.api.nvim_win_call(wins[2], function()
+      vim.api.nvim_win_set_cursor(0, { 3, 0 })
+      vim.cmd("normal G")
+    end)
+    assert.equals("https://github.com/o/r/pull/1", opened)
+  end)
+
+  it("switches to the tab whose worktree has a stack row's branch with <cr>", function()
+    local workspace = require("config.workspace")
+    local find = workspace.find
+    greeter.open(win)
+    local _, wins = column()
+    vim.cmd("tabnew")
+    local other = vim.api.nvim_get_current_tabpage()
+    vim.cmd("tabprevious")
+    workspace.find = function(dir)
+      return dir == repo .. "/wt-a" and other or nil
+    end
+    vim.api.nvim_win_call(wins[2], function()
+      vim.api.nvim_win_set_cursor(0, { 3, 0 })
+      vim.cmd("normal \r")
+    end)
+    local switched = vim.wait(2000, function()
+      return vim.api.nvim_get_current_tabpage() == other
+    end)
+    workspace.find = find
+    assert.is_true(switched)
   end)
 end)

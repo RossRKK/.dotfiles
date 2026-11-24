@@ -25,6 +25,18 @@ return {
     -- containing the keyword under the cursor) -- an accepted trade-off here.
     scope = { enabled = true },
     scratch = { enabled = true },
+    -- gh:// buffers (the greeter's PR, <leader>gP) re-fetch only after an action of their own.
+    gh = {
+      keys = {
+        refresh = {
+          "R",
+          function(_, buf)
+            buf:update()
+          end,
+          desc = "Refresh",
+        },
+      },
+    },
   },
   keys = {
     -- Toggle scratch buffer. Mapped in terminal mode too, so it works from the
