@@ -3,17 +3,15 @@
 --
 -- workspace.open() used to leave a plain empty buffer there, which told you
 -- nothing and did nothing. Instead the window gets a snacks dashboard scoped to
--- THIS workspace, showing where the branch stands: repo and branch, its position
--- against the remote and the review base, the size of its diff, and the files
--- it changes. It comes back whenever the buffer list empties out again
--- (<leader>X, or closing the last buffer), so "no buffers open" is a status
--- screen rather than a dead end.
+-- THIS workspace: repo and branch, the reviews waiting, the branch's PR stack
+-- and the size of its diff. It comes back whenever the buffer list empties out
+-- again (<leader>X, or closing the last buffer), so "no buffers open" is a
+-- status screen rather than a dead end.
 --
--- The numbers and the file list come from triage.report (plugins/review.lua) --
--- the same merge-result diff and triage ledger review mode marks the explorer
--- with, so the greeter's list and the tree's glyphs can never disagree. It
--- reports regardless of whether review mode is on, so the overview reads the
--- same before you toggle it as after.
+-- The size comes from triage.report (plugins/review.lua) -- the same
+-- merge-result diff review mode marks the explorer with. It reports regardless
+-- of whether review mode is on, so the overview reads the same before you
+-- toggle it as after.
 --
 -- It is also a real, listed buffer, pinned to the front of the bufferline: one
 -- per workspace, kept alive for the life of the tab rather than rebuilt each
@@ -21,12 +19,6 @@
 -- click, or <S-h> off the left end) instead of only somewhere you land when the
 -- last buffer closes. plugins/buffers.lua does the pinning and the filtering --
 -- it keys off the b:greeter_root set below.
---
--- No pickers here: find/recent/grep have keybinds, and repeating them as a menu
--- costs the space the overview wants. The changed-file list IS the file
--- selector -- the files this branch is about, a letter away. The pickers only
--- come back as the fallback for a directory that isn't a git repo, which has no
--- overview to show.
 --
 -- Distinct from plugins/dashboard.lua, which is the bare-`nvim` startup greeter
 -- and is about CHOOSING a project; this one assumes the project. Both are snacks
@@ -55,7 +47,7 @@ end
 
 --- Is this buffer a spent one -- nothing in it, nothing to save, nobody's
 --- scratch -- that the greeter may take the window from and delete? A previous
---- greeter counts too. Deliberately-blank buffers (M.new_file) are tagged out.
+--- greeter counts too.
 ---
 --- Requiring buflisted is what keeps a panel's buffer safe: a plugin's scratch
 --- buffer is unlisted, and fishmonger's terminal buffer is empty, unnamed and
@@ -65,7 +57,7 @@ end
 ---@param buf integer
 ---@return boolean
 function M.is_disposable(buf)
-  if not vim.api.nvim_buf_is_valid(buf) or vim.b[buf].greeter_ignore then
+  if not vim.api.nvim_buf_is_valid(buf) then
     return false
   end
   if vim.bo[buf].filetype == "snacks_dashboard" then
@@ -78,17 +70,6 @@ function M.is_disposable(buf)
     and not vim.bo[buf].modified
     and vim.api.nvim_buf_line_count(buf) == 1
     and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
-end
-
---- Start an empty unnamed buffer to type into. A deliberately blank buffer is
---- indistinguishable from the spent one the fallback below exists to replace, so
---- it's tagged: without the tag, "New file" hands you a blank buffer and the
---- fallback immediately takes it back, which looks like the key doing nothing.
-function M.new_file()
-  require("config.windows").goto_main_window()
-  vim.cmd.enew()
-  vim.b[vim.api.nvim_get_current_buf()].greeter_ignore = true
-  vim.cmd.startinsert()
 end
 
 -- Live dashboard instances, buffer -> the object Snacks.dashboard.open()
@@ -187,8 +168,7 @@ function M.fetch(root)
 end
 
 -- The review-tier attributes of each root's changed files (util/diffsize),
--- read alongside its report so the size line and the file list's order land
--- with the files they describe.
+-- read alongside its report so the size line lands with the files it describes.
 ---@type table<string, table<string, diffsize.Attrs>>
 M.attrs = {}
 
@@ -244,17 +224,15 @@ function M.read_attrs(root, files, cb)
 end
 
 -- The PR for the workspace's branch, per workspace root: { branch, at, pr }
--- with pr = the decoded `gh pr view` JSON, or false for "no PR". Shown whenever
--- there is one -- reviewing someone's branch or working on my own, the PR is
--- what the branch is for. The TTL below is what keeps a gh round trip off
--- every git event.
+-- with pr = the decoded `gh pr view` JSON, or false for "no PR". The TTL below
+-- is what keeps a gh round trip off every git event.
 M.prs = {}
 local pr_fetching = {}
 -- The watchers fetch the report on every git event; the PR moves on GitHub's
 -- clock, not ours, so a minute-old answer is fine between toggles.
 local PR_TTL_MS = 60 * 1000
 
---- Fetch the PR for `branch` into M.prs[root] and redraw on a change.
+--- Fetch the PR for `branch` into M.prs[root].
 ---@param root string workspace root
 ---@param branch string the branch the PR's head is
 ---@param force? boolean skip the TTL (review mode was just turned on)
@@ -267,9 +245,8 @@ function M.fetch_pr(root, branch, force)
     return
   end
   pr_fetching[root] = true
-  local fields = "number,title,state,isDraft,body,reviewDecision,url,headRefOid,baseRefName"
   vim.system(
-    { "gh", "pr", "view", branch, "--json", fields },
+    { "gh", "pr", "view", branch, "--json", "number,state,baseRefName" },
     { cwd = root, text = true },
     function(res)
       vim.schedule(function()
@@ -280,32 +257,14 @@ function M.fetch_pr(root, branch, force)
             pcall(vim.json.decode, res.stdout or "", { luanil = { object = true, array = true } })
           pr = ok and type(decoded) == "table" and decoded or false
         end
-        local old = cached and cached.pr
-        if pr and old and old.number == pr.number and old.headRefOid == pr.headRefOid then
-          -- Last round's checks stand in until this round's land (below).
-          pr.checks = old.checks
-        end
-        local changed = not (cached and vim.deep_equal(cached.pr, pr))
         local was = cached and cached.branch == branch and M.pr_base(root, branch)
-        local entry = { branch = branch, at = vim.uv.now(), pr = pr }
-        M.prs[root] = entry
-        if changed then
-          M.update_dashboards()
-        end
+        M.prs[root] = { branch = branch, at = vim.uv.now(), pr = pr }
         -- triage reviews against the PR's base (pr_base): a review started
         -- before this answer, or a parent merging and GitHub retargeting the
         -- PR, has to move to the new base.
         local triage = require("triage")
         if M.pr_base(root, branch) ~= was and triage.is_enabled(root) then
           triage.refresh()
-        end
-        if pr then
-          require("util.reviewqueue").checks(root, pr.number, function(checks)
-            if checks and M.prs[root] == entry and not vim.deep_equal(pr.checks, checks) then
-              pr.checks = checks
-              M.update_dashboards()
-            end
-          end)
         end
       end)
     end
@@ -517,14 +476,6 @@ function M.live_roots()
   return live
 end
 
---- Open a file from the overview in the main editor window (the greeter's own
---- window is the main one, but the list is also reachable from a split).
----@param path string
-local function edit(path)
-  require("config.windows").goto_main_window()
-  vim.cmd.edit(vim.fn.fnameescape(path))
-end
-
 --- The height and pane width of whichever window is showing the greeter NOW,
 --- not the one it was opened in: the buffer outlives any single window (it's a
 --- bufferline tab you come back to), so a captured window handle goes stale --
@@ -548,61 +499,11 @@ local function line(chunks)
   return { text = chunks, align = "center" }
 end
 
---- The summary under the header: where the branch sits against its remote,
---- against the base it's reviewed into, and how big its diff to that base is.
---- Nil when there's nothing meaningful to say (no report yet, or not a repo).
----@param report table? TriageReport
----@param attrs table<string, diffsize.Attrs>
----@return table[]?
-local function overview(report, attrs)
-  if not report then
-    return nil
-  end
-  local dim = "SnacksDashboardDesc"
-  local items = {}
-
-  -- Remote position. An unpushed branch says so rather than showing 0/0, which
-  -- would read as "in sync with a remote" -- the opposite of the truth.
-  if report.upstream then
-    items[#items + 1] = line({
-      { "\xe2\x87\xa1" .. (report.ahead or 0) .. " ", hl = report.ahead ~= 0 and "Added" or dim },
-      {
-        "\xe2\x87\xa3" .. (report.behind or 0) .. "  ",
-        hl = report.behind ~= 0 and "Removed" or dim,
-      },
-      { report.upstream, hl = dim },
-    })
-  else
-    items[#items + 1] = line({ { "no upstream", hl = dim } })
-  end
-
-  -- Base position: the branch under review and how far ahead of it we are.
-  local base = {}
-  if report.base then
-    -- Git-merge glyph (U+F419), the same mark triage's statusline uses for the
-    -- review base.
-    base[#base + 1] = { "\xef\x90\x99 " .. report.base, hl = dim }
-    if (report.base_ahead or 0) > 0 then
-      local n = report.base_ahead
-      base[#base + 1] = { ("  %d commit%s"):format(n, n == 1 and "" or "s"), hl = dim }
-    end
-  end
-  if report.dirty > 0 then
-    base[#base + 1] = { ("  %d uncommitted"):format(report.dirty), hl = "SnacksDashboardSpecial" }
-  end
-  if #base > 0 then
-    items[#items + 1] = line(base)
-  end
-  items[#items + 1] = M.size_line(report, attrs)
-  return items
-end
-
 --- The diff size by review tier (util/diffsize) of the files the report lists,
---- the same diff as the changed-file list below it. Nil when nothing changed.
+--- the merge-result diff against the review base. Nil when nothing changed.
 ---
---- The one size line, PR or not: a PR's block only shows while its branch is
---- checked out, where this diff is the PR's against the same base plus any
---- work not pushed yet -- GitHub's count would only lag behind it.
+--- Ours rather than GitHub's count: with the branch checked out, this diff is
+--- the PR's plus any work not pushed yet, which GitHub's would lag behind.
 ---@param report table TriageReport
 ---@param attrs table<string, diffsize.Attrs>
 ---@return table? item
@@ -621,270 +522,6 @@ function M.size_line(report, attrs)
     chunks[i] = { c[1], hl = c[2] }
   end
   return line(chunks)
-end
-
---- The changed-file list: every file the branch is responsible for, marked with
---- its triage glyph, each a keypress from opening. Long branches are cut to what
---- the window can show, with the remainder counted -- the list is a way into the
---- files, not a report to scroll. Ordered by review tier, so what most needs a
---- reviewer's eye is what survives the cut.
----@param report table? TriageReport
----@param attrs table<string, diffsize.Attrs>
----@param buf integer the greeter's buffer
----@return table[]
-local function files(report, attrs, buf)
-  if not report then
-    return {}
-  end
-  local triage = require("triage")
-  local height = pane_size(buf)
-  -- Leave room for the header, the summary and the section title; the rest of
-  -- the window is the list's.
-  local limit = math.max(5, height - 12)
-  local items = {}
-  for i, file in ipairs(M.by_tier(report.files, attrs)) do
-    if i > limit then
-      local rest = #report.files - limit
-      items[#items + 1] = {
-        text = { { ("\xe2\x80\xa6 %d more"):format(rest), hl = "SnacksDashboardDesc" } },
-        indent = 4,
-      }
-      break
-    end
-    local icon = triage.icons[file.status]
-    items[#items + 1] = {
-      -- A table icon is taken verbatim by snacks' formatter, which is what lets
-      -- the glyph keep its own status colour instead of the dashboard's.
-      icon = { icon and icon.text or "\xe2\x80\xa2", hl = icon and icon.hl, width = 1 },
-      -- The repo-relative path, not the absolute one: snacks shortens a long
-      -- path to initials to make it fit, and every file here shares the same
-      -- root, so the root is the part worth dropping.
-      file = file.rel,
-      autokey = true,
-      action = function()
-        edit(file.path)
-      end,
-    }
-  end
-  if #items == 0 then
-    items[#items + 1] = {
-      text = { { "nothing changed on this branch", hl = "SnacksDashboardDesc" } },
-      indent = 4,
-    }
-  end
-  return items
-end
-
---- `files` (TriageReport entries) ordered by review tier (util/diffsize),
---- keeping their order within a tier.
----@param files { rel: string }[]
----@param attrs table<string, diffsize.Attrs>
----@return { rel: string }[]
-function M.by_tier(files, attrs)
-  local ordered = {}
-  for _, group in
-    ipairs(require("util.diffsize").by_tier(files, function(f)
-      return f.rel
-    end, attrs))
-  do
-    vim.list_extend(ordered, group.items)
-  end
-  return ordered
-end
-
---- The agents section: every agent running in any workspace, not just this one,
---- each a letter away from being jumped to (switch tabpage + surface its
---- terminal). The rows and the jumping are fishmonger's (fishmonger.view), so
---- the same list is one keystroke away from anywhere as a popup (<C-b>A) and
---- there is one definition of what an agent row says.
----
---- Cross-workspace on purpose, and above the branch overview: the branch is
---- still there when you get to it, while an agent stuck on a permission prompt
---- in a project you aren't looking at is costing you time right now. This is the
---- screen you land on between tasks, which makes it the right place to be told.
----@return table[]?
-local function agents()
-  local ok, view = pcall(require, "fishmonger.view")
-  if not ok then
-    return nil
-  end
-  local rows = view.items()
-  if #rows == 0 then
-    return nil
-  end
-  local glyph_cell = require("fishmonger.agent").glyph_cell
-  local section = { icon = " ", title = "Agents", indent = 2, padding = 1 }
-  -- Column-align the titles: pad every project name to the widest one, so what
-  -- each agent is doing lines up down the list instead of starting wherever
-  -- that row's project name happens to end.
-  local project_width = 0
-  for _, row in ipairs(rows) do
-    project_width = math.max(project_width, vim.fn.strdisplaywidth(row.project or ""))
-  end
-  for _, row in ipairs(rows) do
-    section[#section + 1] = {
-      -- A table icon is passed through verbatim by snacks' formatter, which is
-      -- what keeps the glyph's own state colour (see the changed-files list).
-      icon = { glyph_cell(row.icon), hl = row.hl },
-      -- A session fishmonger can't reach (an agent in a bare terminal) gets no
-      -- key: it still belongs in the list -- it is still an agent waiting on you
-      -- -- but there is nothing to jump to.
-      key = row.action and row.key or nil,
-      -- Where it is, then what it's doing (the terminal's own title, when it
-      -- says more than the project name). No state WORD: the icon already says
-      -- it, and repeating it in text pushed the title out of the eye line.
-      -- Padded by display width, not %-Ns: project names can hold multibyte
-      -- characters, and string.format counts bytes.
-      desc = (row.project or "") .. (" "):rep(
-        project_width - vim.fn.strdisplaywidth(row.project or "")
-      ) .. (row.title and ("  " .. row.title) or ""),
-      action = row.action,
-    }
-  end
-  return section
-end
-
---- Word-wrap `text` to `width` display columns. Words longer than a line are
---- cut rather than overflowing (a URL in a PR body would widen the pane).
----@param text string
----@param width integer
----@return string[]
-function M.wrap(text, width)
-  local out, cur = {}, ""
-  for word in text:gmatch("%S+") do
-    while vim.fn.strdisplaywidth(word) > width do
-      if cur ~= "" then
-        out[#out + 1], cur = cur, ""
-      end
-      out[#out + 1] = vim.fn.strcharpart(word, 0, width)
-      word = vim.fn.strcharpart(word, width)
-    end
-    if cur == "" then
-      cur = word
-    elseif vim.fn.strdisplaywidth(cur) + 1 + vim.fn.strdisplaywidth(word) <= width then
-      cur = cur .. " " .. word
-    else
-      out[#out + 1], cur = cur, word
-    end
-  end
-  if cur ~= "" then
-    out[#out + 1] = cur
-  end
-  return out
-end
-
---- The PR's status line chunks: state, review decision, checks.
----@param pr table `gh pr view` JSON, plus `checks` (reviewqueue.Checks) once fetched
----@return table[] chunks
-function M.pr_status(pr)
-  local dim = "SnacksDashboardDesc"
-  local state = pr.isDraft and pr.state == "OPEN" and "DRAFT" or pr.state or "?"
-  local state_hl = ({ OPEN = "Added", DRAFT = dim, MERGED = "Special", CLOSED = "Removed" })[state]
-    or dim
-  local chunks = { { state:lower(), hl = state_hl } }
-
-  -- Null under rulesets-only repos (no branch protection): say nothing then
-  -- rather than a misleading "no review required".
-  local decision = ({
-    APPROVED = { "approved", "Added" },
-    CHANGES_REQUESTED = { "changes requested", "Removed" },
-    REVIEW_REQUIRED = { "review required", "DiagnosticWarn" },
-  })[pr.reviewDecision or ""]
-  if decision then
-    chunks[#chunks + 1] = { "  \u{00b7}  ", hl = dim }
-    chunks[#chunks + 1] = { decision[1], hl = decision[2] }
-  end
-
-  -- Set by fetch_pr once the checks land; no checks segment until then.
-  local checks = pr.checks
-  local failed = checks and #checks.failing or 0
-  if checks and failed + checks.pending + checks.passed > 0 then
-    chunks[#chunks + 1] = { "  \u{00b7}  ", hl = dim }
-    if failed > 0 then
-      chunks[#chunks + 1] = { ("\u{2717} %d failing"):format(failed), hl = "Removed" }
-    elseif checks.pending > 0 then
-      chunks[#chunks + 1] =
-        { ("\u{25cf} %d pending"):format(checks.pending), hl = "DiagnosticWarn" }
-    else
-      chunks[#chunks + 1] = { "\u{2713} checks pass", hl = "Added" }
-    end
-  end
-  return chunks
-end
-
---- The PR block: "#N title", the status line, then the description rendered as
---- markdown over `buf`, cut to `max_lines` rows (the file list wants the room
---- more -- the whole body is a <C-o> away in the browser, or nitpick's overview).
----@param pr table `gh pr view` JSON
----@param width integer
----@param max_lines integer
----@param buf integer the greeter's buffer
----@return table[] items
-function M.pr_items(pr, width, max_lines, buf)
-  local dim = "SnacksDashboardDesc"
-  local items = {
-    line({
-      { ("#%d "):format(pr.number or 0), hl = "SnacksDashboardKey" },
-      { pr.title or "", hl = "SnacksDashboardHeader" },
-    }),
-    line(M.pr_status(pr)),
-    { padding = 1 },
-  }
-
-  local lines = M.description(pr.body)
-  if #lines == 0 then
-    items[#items + 1] = line({ { "no description", hl = dim } })
-    return items
-  end
-  local rows = 0
-  for _, l in ipairs(lines) do
-    local lead = l:match("^%s*")
-    rows = rows + math.max(1, #M.wrap(l, math.max(10, width - #lead)))
-  end
-  items[#items + 1] =
-    require("util.dashboard_markdown").item(buf, lines, width, math.min(rows, max_lines))
-  if rows > max_lines then
-    items[#items + 1] =
-      { text = { { ("\u{2026} %d more lines"):format(rows - max_lines), hl = dim } } }
-  end
-  return items
-end
-
---- A PR body as the markdown the greeter shows: no template comments (instructions
---- to the author, not description), blank runs collapsed to one, and each fenced
---- block one placeholder line -- a diagram or code is noise in an overview.
----@param body string?
----@return string[]
-function M.description(body)
-  body = (body or ""):gsub("\r", ""):gsub("<!%-%-.-%-%->", "")
-  local lines, blank, fence = {}, true, nil
-  for raw in (body .. "\n"):gmatch("([^\n]*)\n") do
-    local marker, lang = raw:match("^%s*(```+)%s*([%w_+-]*)")
-    if not marker then
-      marker, lang = raw:match("^%s*(~~~+)%s*([%w_+-]*)")
-    end
-    if fence then
-      if marker and marker:sub(1, 1) == fence:sub(1, 1) and #marker >= #fence then
-        fence = nil
-      end
-    elseif marker then
-      fence = marker
-      blank = false
-      lines[#lines + 1] = ("_[%s block]_"):format(lang ~= "" and lang or "code")
-    elseif raw:match("^%s*$") then
-      if not blank then
-        lines[#lines + 1] = ""
-      end
-      blank = true
-    else
-      blank = false
-      lines[#lines + 1] = raw
-    end
-  end
-  if lines[#lines] == "" then
-    lines[#lines] = nil
-  end
-  return lines
 end
 
 --- A greeter line of non-empty counts: "<glyph> 2 need you  ·  1 for your
@@ -1027,15 +664,6 @@ end
 ---@return table[]
 function M.sections(root, buf, tab, report)
   return {
-    -- A blank line first. Snacks centres the content vertically, but only while
-    -- it fits: once the overview and file list overrun the window it starts at row
-    -- 0, and the Agents list sat hard against the top edge.
-    { padding = 1 },
-    -- Agents first, ABOVE the header: everything below it is about this
-    -- project, and this list deliberately isn't -- it's every workspace's
-    -- agents. Sitting under a "<repo> - <branch>" heading would read as a
-    -- claim that these belong to this repo.
-    agents,
     -- "<repo> - <branch>", the tab label, read from the report cache this
     -- greeter fills, with the plain workspace name as the fallback for a
     -- directory git can't tell us anything about. See workspace.display_name.
@@ -1046,38 +674,20 @@ function M.sections(root, buf, tab, report)
         padding = 1,
       }
     end,
-    -- The branch's PR, if it has one, between the name and the overview. Then,
-    -- unless reviewing, how many reviews are waiting on me, and how many of my
+    -- Unless reviewing, how many reviews are waiting on me, and how many of my
     -- own PRs are.
     function()
-      local items = {}
-      local entry, rep = M.prs[root], report()
-      -- The entry can be for the branch before a checkout until the refetch.
-      if entry and entry.pr and rep and entry.branch == rep.branch then
-        local height, width = pane_size(buf)
-        -- A third of what's below the header, so the file list keeps its share.
-        items = M.pr_items(entry.pr, width, math.max(3, math.floor((height - 12) / 3)), buf)
-        items[#items + 1] = { padding = 1 }
+      if reviewing(root) then
+        return nil
       end
-      -- No description drawn this time round: nothing for the last one's float to cover.
-      if not vim.iter(items):any(function(item)
-        return item.markdown ~= nil
-      end) then
-        require("util.dashboard_markdown").close(buf)
+      -- From the review queue's background refresh (no fetch of its own),
+      -- which lists my own PRs too.
+      local rq = require("util.reviewqueue")
+      local lines = { M.queue_line(rq.counts(root)), M.mine_line(rq.counts(root, "mine")) }
+      if not (lines[1] or lines[2]) then
+        return nil
       end
-      if not reviewing(root) then
-        -- From the review queue's background refresh (no fetch of its own),
-        -- which lists my own PRs too.
-        local rq = require("util.reviewqueue")
-        local lines = { M.queue_line(rq.counts(root)), M.mine_line(rq.counts(root, "mine")) }
-        if lines[1] or lines[2] then
-          for i = 1, 2 do
-            items[#items + 1] = lines[i]
-          end
-          items[#items + 1] = { padding = 1 }
-        end
-      end
-      return #items > 0 and items or nil
+      return { lines[1], lines[2], { padding = 1 } }
     end,
     -- The stack the branch's PR is in, from the review queue's list of my
     -- open PRs (its background refresh; no fetch of its own).
@@ -1097,45 +707,10 @@ function M.sections(root, buf, tab, report)
         M.stack_items(stack, width - 2)
       )
     end,
-    -- The ahead/behind summary and the diff size.
+    -- The diff size.
     function()
-      local items = overview(report(), M.attrs[root] or {})
-      return items and vim.list_extend(items, { { padding = 1 } }) or nil
-    end,
-    {
-      icon = " ",
-      title = "Changed Files",
-      indent = 2,
-      function()
-        return files(report(), M.attrs[root] or {}, buf)
-      end,
-    },
-    -- Not a git repo: there's no overview to show, so fall back to the
-    -- pickers -- the only case where the greeter still needs a menu.
-    function()
-      if reports[root] ~= false then
-        return nil
-      end
-      return {
-        padding = 1,
-        {
-          icon = " ",
-          key = "f",
-          desc = "Find file",
-          action = function()
-            Snacks.picker.files()
-          end,
-        },
-        {
-          icon = " ",
-          key = "g",
-          desc = "Live grep",
-          action = function()
-            Snacks.picker.grep()
-          end,
-        },
-        { icon = " ", key = "n", desc = "New file", action = M.new_file },
-      }
+      local rep = report()
+      return rep and M.size_line(rep, M.attrs[root] or {})
     end,
   }
 end
@@ -1279,10 +854,10 @@ end
 --- Idempotent: a second call is a no-op.
 ---
 --- 1. D:find indexes self.lines[cursor row] and hands it to charidx() without a
----    nil guard. A dashboard that shrinks on re-render -- ours does, the file
----    list is sized to the window (see files()) -- can leave the cursor below
----    the last rendered line, and snacks' own VimResized autocmd (the one
----    update path not behind a pcall) then dies with E1174. Clamp the row into
+---    nil guard. A dashboard that shrinks on re-render (ours does, as its
+---    sections come and go) can leave the cursor below the last rendered line,
+---    and snacks' own VimResized autocmd (the one update path not behind a
+---    pcall) then dies with E1174. Clamp the row into
 ---    the rendered lines before handing it over.
 ---
 --- 2. D:size reads the geometry of self.win unguarded, and the class's
@@ -1360,18 +935,6 @@ function M.setup()
     callback = M.queue_refresh,
   })
 
-  -- An agent changing state is the one thing on this screen that moves without
-  -- anyone touching nvim, so the list has to repaint on its own -- a stale
-  -- "working" where the agent is actually blocked is worse than not showing it.
-  -- update_dashboards() re-resolves every open dashboard's sections, so
-  -- background workspaces' greeters are current the moment you switch to them
-  -- too.
-  vim.api.nvim_create_autocmd("User", {
-    group = group,
-    pattern = "FishmongerAgentsChanged",
-    callback = M.update_dashboards,
-  })
-
   -- The review queue's counts are on every greeter outside review mode.
   vim.api.nvim_create_autocmd("User", {
     group = group,
@@ -1433,9 +996,8 @@ function M.setup()
       --
       -- Re-tested on the way out, not just re-identified: BufEnter fires from
       -- INSIDE the command that made the buffer, so anything that command does
-      -- afterwards to claim it -- M.new_file's tag, a plugin setting a filetype
-      -- or attaching a job -- has only landed by now. Trusting the entry check
-      -- alone made "New file" hand back the greeter instead of a blank buffer.
+      -- afterwards to claim it -- a plugin setting a filetype or attaching a
+      -- job -- has only landed by now.
       vim.schedule(function()
         if
           vim.api.nvim_win_is_valid(win)

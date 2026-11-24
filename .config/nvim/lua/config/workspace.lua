@@ -346,9 +346,9 @@ local close_button = " \u{f00d} "
 
 --- Read every tabpage's label for the tab strip: the project name, prefixed
 --- with the status glyph of each of that tabpage's side terminals, in that
---- state's colour -- the same icon and highlight the agent view and the
---- greeter's Agents section use (fishmonger resolves the hook-reported agent
---- state first, falling back to the leading glyph of the terminal's OSC title).
+--- state's colour -- the same icon and highlight the agent view uses
+--- (fishmonger resolves the hook-reported agent state first, falling back to
+--- the leading glyph of the terminal's OSC title).
 --- That's the point of the glyphs being here rather than only in the OS title: a
 --- background project whose agent is waiting on you says so from its tab -- and
 --- says so in orange -- without switching to it.

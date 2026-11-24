@@ -885,16 +885,6 @@ query($owner: String!, $name: String!, $number: Int!, $after: String) {
   }
 }]]):format(CONTEXTS)
 
-local CHECKS = ([[
-query($owner: String!, $name: String!, $number: Int!) {
-  repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) {
-      number
-      commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) { %s } } } } }
-    }
-  }
-}]]):format(CONTEXTS)
-
 local TEAMS =
   "teams(first: 100, userLogins: [%s]) { nodes { combinedSlug ancestors(first: 20) { nodes { combinedSlug } } } }"
 
@@ -1166,27 +1156,6 @@ local function repo_of(dir)
     error("not a GitHub repo: " .. vim.trim(view.stderr or ""), 0)
   end
   return { owner = info.owner.login, name = info.name }
-end
-
---- The checks on one PR's head (the greeter's PR), read as the queue reads
---- them, or nil if they couldn't be had. GraphQL rather than `gh pr view`,
---- whose rollup has no app slug to tell a merge gate by.
----@param dir string
----@param number integer
----@param cb fun(checks: reviewqueue.Checks?)
-function M.checks(dir, number, cb)
-  coroutine.wrap(function()
-    local ok, checks = pcall(function()
-      local repo = repo_of(dir)
-      local node =
-        graphql(CHECKS, { owner = repo.owner, name = repo.name, number = number }).repository.pullRequest
-      with_all_contexts(repo, node)
-      local head = node.commits.nodes[1]
-      local rollup = head and head.commit.statusCheckRollup
-      return rollup and M.checks_of(rollup) or nil
-    end)
-    cb(ok and checks or nil)
-  end)()
 end
 
 ---@alias reviewqueue.Item { pr: reviewqueue.PR, verdict: reviewqueue.Verdict }
