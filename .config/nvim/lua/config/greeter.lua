@@ -5,7 +5,7 @@
 -- nothing and did nothing. Instead the window shows the review queue's counts,
 -- held to their height, with the todo list (config/todo.lua) under it. Above
 -- it, for a branch with a PR, sit the PR stack (its rows pick a PR) and diff
--- size, then the PR itself, a gh:// buffer that snacks.nvim renders and that
+-- size, then the PR itself, an octo:// buffer that octo.nvim renders and that
 -- takes the room; without a PR the todo list takes it. It comes back whenever
 -- the buffer list empties out again (<leader>X, or closing the last buffer), so
 -- "no buffers open" is a status screen rather than a dead end. The windows
@@ -90,7 +90,7 @@ local PANE_WO = {
   spell = false,
 }
 
-local new_buffer, lay_out, size_column, refresh_pr, part_window, place, pr_buffer, pr_uri, named
+local new_buffer, lay_out, size_column, part_window, place, pr_buffer, pr_uri, named
 local stack_buffer, reviewers_buffer, part_buffer, pick_prs
 
 --- Show this workspace's greeter in `win` (default: the current window).
@@ -154,18 +154,12 @@ function lay_out(win, todo_file)
   local width = vim.api.nvim_win_get_width(win)
   M.draw(buf, M.queue_rows(root), width)
   local pr = M.branch_pr(root)
-  local pr_buf, fresh = nil, false
-  if pr then
-    pr_buf, fresh = pr_buffer(pr)
-  end
+  local pr_buf = pr and pr_buffer(pr)
   local stack_buf = pr and stack_buffer(root, width)
   local reviewers_buf = pr and reviewers_buffer(root, width)
   local todo_win = require("config.todo").window(tab, todo_file)
 
   local pr_win, shown = place(tab, "pr", pr_buf, win, { split = "above", win = win })
-  if shown and not fresh then
-    require("snacks.gh.buf").attached[pr_buf]:update()
-  end
   -- Only ever with a PR, so each goes above the PR's window, the stack on top.
   local reviewers_win =
     place(tab, "reviewers", reviewers_buf, win, pr_win and { split = "above", win = pr_win })
@@ -364,17 +358,6 @@ function M.go_to_pr(root, pr)
   )
 end
 
---- Refresh the PR shown for `root`'s branch.
----@param root string normalized workspace root
-function refresh_pr(root)
-  local pr = M.branch_pr(root)
-  local buf = pr and named(pr_uri(pr))
-  local attached = buf and require("snacks.gh.buf").attached[buf]
-  if attached then
-    attached:update()
-  end
-end
-
 -- The windows above the queue, by the part of the greeter they show.
 ---@alias greeter.Part "stack"|"reviewers"|"pr"
 
@@ -419,31 +402,29 @@ function place(tab, part, buf, under, anchor)
   return win, "opened"
 end
 
---- `pr`'s gh:// buffer, rendered by snacks.nvim's gh module: snacks' refresh
---- after an action and its window, write and detach autocmds match the name.
+--- `pr`'s octo:// buffer, rendered once by octo.nvim, whose poll keeps it
+--- current without overwriting unsaved edits; its write (:w saves them to
+--- GitHub) and window autocmds match the name.
 ---@param pr table `gh pr view` JSON
----@return integer buf, boolean fresh attached just now, so already rendering
+---@return integer
 function pr_buffer(pr)
   local uri = pr_uri(pr)
   local buf = named(uri)
-  if not buf then
-    buf = vim.api.nvim_create_buf(false, false)
-    vim.api.nvim_buf_set_name(buf, uri)
+  if buf then
+    return buf
   end
-  local gh = require("snacks.gh.buf")
-  if gh.attached[buf] then
-    return buf, false
-  end
-  gh.attach(buf)
-  return buf, true
+  buf = vim.api.nvim_create_buf(false, false)
+  vim.api.nvim_buf_set_name(buf, uri)
+  require("octo").load_buffer({ bufnr = buf })
+  return buf
 end
 
---- The gh:// uri snacks.nvim names `pr`'s buffer by.
+--- The octo:// uri octo.nvim names `pr`'s buffer by.
 ---@param pr table `gh pr view` JSON
 ---@return string
 function pr_uri(pr)
   local repo, number = pr.url:match("^https?://[^/]+/([^/]+/[^/]+)/pull/(%d+)")
-  return ("gh://%s/pr/%s"):format(repo, number)
+  return ("octo://%s/pull/%s"):format(repo, number)
 end
 
 --- The buffer named `name`, if there is one.
@@ -650,13 +631,8 @@ function M.cache_report(root, report, attrs)
   if vim.deep_equal(reports[root], report) and vim.deep_equal(M.attrs[root], attrs) then
     return
   end
-  local old = reports[root]
   reports[root] = report
   M.attrs[root] = attrs
-  -- A checkout or a commit moves what the PR shows too: its commits, checks and size.
-  if old and report and (old.branch ~= report.branch or old.head ~= report.head) then
-    refresh_pr(root)
-  end
   M.redraw()
   -- The tab labels carry the same "<repo> - <branch>" name
   -- (workspace.display_name reads this cache), so a fresh report -- the

@@ -172,10 +172,13 @@ to it. It's a stack of windows, top to bottom:
    `` commented, `✓` approved, `✗` changes requested. A review made for a
    team names it (`for org/team`). A member that team auto-assign picked is a
    row of its own: GitHub's API doesn't say which team picked them.
-3. **PR** — only when the branch has a PR: the PR itself as a `gh://` buffer
-   rendered by snacks, taking the room. Snacks' keys work there (`i` edit, `a`
-   comment or reply, `Enter` the action menu), and `R` refreshes it, as in any
-   `gh://` buffer. It refreshes itself when the branch or HEAD moves.
+3. **PR** — only when the branch has a PR: the PR itself as an octo buffer,
+   taking the room. Edit the title, description or your comments in place and
+   `:w` saves them to GitHub. Octo's keys work there: `Enter` the action menu,
+   `Space+ca` comment, `Space+cr` reply, `]c`/`[c` next/previous comment,
+   `Space+pu` reload, `Space+pw` open in the browser, `Space+py`/`Space+pY`
+   copy its URL/commit SHA. It reloads itself within a minute of the PR
+   changing on GitHub, unless it holds unsaved edits.
 4. **Review queue** — the [review queue](#review-queue-spacerq) and
    [my PRs](#my-prs-spacerm) counts, held to their height. It doesn't depend on
    the branch.

@@ -1,7 +1,7 @@
 -- Run inside the child nvim plugin_loading_spec starts with the full config:
 -- reports how plugins load, as JSON to the file named by $PROBE_OUT, then quits.
 
-local gh_buffer_attached -- defined below report
+local gh_buffer_attached, octo_buffer_attached -- defined below report
 
 local function report()
   local plugins = require("lazy.core.config").plugins
@@ -21,6 +21,7 @@ local function report()
   local agentic = require("agentic.config")
   return {
     gh_buffer_attached = gh_buffer_attached(),
+    octo_buffer_attached = octo_buffer_attached(),
     unidentified = unidentified,
     agentic_loaded = plugins["agentic.nvim"]._.loaded ~= nil,
     agentic_preselect = agentic.completion.preselect,
@@ -36,6 +37,20 @@ function gh_buffer_attached()
   vim.api.nvim_win_set_buf(0, buf)
   vim.bo[buf].filetype = "markdown.gh"
   return require("render-markdown.core.manager").attached(buf)
+end
+
+--- Whether render-markdown attaches to an octo PR buffer, and treesitter parses it as markdown, once octo has loaded
+--- as the greeter loads it: octo's config is what tells treesitter its buffers hold markdown.
+---@return boolean
+function octo_buffer_attached()
+  require("octo")
+  local buf = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_win_set_buf(0, buf)
+  vim.bo[buf].filetype = "octo"
+  local parser = vim.treesitter.get_parser(buf, nil, { error = false })
+  return require("render-markdown.core.manager").attached(buf)
+    and parser ~= nil
+    and parser:lang() == "markdown"
 end
 
 -- After startup's own loads (lazy's VeryLazy never fires headless).
