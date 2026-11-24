@@ -19,7 +19,7 @@ function M.setup(opts)
   options = vim.tbl_extend("force", options, opts)
 end
 
-local host, host_first, newest, start_spec, stop, paste, attach, pass_ctrl_keys, route_ctrl_key, chat_record, paint, repaint_all, title_hl, set_title_hl -- defined below their callers
+local host, host_first, newest, start_spec, stop, paste, attach, type_into, pass_ctrl_keys, route_ctrl_key, chat_record, paint, repaint_all, title_hl, set_title_hl -- defined below their callers
 
 -- A session's name and colour arrive as agent-status and Claude report them.
 vim.api.nvim_create_autocmd("User", {
@@ -230,10 +230,32 @@ function host(spec, place)
       local live = registry.get(key)
       return live and M.agent_name(live.session_id) or "agent"
     end,
+    -- fishmonger.send (<leader>ya) types into the prompt, agentic's own buffer under the chat.
+    send = function(text)
+      local live = registry.get(key)
+      local win = live and live.widget.win_nrs.input
+      if win and vim.api.nvim_win_is_valid(win) then
+        type_into(win, text)
+      end
+    end,
   })
   if not hosted then
     registry.destroy(key)
   end
+end
+
+--- Append `text` to the end of the prompt in `win` and type on from there.
+---@param win integer
+---@param text string
+function type_into(win, text)
+  local buf = vim.api.nvim_win_get_buf(win)
+  local row = vim.api.nvim_buf_line_count(buf) - 1
+  local col = #vim.api.nvim_buf_get_lines(buf, row, row + 1, true)[1]
+  local lines = vim.split(text, "\n", { plain = true })
+  vim.api.nvim_buf_set_text(buf, row, col, row, col, lines)
+  vim.api.nvim_set_current_win(win)
+  vim.api.nvim_win_set_cursor(win, { row + #lines, 0 })
+  vim.cmd("startinsert!")
 end
 
 --- Stop session `key`'s reply while it generates, else its running sub-agents; agentic stops nothing that isn't running.

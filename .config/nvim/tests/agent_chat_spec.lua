@@ -374,6 +374,21 @@ describe("agent_chat.new", function()
     end)
   end)
 
+  -- <leader>ya's path:line goes to the prompt, not the chat, typed on from its end.
+  it("takes fishmonger.send's text into its prompt, the chat left alone", function()
+    new()
+    local widget = created[1].session.widget
+    vim.api.nvim_buf_set_lines(widget.buf_nrs.input, 0, -1, true, { "look at" })
+    fishmonger.toggle() -- hidden: send re-shows it
+
+    assert.is_true(fishmonger.send(" lua/a.lua:12 "))
+
+    assert.same({ "look at lua/a.lua:12 " }, vim.api.nvim_buf_get_lines(widget.buf_nrs.input, 0, -1, true))
+    assert.same({ "" }, vim.api.nvim_buf_get_lines(widget.buf_nrs.chat, 0, -1, true))
+    assert.equals(widget.win_nrs.input, vim.api.nvim_get_current_win())
+    vim.cmd("stopinsert")
+  end)
+
   it("leaves insert mode in its prompt on Ctrl+N", function()
     new()
     local input = created[1].session.widget.buf_nrs.input
