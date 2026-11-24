@@ -179,9 +179,10 @@ to it. It's a stack of windows, top to bottom:
    (below the rule) in place and `:w` or `Ctrl+S` saves them to GitHub; it
    refuses if GitHub's copy changed since it loaded. Under the description,
    the conversation, newest activity first: comments on the PR, reviews'
-   summaries and threads on the code (file:line, then the end of the diff);
-   resolved threads collapse to their file:line, bot-only threads are hidden
-   and counted. Your own comments edit in place too, saved by the same `:w`.
+   summaries and threads on the code (file:line, then the end of the diff).
+   Each thread is a fold (`za` toggles it): resolved ones start closed, the
+   rest open, and a reload keeps them as you left them. Bot-only threads are
+   hidden and counted. Your own comments edit in place too, saved by the same `:w`.
    `Space+ra` on a thread replies (in it for one on the code, else a comment to
    its author), `Space+rc` comments on the PR, both in the compose box. It
    refreshes itself when the branch or HEAD moves, unless it holds unsaved
