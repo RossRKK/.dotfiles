@@ -66,8 +66,8 @@ Outside nvim, or for smaller tasks use worktrees as usual.
 # Attribution
 
 When opening a PR yourself title it "Claude's Blog" I will add my own
-description above that. Always open PRs as draft first. Its body ends with
-`diff-size` output; run `diff-size --update-pr` after each push.
+description above that. Always open PRs as draft first. Keep PR descriptions
+brief and to the point.
 
 When commenting on a PR on my behalf always begin the message with "claude 🤖".
 
