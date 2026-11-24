@@ -172,10 +172,13 @@ to it. It's a stack of windows, top to bottom:
    `` commented, `✓` approved, `✗` changes requested. A review made for a
    team names it (`for org/team`). A member that team auto-assign picked is a
    row of its own: GitHub's API doesn't say which team picked them.
-3. **PR** — only when the branch has a PR: the PR itself as a `gh://` buffer
-   rendered by snacks, taking the room. Snacks' keys work there (`i` edit, `a`
-   comment or reply, `Enter` the action menu), and `R` refreshes it, as in any
-   `gh://` buffer. It refreshes itself when the branch or HEAD moves.
+3. **PR** — only when the branch has a PR: the PR itself as nitpick's PR
+   buffer, taking the room. Edit the title (first line) or the description
+   (below the rule) in place and `:w` or `Ctrl+S` saves them to GitHub; it
+   refuses if GitHub's copy changed since it loaded. Each failed or running
+   check has its own row: `gd` on it opens the check. It refreshes itself when
+   the branch or HEAD moves, unless it holds unsaved edits. `:NitpickPr [n]`
+   opens any PR the same way.
 4. **Review queue** — the [review queue](#review-queue-spacerq) and
    [my PRs](#my-prs-spacerm) counts, held to their height. It doesn't depend on
    the branch.

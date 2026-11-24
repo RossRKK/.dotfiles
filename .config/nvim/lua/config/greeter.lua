@@ -5,7 +5,7 @@
 -- nothing and did nothing. Instead the window shows the review queue's counts,
 -- held to their height, with the todo list (config/todo.lua) under it. Above
 -- it, for a branch with a PR, sit the PR stack (its rows pick a PR) and diff
--- size, then the PR itself, a gh:// buffer that snacks.nvim renders and that
+-- size, then the PR itself, nitpick's PR buffer, editable in place, which
 -- takes the room; without a PR the todo list takes it. It comes back whenever
 -- the buffer list empties out again (<leader>X, or closing the last buffer), so
 -- "no buffers open" is a status screen rather than a dead end. The windows
@@ -90,7 +90,7 @@ local PANE_WO = {
   spell = false,
 }
 
-local new_buffer, lay_out, size_column, refresh_pr, part_window, place, pr_buffer, pr_uri, named
+local new_buffer, lay_out, size_column, refresh_pr, part_window, place, pr_buffer, pr_ref, named
 local stack_buffer, reviewers_buffer, part_buffer, pick_prs
 
 --- Show this workspace's greeter in `win` (default: the current window).
@@ -164,7 +164,7 @@ function lay_out(win, todo_file)
 
   local pr_win, shown = place(tab, "pr", pr_buf, win, { split = "above", win = win })
   if shown and not fresh then
-    require("snacks.gh.buf").attached[pr_buf]:update()
+    require("nitpick.pr_buffer").refresh(pr_buf)
   end
   -- Only ever with a PR, so each goes above the PR's window, the stack on top.
   local reviewers_win =
@@ -368,10 +368,10 @@ end
 ---@param root string normalized workspace root
 function refresh_pr(root)
   local pr = M.branch_pr(root)
-  local buf = pr and named(pr_uri(pr))
-  local attached = buf and require("snacks.gh.buf").attached[buf]
-  if attached then
-    attached:update()
+  local pr_buffers = require("nitpick.pr_buffer")
+  local buf = pr and named(pr_buffers.uri(pr_ref(pr)))
+  if buf then
+    pr_buffers.refresh(buf)
   end
 end
 
@@ -419,31 +419,19 @@ function place(tab, part, buf, under, anchor)
   return win, "opened"
 end
 
---- `pr`'s gh:// buffer, rendered by snacks.nvim's gh module: snacks' refresh
---- after an action and its window, write and detach autocmds match the name.
+--- `pr`'s buffer in nitpick, which keeps it current on a refresh without overwriting unsaved edits.
 ---@param pr table `gh pr view` JSON
----@return integer buf, boolean fresh attached just now, so already rendering
+---@return integer buf, boolean fresh made just now, so already loading
 function pr_buffer(pr)
-  local uri = pr_uri(pr)
-  local buf = named(uri)
-  if not buf then
-    buf = vim.api.nvim_create_buf(false, false)
-    vim.api.nvim_buf_set_name(buf, uri)
-  end
-  local gh = require("snacks.gh.buf")
-  if gh.attached[buf] then
-    return buf, false
-  end
-  gh.attach(buf)
-  return buf, true
+  return require("nitpick.pr_buffer").buffer(pr_ref(pr))
 end
 
---- The gh:// uri snacks.nvim names `pr`'s buffer by.
+--- The PR `pr` is, as nitpick names one.
 ---@param pr table `gh pr view` JSON
----@return string
-function pr_uri(pr)
-  local repo, number = pr.url:match("^https?://[^/]+/([^/]+/[^/]+)/pull/(%d+)")
-  return ("gh://%s/pr/%s"):format(repo, number)
+---@return nitpick.PrRef
+function pr_ref(pr)
+  local owner, name, number = pr.url:match("^https?://[^/]+/([^/]+)/([^/]+)/pull/(%d+)")
+  return { owner = owner, name = name, number = tonumber(number) }
 end
 
 --- The buffer named `name`, if there is one.

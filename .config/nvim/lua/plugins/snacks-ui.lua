@@ -25,7 +25,7 @@ return {
     -- containing the keyword under the cursor) -- an accepted trade-off here.
     scope = { enabled = true },
     scratch = { enabled = true },
-    -- gh:// buffers (the greeter's PR) re-fetch only after an action of their own.
+    -- gh:// buffers (opened from the gh pickers) re-fetch only after an action of their own.
     gh = {
       -- Snacks has no option for the gh header's fields, so util/gh_header patches them.
       config = function()

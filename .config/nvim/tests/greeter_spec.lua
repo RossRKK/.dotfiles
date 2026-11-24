@@ -462,13 +462,13 @@ describe("greeter.stack_items", function()
   end)
 end)
 
--- The windows under the queue for a branch with a PR. The PR buffer is attached
--- by a stand-in for snacks.gh.buf: the real one renders from the GitHub API.
+-- The windows under the queue for a branch with a PR. The PR buffer comes from
+-- a stand-in for nitpick's: the real one renders from the GitHub API.
 describe("greeter's PR windows", function()
   local reports = require("util.branch_reports")
   local todo_file = vim.fs.normalize(vim.fn.tempname() .. "-todo.md")
   local repo = vim.fs.normalize(vim.fn.tempname())
-  local saved, gh, root, win
+  local saved, refreshes, root, win
 
   local function git(...)
     local res = vim.system({ "git", "-C", repo, ... }):wait()
@@ -515,7 +515,7 @@ describe("greeter's PR windows", function()
       file = todo.FILE,
       counts = rq.counts,
       key = rq.key,
-      gh = package.loaded["snacks.gh.buf"],
+      pr_buffer = package.loaded["nitpick.pr_buffer"],
       open = vim.ui.open,
     }
     todo.FILE = todo_file
@@ -524,16 +524,26 @@ describe("greeter's PR windows", function()
       return "/repo"
     end
     rq.cache["/repo"] = { mine = { mine(1, "a", "main"), mine(2, "b", "a") } }
-    gh = { attached = {} }
-    function gh.attach(buf)
-      local attached = { updates = 0 }
-      function attached.update(self)
-        self.updates = self.updates + 1
-      end
-      gh.attached[buf] = attached
-      return attached
+    refreshes = {}
+    local stand_in = {}
+    function stand_in.uri(ref)
+      return ("nitpick://pr/%s/%s/%d"):format(ref.owner, ref.name, ref.number)
     end
-    package.loaded["snacks.gh.buf"] = gh
+    function stand_in.buffer(ref)
+      local name = stand_in.uri(ref)
+      local existing = vim.fn.bufnr(name)
+      if existing ~= -1 then
+        return existing, false
+      end
+      local buf = vim.api.nvim_create_buf(false, false)
+      vim.api.nvim_buf_set_name(buf, name)
+      refreshes[buf] = 0
+      return buf, true
+    end
+    function stand_in.refresh(buf)
+      refreshes[buf] = refreshes[buf] + 1
+    end
+    package.loaded["nitpick.pr_buffer"] = stand_in
     reports[root] = report("abc")
     greeter.attrs[root] = {}
     greeter.prs[root] = { branch = "b", at = 0, pr = pr(2) }
@@ -542,7 +552,12 @@ describe("greeter's PR windows", function()
 
   after_each(function()
     todo.FILE, rq.counts, rq.key, vim.ui.open = saved.file, saved.counts, saved.key, saved.open
-    package.loaded["snacks.gh.buf"] = saved.gh
+    package.loaded["nitpick.pr_buffer"] = saved.pr_buffer
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.startswith(vim.api.nvim_buf_get_name(buf), "nitpick://pr/") then
+        vim.api.nvim_buf_delete(buf, { force = true })
+      end
+    end
     rq.cache, reports[root], greeter.attrs[root], greeter.prs[root] = {}, nil, nil, nil
     vim.api.nvim_del_augroup_by_name("main_companions")
     vim.cmd("silent! tabonly!")
@@ -566,8 +581,8 @@ describe("greeter's PR windows", function()
   it("stacks the stack, the PR, the queue and the todo list, top to bottom", function()
     greeter.open(win)
     local names, wins = column()
-    assert.same({ "greeter_stack", "gh://o/r/pr/2", "greeter", "todo" }, names)
-    assert.is_not_nil(gh.attached[vim.api.nvim_win_get_buf(wins[2])])
+    assert.same({ "greeter_stack", "nitpick://pr/o/r/2", "greeter", "todo" }, names)
+    assert.equals(0, refreshes[vim.api.nvim_win_get_buf(wins[2])], "made, so loading already")
     local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[1]), 0, -1, false)
     assert.matches("^ *\u{25c9} #2  PR 2", lines[1])
     assert.matches("^ *\u{25cb} #1  PR 1", lines[2])
@@ -682,7 +697,7 @@ describe("greeter's PR windows", function()
     greeter.open(win)
     local names, wins = column()
     greeter.reviewers[root] = nil
-    assert.same({ "greeter_stack", "greeter_reviewers", "gh://o/r/pr/2", "greeter", "todo" }, names)
+    assert.same({ "greeter_stack", "greeter_reviewers", "nitpick://pr/o/r/2", "greeter", "todo" }, names)
     local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[2]), 0, -1, false)
     assert.matches("acme/devs", lines[1])
     assert.matches("bob", lines[2])
@@ -695,7 +710,7 @@ describe("greeter's PR windows", function()
     greeter.open(win)
     local names = column()
     greeter.reviewers[root] = nil
-    assert.same({ "greeter_stack", "gh://o/r/pr/2", "greeter", "todo" }, names)
+    assert.same({ "greeter_stack", "nitpick://pr/o/r/2", "greeter", "todo" }, names)
   end)
 
   it("has only the todo list under the queue for a branch without a PR", function()
@@ -721,29 +736,29 @@ describe("greeter's PR windows", function()
     greeter.prs[root].pr = pr(3)
     greeter.redraw()
     local names, after = column()
-    assert.equals("gh://o/r/pr/3", names[2])
+    assert.equals("nitpick://pr/o/r/3", names[2])
     assert.equals(before[3], after[3])
   end)
 
   it("refreshes a PR rendered before when it comes back into the window", function()
     greeter.open(win)
     local _, wins = column()
-    local attached = gh.attached[vim.api.nvim_win_get_buf(wins[2])]
+    local buf = vim.api.nvim_win_get_buf(wins[2])
     greeter.prs[root].pr = pr(3)
     greeter.redraw()
     greeter.prs[root].pr = pr(2)
     greeter.redraw()
-    assert.equals(1, attached.updates)
+    assert.equals(1, refreshes[buf])
   end)
 
   it("refreshes the PR when the branch's HEAD moves, and only then", function()
     greeter.open(win)
     local _, wins = column()
-    local attached = gh.attached[vim.api.nvim_win_get_buf(wins[2])]
+    local buf = vim.api.nvim_win_get_buf(wins[2])
     greeter.cache_report(root, report("abc"), {})
-    assert.equals(0, attached.updates)
+    assert.equals(0, refreshes[buf])
     greeter.cache_report(root, report("def"), {})
-    assert.equals(1, attached.updates)
+    assert.equals(1, refreshes[buf])
   end)
 
   it("opens a stack row's PR in the browser with G", function()
