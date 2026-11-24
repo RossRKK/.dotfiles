@@ -166,14 +166,20 @@ to it. It's a stack of windows, top to bottom:
    the review queue; binary files count no lines). Its rows pick a PR: `G` opens
    it in the browser; `Enter` switches to the workspace tab whose worktree has
    its branch, else runs `gh pr checkout` in this worktree.
-2. **PR** — only when the branch has a PR: the PR itself as a `gh://` buffer
+2. **Reviewers** — only when the branch has a PR, as GitHub's Reviewers panel:
+   the requested teams and people (a shield `` marks a CODEOWNERS request),
+   then anyone who reviewed unasked, each with their latest state: `●` pending,
+   `` commented, `✓` approved, `✗` changes requested. A review made for a
+   team names it (`for org/team`). A member that team auto-assign picked is a
+   row of its own: GitHub's API doesn't say which team picked them.
+3. **PR** — only when the branch has a PR: the PR itself as a `gh://` buffer
    rendered by snacks, taking the room. Snacks' keys work there (`i` edit, `a`
    comment or reply, `Enter` the action menu), and `R` refreshes it, as in any
    `gh://` buffer. It refreshes itself when the branch or HEAD moves.
-3. **Review queue** — the [review queue](#review-queue-spacerq) and
+4. **Review queue** — the [review queue](#review-queue-spacerq) and
    [my PRs](#my-prs-spacerm) counts, held to their height. It doesn't depend on
    the branch.
-4. **Todo list** — `~/todo.md`, the real file, so edit it there. It keeps a
+5. **Todo list** — `~/todo.md`, the real file, so edit it there. It keeps a
    third of the room under a PR, and fills everything below the queue without
    one.
 

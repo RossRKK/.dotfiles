@@ -361,6 +361,43 @@ describe("greeter.fetch", function()
   end
 end)
 
+describe("greeter.reviewer_rows", function()
+  --- A reviewer with the fields a row reads.
+  local function reviewer(name, state, extra)
+    return vim.tbl_extend(
+      "force",
+      { name = name, kind = "user", code_owner = false, state = state, on_behalf_of = {} },
+      extra or {}
+    )
+  end
+
+  it("aligns each reviewer's state after the names, code owners shielded", function()
+    assert.same(
+      {
+        "\u{25cf} acme/physics \u{f132}  pending",
+        "\u{25cf} bob" .. (" "):rep(13) .. "pending",
+        "\u{2713} dave" .. (" "):rep(12) .. "approved  for acme/devs, acme/orchestrator",
+        "\u{2717} eve" .. (" "):rep(13) .. "changes requested",
+        "\u{f075} claude" .. (" "):rep(10) .. "commented",
+      },
+      vim.tbl_map(
+        text,
+        greeter.reviewer_rows({
+          reviewer("acme/physics", "pending", { kind = "team", code_owner = true }),
+          reviewer("bob", "pending"),
+          reviewer("dave", "approved", { on_behalf_of = { "acme/devs", "acme/orchestrator" } }),
+          reviewer("eve", "changes_requested"),
+          reviewer("claude", "commented"),
+        })
+      )
+    )
+  end)
+
+  it("says so when nobody is requested or has reviewed", function()
+    assert.same({ "no reviewers" }, vim.tbl_map(text, greeter.reviewer_rows({})))
+  end)
+end)
+
 describe("greeter.stack_items", function()
   local function texts(rows)
     return vim.tbl_map(text, rows)
@@ -586,6 +623,39 @@ describe("greeter's PR windows", function()
       assert.is_true(vim.api.nvim_win_get_height(wins[2]) > vim.api.nvim_win_get_height(wins[4]))
     end
   )
+
+  it("puts the PR's reviewers between the stack and the PR, held to their rows", function()
+    greeter.reviewers[root] = {
+      number = 2,
+      reviewers = {
+        {
+          name = "acme/devs",
+          kind = "team",
+          code_owner = true,
+          state = "pending",
+          on_behalf_of = {},
+        },
+        { name = "bob", kind = "user", code_owner = false, state = "approved", on_behalf_of = {} },
+      },
+    }
+    greeter.open(win)
+    local names, wins = column()
+    greeter.reviewers[root] = nil
+    assert.same({ "greeter_stack", "greeter_reviewers", "gh://o/r/pr/2", "greeter", "todo" }, names)
+    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[2]), 0, -1, false)
+    assert.matches("acme/devs", lines[1])
+    assert.matches("bob", lines[2])
+    assert.equals(2, vim.api.nvim_win_get_height(wins[2]))
+    assert.is_true(vim.wo[wins[2]].winfixheight)
+  end)
+
+  it("has no reviewers window for reviewers fetched for another PR", function()
+    greeter.reviewers[root] = { number = 9, reviewers = {} }
+    greeter.open(win)
+    local names = column()
+    greeter.reviewers[root] = nil
+    assert.same({ "greeter_stack", "gh://o/r/pr/2", "greeter", "todo" }, names)
+  end)
 
   it("has only the todo list under the queue for a branch without a PR", function()
     greeter.prs[root].pr = false
