@@ -18,7 +18,7 @@ return {
       end,
       -- No emoji or icon glyphs in the chat's titles, marks and spinner; words and plain marks
       -- instead. The user and agent headings keep agentic's icons.
-      message_icons = { thinking = ">", finished = "✓", stopped = "■", error = "✗" },
+      message_icons = { thinking = "∴", finished = "✓", stopped = "■", error = "✗" },
       diagnostic_icons = { error = "E", warn = "W", info = "I", hint = "H" },
       spinner_chars = {
         thinking = { "·", "✢", "✳", "∗", "✻", "✽" },

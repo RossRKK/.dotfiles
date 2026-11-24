@@ -99,3 +99,20 @@ describe("agentic chat windows", function()
     assert.are.equal("↪ ", showbreak(host))
   end)
 end)
+
+-- Agent chats render as markdown, where a thinking mark starting a block construct took the thought over.
+describe("a thinking block in an agent chat", function()
+  it("starts with a mark markdown reads as text, not a quote", function()
+    require("agentic").setup(require("plugins.agentic")[1].opts)
+    local buf = vim.api.nvim_create_buf(false, true)
+    local writer = require("agentic.ui.message_writer"):new(buf)
+    writer:write_message_chunk({
+      sessionUpdate = "agent_thought_chunk",
+      content = { type = "text", text = "Weighing it up." },
+    })
+    local tree = vim.treesitter.get_string_parser(table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n"), "markdown"):parse()[1]
+    local quotes = vim.treesitter.query.parse("markdown", "(block_quote) @quote")
+    assert.is_nil(quotes:iter_captures(tree:root(), 0)(), table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n"))
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+end)
