@@ -27,6 +27,10 @@ return {
     scratch = { enabled = true },
     -- gh:// buffers (the greeter's PR, <leader>gP) re-fetch only after an action of their own.
     gh = {
+      -- Snacks has no option for the gh header's fields, so util/gh_header patches them.
+      config = function()
+        require("util.gh_header").apply()
+      end,
       keys = {
         refresh = {
           "R",
