@@ -165,8 +165,8 @@ to it. It's a stack of windows, top to bottom:
    the branch.
 2. **Stack** — only when the branch has a PR. The size of the branch's diff to
    its review base (`+adds -dels`, a bar and a legend by review tier, as in the
-   review queue; binary files count no lines), then, when the PR is one of yours
-   stacked with others, the stack. Its rows pick a PR: `G` opens it in the
+   review queue; binary files count no lines), then, when the PR is one of yours,
+   its stack (a PR on its own is a stack of one). Its rows pick a PR: `G` opens it in the
    browser; `Enter` switches to the workspace tab whose worktree has its branch,
    else runs `gh pr checkout` in this worktree.
 3. **PR** — only when the branch has a PR: the PR itself as a `gh://` buffer
@@ -744,9 +744,9 @@ open tab (and when you leave review mode), so the picker opens instantly from
 that cache — its title says how old it is, and a list over a minute old is
 refreshed behind it. The greeter's top window shows the counts
 (`12 need you · 1 back to you · 3 for your team`), and under them the
-[my PRs](#my-prs-spacerm) counts. When the branch's PR is one of yours stacked
-with others (PRs targeting each other's branches), the greeter's stack window
-lists the whole stack top first, down to the
+[my PRs](#my-prs-spacerm) counts. When the branch's PR is one of yours, the
+greeter's stack window lists its stack (PRs targeting each other's branches;
+one row for a PR on its own) top first, down to the
 branch the bottom one targets: `◉` marks the checked-out branch's PR, each row
 shows its [my PRs](#my-prs-spacerm) tier (or `draft`) and checks (`✓` `●` `✗`),
 and a PR forked off one lower down says `on <branch>`. It reads the same

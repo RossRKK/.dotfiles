@@ -545,6 +545,32 @@ describe("greeter's PR windows", function()
     end
   end)
 
+  it("shows a PR stacked with nothing as a one-row stack that G opens", function()
+    local opened
+    vim.ui.open = function(path, _)
+      opened = path
+      return nil, nil
+    end
+    rq.cache["/repo"] = { mine = { mine(2, "b", "main") } }
+    greeter.open(win)
+    local names, wins = column()
+    local stack_win = wins[assert(vim.iter(ipairs(names)):find(function(_, n)
+      return n == "greeter_stack"
+    end))]
+    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(stack_win), 0, -1, false)
+    local row = assert(vim.iter(ipairs(lines)):find(function(_, l)
+      return l:find("\u{25c9} #2  PR 2", 1, true) ~= nil
+    end))
+    assert.is_truthy(vim.iter(lines):find(function(l)
+      return vim.trim(l) == "\u{2570} main"
+    end))
+    vim.api.nvim_win_call(stack_win, function()
+      vim.api.nvim_win_set_cursor(0, { row, 0 })
+      vim.cmd("normal G")
+    end)
+    assert.equals("https://github.com/o/r/pull/2", opened)
+  end)
+
   it("holds the stack to its rows and the todo list to a share, the PR taking the rest", function()
     greeter.open(win)
     local _, wins = column()

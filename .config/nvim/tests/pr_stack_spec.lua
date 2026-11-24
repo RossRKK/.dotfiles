@@ -62,8 +62,11 @@ describe("pr_stack.of", function()
     end
   end)
 
-  it("is nil for a PR stacked with nothing", function()
-    assert.is_nil(pr_stack.of(recorded(), "rkk/rig-maintenance"))
+  it("is a one-row stack, current, over its trunk, for a PR stacked with nothing", function()
+    local stack = assert(pr_stack.of(recorded(), "rkk/rig-maintenance"))
+    assert.same({ 9135 }, numbers(stack))
+    assert.is_true(stack.rows[1].current)
+    assert.equals("master", stack.trunk)
   end)
 
   it("is nil for a branch without a PR, the default branch included", function()

@@ -14,8 +14,8 @@ local M = {}
 ---@field trunk string the branch the bottom PR targets
 
 --- The stack `branch`'s PR belongs to: every PR chained to the bottom of its
---- base chain, so siblings forked off a lower PR are in it too. Nil when the
---- branch has no PR in `items`, or its PR stands alone.
+--- base chain, so siblings forked off a lower PR are in it too. A PR standing
+--- alone is a stack of one. Nil when the branch has no PR in `items`.
 ---@param items { pr: reviewqueue.PR, verdict: reviewqueue.Verdict }[]
 ---@param branch string?
 ---@return pr_stack.Stack?
@@ -52,9 +52,6 @@ function M.of(items, branch)
     rows[#rows + 1] = { pr = it.pr, verdict = it.verdict, current = it.pr.head == branch }
   end
   place(bottom)
-  if #rows < 2 then
-    return nil
-  end
   return { rows = rows, trunk = bottom.pr.base }
 end
 
