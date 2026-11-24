@@ -118,7 +118,7 @@ end
 ---@return boolean
 function M.built(tab)
   local shape = M.shape(tab)
-  for _, ft in ipairs({ "neo-tree", "snacks_dashboard", "markdown", "fishmonger" }) do
+  for _, ft in ipairs({ "neo-tree", "greeter", "markdown", "fishmonger" }) do
     if not shape:find(ft, 1, true) then
       return false
     end

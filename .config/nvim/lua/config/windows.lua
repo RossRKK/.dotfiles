@@ -8,8 +8,10 @@ local PLACEHOLDER = "main_placeholder"
 -- Window role: a split under the main window that anything but the greeter there puts away (the todo list);
 -- holds the buffer it was opened for and the window it sits under.
 local COMPANION = "main_companion"
+-- Window mark: held at its placeholder's height beside its companions (see M.hold_height).
+local HELD = "main_held"
 
-local is_file, move_file, sits_under
+local is_file, move_file, sits_under, release
 
 --- Put companions away for whatever takes the window they sit under, and a file opened in one into the main window.
 function M.setup()
@@ -49,8 +51,14 @@ function M.replace_placeholders(win)
       return
     end
     move_file(win, main)
-  elseif vim.b[buf][PLACEHOLDER] or not sits_under(tab, win) then
+    release(main)
+  elseif vim.b[buf][PLACEHOLDER] then
     return
+  else
+    release(win)
+    if not sits_under(tab, win) then
+      return
+    end
   end
   for _, companion in ipairs(M.companions(tab)) do
     vim.api.nvim_win_close(companion, false)
@@ -61,6 +69,18 @@ end
 ---@param buf integer
 function M.mark_placeholder(buf)
   vim.b[buf][PLACEHOLDER] = true
+end
+
+--- Hold `win`, showing a placeholder, at `height` rows while a companion sits under it; anything else shown in it lets go.
+---@param win integer
+---@param height integer
+function M.hold_height(win, height)
+  if not sits_under(vim.api.nvim_win_get_tabpage(win), win) then
+    return
+  end
+  vim.api.nvim_win_set_height(win, height)
+  vim.wo[win].winfixheight = true
+  vim.w[win][HELD] = true
 end
 
 --- Mark `win` as a companion of main window `under`, standing for the buffer it shows now.
@@ -186,6 +206,15 @@ function sits_under(tab, win)
   return vim.iter(M.companions(tab)):any(function(companion)
     return vim.w[companion][COMPANION].under == win
   end)
+end
+
+--- Let go of the height a placeholder held `win` at: what replaced it has the window to itself.
+---@param win integer
+function release(win)
+  if vim.w[win][HELD] then
+    vim.w[win][HELD] = nil
+    vim.wo[win].winfixheight = false
+  end
 end
 
 --- An ordinary, listed file buffer.

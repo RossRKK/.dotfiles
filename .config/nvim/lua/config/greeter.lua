@@ -2,27 +2,26 @@
 -- real to show.
 --
 -- workspace.open() used to leave a plain empty buffer there, which told you
--- nothing and did nothing. Instead the window gets a snacks dashboard scoped to
--- THIS workspace: repo and branch, the reviews waiting, the branch's PR stack
--- and the size of its diff. It comes back whenever the buffer list empties out
--- again (<leader>X, or closing the last buffer), so "no buffers open" is a
--- status screen rather than a dead end.
+-- nothing and did nothing. Instead the window shows the review queue's counts,
+-- held to their height, with the todo list (config/todo.lua) filling the area
+-- under it. It comes back whenever the buffer list empties out again
+-- (<leader>X, or closing the last buffer), so "no buffers open" is a status
+-- screen rather than a dead end. The windows under it are companions
+-- (config/windows.lua): a file opened over the greeter puts them away.
 --
--- The size comes from triage.report (plugins/review.lua) -- the same
--- merge-result diff review mode marks the explorer with. It reports regardless
--- of whether review mode is on, so the overview reads the same before you
--- toggle it as after.
+-- The queue's buffer is a real, listed one, pinned to the front of the
+-- bufferline: one per workspace, kept alive for the life of the tab rather
+-- than rebuilt each time. That makes the overview somewhere you can go back to
+-- (<leader>h, a click, or <S-h> off the left end) instead of only somewhere
+-- you land when the last buffer closes. plugins/buffers.lua does the pinning
+-- and the filtering -- it keys off the b:greeter_root set below.
 --
--- It is also a real, listed buffer, pinned to the front of the bufferline: one
--- per workspace, kept alive for the life of the tab rather than rebuilt each
--- time. That makes the overview somewhere you can go back to (<leader>h, a
--- click, or <S-h> off the left end) instead of only somewhere you land when the
--- last buffer closes. plugins/buffers.lua does the pinning and the filtering --
--- it keys off the b:greeter_root set below.
+-- The branch report (triage.report, plugins/review.lua) is fetched here too:
+-- it names the workspace's tab and the OS title, and resolves the PR that
+-- triage reviews against.
 --
 -- Distinct from plugins/dashboard.lua, which is the bare-`nvim` startup greeter
--- and is about CHOOSING a project; this one assumes the project. Both are snacks
--- dashboards, so they share styling and section machinery.
+-- and is about CHOOSING a project; this one assumes the project.
 
 local M = {}
 
@@ -46,8 +45,8 @@ function M.is_greeter(buf)
 end
 
 --- Is this buffer a spent one -- nothing in it, nothing to save, nobody's
---- scratch -- that the greeter may take the window from and delete? A previous
---- greeter counts too.
+--- scratch -- that the greeter may take the window from and delete?
+--- The start screen, a snacks dashboard, counts too.
 ---
 --- Requiring buflisted is what keeps a panel's buffer safe: a plugin's scratch
 --- buffer is unlisted, and fishmonger's terminal buffer is empty, unnamed and
@@ -72,68 +71,146 @@ function M.is_disposable(buf)
     and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
 end
 
--- Live dashboard instances, buffer -> the object Snacks.dashboard.open()
--- returned. Kept because Snacks.dashboard.update() cannot be trusted to reach
--- more than the newest dashboard: every instance registers its listeners in an
--- augroup CREATED BY NAME with clear = true ("snacks_dashboard"), so opening a
--- greeter wipes every older greeter's Update autocmd and they go permanently
--- stale. Calling each instance's :update() directly bypasses that event
--- plumbing. Pruned lazily: a dead entry is just an invalid buffer.
-local instances = {}
-M._instances = instances -- exposed for tests only
+-- The greeter's text highlights.
+local DIM, KEY = "Comment", "Special"
 
---- True when the dashboard's own window still exists and still shows it.
+-- Window options of the queue's window, local to the greeter in it so a file shown there gets its own.
+local QUEUE_WO = {
+  number = false,
+  relativenumber = false,
+  signcolumn = "no",
+  foldcolumn = "0",
+  statuscolumn = "",
+  cursorline = false,
+  list = false,
+  wrap = false,
+  spell = false,
+}
+
+local new_buffer
+
+--- Show this workspace's greeter in `win` (default: the current window).
 ---
---- A snacks dashboard remembers the window it opened in (`dash.win`) and
---- `dash:update()` ends by putting the cursor on an action item IN THAT
---- WINDOW, without checking what the window shows now. Our greeters outlive
---- being displayed (bufhidden=hide, so the buffer stays on the bufferline), so
---- once a file is opened over one, that window is the file's -- and an update
---- would yank the file's cursor to the dashboard item's row and column.
----@param buf integer
----@param dash snacks.dashboard.Class
----@return boolean
-local function shown_in_own_window(buf, dash)
-  return dash.win ~= nil
-    and vim.api.nvim_win_is_valid(dash.win)
-    and vim.api.nvim_win_get_buf(dash.win) == buf
-end
-
---- Repaint every greeter that is on screen in its own window, newest and
---- stale-augroup ones alike. Hidden ones are left as they are: they re-resolve
---- the moment they are shown again, via open(), and updating one would move
---- the cursor in whatever window took its place (see shown_in_own_window).
-function M.update_dashboards()
-  for buf, dash in pairs(instances) do
-    if vim.api.nvim_buf_is_valid(buf) then
-      if shown_in_own_window(buf, dash) then
-        pcall(dash.update, dash)
-      end
-    else
-      instances[buf] = nil
+--- The buffer is listed and kept for the life of the workspace, so it holds a
+--- place on the bufferline rather than being conjured and thrown away: a second
+--- call just puts the existing one back in the window.
+---@param win? integer
+function M.open(win)
+  win = win or vim.api.nvim_get_current_win()
+  local root = vim.fs.normalize(require("config.workspace").cwd(vim.api.nvim_win_get_tabpage(win)))
+  local buf = M.buffers[root]
+  if not (buf and vim.api.nvim_buf_is_valid(buf)) then
+    buf = new_buffer(root)
+  end
+  local outgoing = vim.api.nvim_win_get_buf(win)
+  if outgoing ~= buf then
+    vim.api.nvim_win_set_buf(win, buf)
+    -- Snacks.bufdelete leaves an empty listed buffer, which would linger on the bufferline.
+    if M.is_disposable(outgoing) then
+      pcall(vim.api.nvim_buf_delete, outgoing, { force = true })
     end
   end
+  -- Always re-ask: the branch may have moved since this workspace last showed its greeter.
+  M.fetch(root)
+  M.arrange(win, require("config.todo").FILE)
+end
+
+--- Lay the greeter out from `win`, which shows it: the queue held to its lines,
+--- the todo list under it taking the rest.
+---@param win integer
+---@param todo_file string
+function M.arrange(win, todo_file)
+  local buf = vim.api.nvim_win_get_buf(win)
+  for option, value in pairs(QUEUE_WO) do
+    vim.wo[win][0][option] = value
+  end
+  M.draw(buf, M.queue_rows(vim.b[buf].greeter_root))
+  local todo = require("config.todo")
+  local todo_win = todo.window(vim.api.nvim_win_get_tabpage(win), todo_file)
+    or todo.open_below(win, todo_file)
+  -- Unfixed, it is the window that takes whatever the queue leaves.
+  vim.wo[todo_win].winfixheight = false
+  require("config.windows").hold_height(win, vim.api.nvim_buf_line_count(buf))
+end
+
+--- Redraw every greeter on screen, its window held to its new line count.
+function M.redraw()
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if M.is_greeter(buf) then
+      M.draw(buf, M.queue_rows(vim.b[buf].greeter_root))
+      require("config.windows").hold_height(win, vim.api.nvim_buf_line_count(buf))
+    end
+  end
+end
+
+--- The queue window's rows: what is waiting on me, and on my own PRs, from the
+--- review queue's background refresh (no fetch of its own).
+---@param root string normalized workspace root
+---@return greeter.Chunk[][]
+function M.queue_rows(root)
+  local rq = require("util.reviewqueue")
+  local rows = vim.tbl_filter(function(row)
+    return row ~= false
+  end, { M.queue_line(rq.counts(root)) or false, M.mine_line(rq.counts(root, "mine")) or false })
+  return #rows > 0 and rows or { { { "\u{f4af} nothing waiting on you", DIM } } }
+end
+
+---@alias greeter.Chunk { [1]: string, [2]: string? } text and its highlight group
+
+local ns = vim.api.nvim_create_namespace("greeter")
+
+--- Replace `buf`'s text with `rows`, one line of highlighted chunks each.
+---@param buf integer
+---@param rows greeter.Chunk[][]
+function M.draw(buf, rows)
+  local lines, marks = {}, {}
+  for i, chunks in ipairs(rows) do
+    local text = ""
+    for _, chunk in ipairs(chunks) do
+      if chunk[2] then
+        marks[#marks + 1] = { i - 1, #text, #text + #chunk[1], chunk[2] }
+      end
+      text = text .. chunk[1]
+    end
+    lines[i] = text
+  end
+  vim.bo[buf].modifiable = true
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  for _, mark in ipairs(marks) do
+    vim.api.nvim_buf_set_extmark(
+      buf,
+      ns,
+      mark[1],
+      mark[2],
+      { end_col = mark[3], hl_group = mark[4] }
+    )
+  end
+end
+
+--- A new greeter buffer for `root`: listed, so it is on the bufferline, and
+--- scratch, so it is never a file on disk.
+---@param root string
+---@return integer
+function new_buffer(root)
+  local buf = vim.api.nvim_create_buf(true, true)
+  -- Tagged first, so the bufferline's filter and sort never see it untagged.
+  vim.b[buf].greeter_root = root
+  require("config.windows").mark_placeholder(buf)
+  vim.bo[buf].filetype = "greeter"
+  vim.bo[buf].modifiable = false
+  M.buffers[root] = buf
+  return buf
 end
 
 -- Roots with a report in flight, so a burst of events queues nothing behind the
 -- first one rather than stacking git processes.
 local fetching = {}
 
--- The dashboard pane width, wider than snacks' default of 60. Long lines are
--- cut to this (or to the window, when that is narrower) so one cannot widen the
--- pane and shift everything else.
-local PANE_WIDTH = 90
-
---- Is review mode on for `root`? False when triage isn't loaded.
----@param root string
----@return boolean
-local function reviewing(root)
-  local ok, triage = pcall(require, "triage")
-  return ok and triage.is_enabled(root) or false
-end
-
---- Kick off a branch overview for `root` and redraw the greeters if it says
---- something new. Safe to call as often as you like -- the expensive step (the
+--- Kick off a branch overview for `root` and repaint what draws off it if it
+--- says something new. Safe to call as often as you like -- the expensive step (the
 --- merge-result diff) is memoised inside triage on the base/HEAD shas, so a
 --- repeat call on an unchanged branch spawns only the cheap git queries.
 ---@param root string workspace cwd
@@ -177,16 +254,12 @@ M.attrs = {}
 ---@param report table|false
 ---@param attrs table<string, diffsize.Attrs>
 function M.cache_report(root, report, attrs)
-  -- Only redraw on an actual change: re-rendering an identical dashboard
-  -- fights the cursor for no benefit.
+  -- Only repaint on an actual change: the labels redraw every tab.
   if vim.deep_equal(reports[root], report) and vim.deep_equal(M.attrs[root], attrs) then
     return
   end
   reports[root] = report
   M.attrs[root] = attrs
-  -- Re-resolves every open dashboard's sections, which is how the overview
-  -- appears without reopening the greeter.
-  M.update_dashboards()
   -- The tab labels carry the same "<repo> - <branch>" name
   -- (workspace.display_name reads this cache), so a fresh report -- the
   -- first one, or a checkout moving the branch -- has to repaint them too.
@@ -306,13 +379,12 @@ function M.pr_base(root, branch)
 end
 
 --- triage's on_toggle (plugins/review.lua): refetch the PR the moment review
---- mode comes on (it's about to be read), and swap the queue line back in
---- when it goes off.
+--- mode comes on (it's about to be read), and refresh the queue when it
+--- goes off.
 ---@param on boolean
 ---@param root string
 function M.on_review_toggle(on, root)
   if not on then
-    M.update_dashboards()
     -- Leaving review mode usually means a review just went in: the queue's
     -- count should drop now, not at the next timer tick.
     require("util.reviewqueue").refresh(root)
@@ -372,7 +444,7 @@ function M.visible_roots()
   local roots, seen = {}, {}
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     local buf = vim.api.nvim_win_get_buf(win)
-    if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "snacks_dashboard" then
+    if M.is_greeter(buf) then
       local root =
         vim.fs.normalize(require("config.workspace").cwd(vim.api.nvim_win_get_tabpage(win)))
       if not seen[root] then
@@ -476,22 +548,6 @@ function M.live_roots()
   return live
 end
 
---- The height and pane width of whichever window is showing the greeter NOW,
---- not the one it was opened in: the buffer outlives any single window (it's a
---- bufferline tab you come back to), so a captured window handle goes stale --
---- and asking a stale one for its size is an error, which would blank the
---- section. A greeter on no window gets a nominal size.
----@param buf integer
----@return integer height, integer width
-local function pane_size(buf)
-  for _, w in ipairs(vim.api.nvim_list_wins()) do
-    if vim.api.nvim_win_get_buf(w) == buf then
-      return vim.api.nvim_win_get_height(w), math.min(PANE_WIDTH, vim.api.nvim_win_get_width(w))
-    end
-  end
-  return 30, PANE_WIDTH
-end
-
 --- A dim text line, indented to sit under the header.
 ---@param chunks table[] snacks text chunks
 ---@return table item
@@ -531,54 +587,53 @@ end
 ---@param parts { [1]: string, [2]: string }[] label and highlight per count; a
 ---   count with no part isn't shown
 ---@param key string
----@return table? item
+---@return greeter.Chunk[]?
 local function counts_line(glyph, counts, parts, key)
   if not counts then
     return nil
   end
-  local dim = "SnacksDashboardDesc"
   local chunks = {}
   for i, p in ipairs(parts) do
     local n = counts[i] or 0
     if n > 0 then
       if #chunks > 0 then
-        chunks[#chunks + 1] = { "  \u{00b7}  ", hl = dim }
+        chunks[#chunks + 1] = { "  \u{00b7}  ", DIM }
       end
-      chunks[#chunks + 1] = { ("%d %s"):format(n, p[1]), hl = p[2] == "dim" and dim or p[2] }
+      chunks[#chunks + 1] = { ("%d %s"):format(n, p[1]), p[2] }
     end
   end
   if #chunks == 0 then
     return nil
   end
-  table.insert(chunks, 1, { glyph .. " ", hl = dim })
-  chunks[#chunks + 1] = { "   " .. key, hl = "SnacksDashboardKey" }
-  return line(chunks)
+  table.insert(chunks, 1, { glyph .. " ", DIM })
+  chunks[#chunks + 1] = { "   " .. key, KEY }
+  return chunks
 end
 
---- The "reviews waiting" line shown outside review mode, from the review
---- queue's per-tier counts. Nil when nothing's waiting (or no list yet).
+--- The "reviews waiting" line, from the review queue's per-tier counts. Nil
+--- when nothing's waiting (or no list yet).
 ---@param counts integer[]? { needs you, back to you, your team }
----@return table? item
+---@return greeter.Chunk[]?
 function M.queue_line(counts)
   -- Review glyph (nf-oct-code_review).
   return counts_line("\u{f4af}", counts, {
     { "need you", "DiagnosticError" },
     { "back to you", "DiagnosticWarn" },
-    { "for your team", "dim" },
+    { "for your team", DIM },
   }, "Space rq")
 end
 
 --- The same for my own PRs. Only what's on me, or about to land: waiting on
 --- reviewers (tier 5) isn't something to act on from here.
 ---@param counts integer[]? { to fix, to merge, to finish, queued, waiting }
----@return table? item
+---@return greeter.Chunk[]?
 function M.mine_line(counts)
   -- Pull request glyph (nf-oct-git_pull_request).
   return counts_line("\u{f407}", counts, {
     { "to fix", "DiagnosticError" },
     { "ready to merge", "Added" },
     { "to finish", "DiagnosticWarn" },
-    { "in merge queue", "dim" },
+    { "in merge queue", DIM },
   }, "Space rm")
 end
 
@@ -655,168 +710,6 @@ function M.stack_items(stack, width)
   return items
 end
 
---- The greeter's sections, top to bottom. Split out of open() so a test can
---- check the layout without a live snacks dashboard.
----@param root string normalized workspace root
----@param buf integer the greeter's buffer
----@param tab integer the workspace tabpage
----@param report fun(): table? the cached TriageReport, or nil while in flight
----@return table[]
-function M.sections(root, buf, tab, report)
-  return {
-    -- "<repo> - <branch>", the tab label, read from the report cache this
-    -- greeter fills, with the plain workspace name as the fallback for a
-    -- directory git can't tell us anything about. See workspace.display_name.
-    function()
-      return {
-        text = { { require("config.workspace").display_name(tab), hl = "SnacksDashboardHeader" } },
-        align = "center",
-        padding = 1,
-      }
-    end,
-    -- Unless reviewing, how many reviews are waiting on me, and how many of my
-    -- own PRs are.
-    function()
-      if reviewing(root) then
-        return nil
-      end
-      -- From the review queue's background refresh (no fetch of its own),
-      -- which lists my own PRs too.
-      local rq = require("util.reviewqueue")
-      local lines = { M.queue_line(rq.counts(root)), M.mine_line(rq.counts(root, "mine")) }
-      if not (lines[1] or lines[2]) then
-        return nil
-      end
-      return { lines[1], lines[2], { padding = 1 } }
-    end,
-    -- The stack the branch's PR is in, from the review queue's list of my
-    -- open PRs (its background refresh; no fetch of its own).
-    function()
-      local rep = report()
-      local rq = require("util.reviewqueue")
-      local key = rep and rq.key(root)
-      local mine = key and rq.cache[key] and rq.cache[key].mine
-      local stack = mine and require("util.pr_stack").of(mine, rep.branch)
-      if not stack then
-        return nil
-      end
-      local _, width = pane_size(buf)
-      -- The section indent's two columns come off the rows' width.
-      return vim.list_extend(
-        { icon = " ", title = "Stack", indent = 2, padding = 1 },
-        M.stack_items(stack, width - 2)
-      )
-    end,
-    -- The diff size.
-    function()
-      local rep = report()
-      return rep and M.size_line(rep, M.attrs[root] or {})
-    end,
-  }
-end
-
---- Show this workspace's greeter in `win` (default: the current window).
----
---- The buffer is listed and kept for the life of the workspace, so it holds a
---- place on the bufferline rather than being conjured and thrown away: a second
---- call just puts the existing one back in the window.
----@param win? integer
-function M.open(win)
-  win = win or vim.api.nvim_get_current_win()
-  local tab = vim.api.nvim_win_get_tabpage(win)
-  local workspace = require("config.workspace")
-  local root = vim.fs.normalize(workspace.cwd(tab))
-
-  -- Already built for this workspace: show it and re-ask for the overview. Not
-  -- rebuilt, because the buffer IS the bufferline tab -- a new one each time
-  -- would renumber the bar's first entry and strand the old buffers on it.
-  local existing = M.buffers[root]
-  if existing and vim.api.nvim_buf_is_valid(existing) then
-    if vim.api.nvim_win_get_buf(win) ~= existing then
-      local outgoing = vim.api.nvim_win_get_buf(win)
-      vim.api.nvim_win_set_buf(win, existing)
-      -- Same spent-buffer cleanup as below, minus the greeters: another
-      -- workspace's greeter looks disposable by filetype but must survive.
-      if not M.is_greeter(outgoing) and M.is_disposable(outgoing) then
-        pcall(vim.api.nvim_buf_delete, outgoing, { force = true })
-      end
-    end
-    M.fetch(root)
-    M.update_dashboards()
-    M.show_todo(win, require("config.todo").FILE)
-    return
-  end
-
-  -- Listed, so it appears on the bufferline; scratch, so it is never a file on
-  -- disk. bufhidden is forced back to "hide" after open() below -- snacks'
-  -- styling sets wipe, which would destroy the buffer (and its place on the
-  -- bar) the moment you switched to a file.
-  local buf = vim.api.nvim_create_buf(true, true)
-  -- Tagged before open() so the bufferline's filter and sort see it on the very
-  -- first redraw, rather than showing it as a stray "[No Name]" for a frame.
-  vim.b[buf].greeter_root = root
-  require("config.windows").mark_placeholder(buf)
-  M.buffers[root] = buf
-
-  -- Retire an outgoing dashboard BEFORE opening ours, never during. Every snacks
-  -- dashboard shares one augroup NAME, so they share its id, and a dashboard
-  -- buffer's BufWipeout deletes that augroup by id. Snacks' own open() sets the
-  -- window's buffer as its first step, so letting it wipe the previous dashboard
-  -- there deletes the augroup the half-built new one is still registering
-  -- against -- "invalid group: N", mid-init, leaving nvim unusable. Doing the
-  -- swap here means the wipe lands while no dashboard is initialising, and
-  -- open() then creates the augroup fresh.
-  --
-  -- The spent buffer the greeter displaces goes the same way, for a different
-  -- reason: Snacks.bufdelete leaves the window on a fresh empty LISTED buffer,
-  -- which lingers in the buffer list as "[No Name]" on the bufferline once the
-  -- greeter has taken the window over.
-  local prev = vim.api.nvim_win_get_buf(win)
-  if prev ~= buf and not M.is_greeter(prev) and M.is_disposable(prev) then
-    vim.api.nvim_win_set_buf(win, buf)
-    pcall(vim.api.nvim_buf_delete, prev, { force = true })
-  end
-
-  -- Always re-ask: the branch may have moved (a commit, a push, a rebase in the
-  -- side terminal) since this workspace last showed its greeter.
-  M.fetch(root)
-
-  --- The cached report, or nil while it's still in flight / not a repo.
-  local function report()
-    local cached = reports[root]
-    return cached ~= false and cached or nil
-  end
-
-  instances[buf] = Snacks.dashboard.open({
-    win = win,
-    buf = buf,
-    width = PANE_WIDTH,
-    sections = M.sections(root, buf, tab, report),
-  })
-
-  -- Undo the two pieces of snacks' styling that assume a throwaway dashboard.
-  -- Set after open(), not before: styling happens inside it, so anything set
-  -- earlier is overwritten. bufhidden=wipe would destroy the buffer -- and its
-  -- place on the bar -- the instant you opened a file over it, which is exactly
-  -- the trip back the bufferline tab exists to provide; unlisted would keep it
-  -- off the bar altogether.
-  vim.bo[buf].bufhidden = "hide"
-  vim.bo[buf].buflisted = true
-  M.show_todo(win, require("config.todo").FILE)
-end
-
---- Open the todo list in a split under the greeter, so checkmate edits the real
---- file. Does nothing if the tab already shows the list, so reopening the
---- greeter never stacks a second one.
----@param win integer the greeter's window
----@param path string the todo file
-function M.show_todo(win, path)
-  local todo = require("config.todo")
-  if not todo.window(vim.api.nvim_win_get_tabpage(win), path) then
-    todo.open_below(win, path)
-  end
-end
-
 --- Put the cursor on this workspace's greeter, building it if the workspace
 --- hasn't got one yet. The <leader>h target: the bufferline tab is clickable and
 --- <S-h> reaches it by cycling, but neither is a straight "take me home".
@@ -849,82 +742,12 @@ function M.close_all()
   M.open()
 end
 
---- Patch two snacks.dashboard assumptions that a persistent greeter breaks.
---- Takes the class (snacks.dashboard.Dashboard) so a spec can hand in a fake.
---- Idempotent: a second call is a no-op.
----
---- 1. D:find indexes self.lines[cursor row] and hands it to charidx() without a
----    nil guard. A dashboard that shrinks on re-render (ours does, as its
----    sections come and go) can leave the cursor below the last rendered line,
----    and snacks' own VimResized autocmd (the one update path not behind a
----    pcall) then dies with E1174. Clamp the row into
----    the rendered lines before handing it over.
----
---- 2. D:size reads the geometry of self.win unguarded, and the class's
----    WinResized/VimResized autocmd calls it on every resize, then runs
----    update() when the size changed -- and update() ends by putting the
----    cursor on an action item IN self.win. Snacks only re-resolves self.win on
----    WinEnter, and only ever expects that window to show the dashboard. Ours
----    outlive their window (see M.open): once a file is opened over a greeter,
----    self.win is either gone ("Invalid window id") or is now the FILE's
----    window, so any resize -- a split opening below it, say -- made snacks
----    re-render the hidden greeter and set the file window's cursor to the
----    dashboard item's row ("Invalid cursor line: out of range", or a silent
----    cursor jump when the file was long enough). Re-resolve the window from
----    the buffer instead, and while the buffer is not shown anywhere report
----    the last known size, so the autocmd's deep_equal sees "unchanged" and
----    skips the update.
----@param D table the snacks.dashboard.Dashboard class
-function M.patch_snacks_dashboard(D)
-  if D._greeter_patched then
-    return
-  end
-  D._greeter_patched = true
-
-  local size = D.size
-  function D:size()
-    if not shown_in_own_window(self.buf, self) then
-      local win = vim.fn.bufwinid(self.buf)
-      if win == -1 then
-        return self._size or { width = 0, height = 0 }
-      end
-      self.win = win
-    end
-    return size(self)
-  end
-
-  local find = D.find
-  function D:find(pos, from)
-    if #self.lines == 0 then
-      return nil
-    end
-    pos = { math.max(1, math.min(pos[1], #self.lines)), pos[2] }
-    return find(self, pos, from)
-  end
-end
-
 --- Keep the greeter as the floor of a workspace tab: whenever a window in one
 --- falls back to a truly empty buffer (last buffer closed, `q` on the greeter
 --- itself), show the greeter instead. Only workspace tabs -- `nvim <file>`,
 --- commit messages, and the bare-nvim startup dashboard are untouched.
 function M.setup()
   local group = vim.api.nvim_create_augroup("workspace_greeter", { clear = true })
-
-  -- Applied on VeryLazy, not here: setup() runs from config.autocmds, before
-  -- lazy has put snacks on the runtimepath. Patching the class is enough for
-  -- dashboards opened earlier (the bare-nvim startup one): instances resolve
-  -- the methods through the class metatable at call time.
-  vim.api.nvim_create_autocmd("User", {
-    group = group,
-    pattern = "VeryLazy",
-    once = true,
-    callback = function()
-      local ok, dashboard = pcall(require, "snacks.dashboard")
-      if ok then
-        M.patch_snacks_dashboard(dashboard.Dashboard)
-      end
-    end,
-  })
 
   -- The git-directory watchers (M.watch) are what actually keep the overview
   -- current -- they catch a commit, rebase or fetch whoever made it. These
@@ -935,11 +758,27 @@ function M.setup()
     callback = M.queue_refresh,
   })
 
-  -- The review queue's counts are on every greeter outside review mode.
   vim.api.nvim_create_autocmd("User", {
     group = group,
     pattern = "ReviewQueueChanged",
-    callback = M.update_dashboards,
+    callback = M.redraw,
+  })
+
+  -- Back in a window (a bufferline click, <S-h>), the greeter lays its companions out again.
+  vim.api.nvim_create_autocmd("BufWinEnter", {
+    group = group,
+    callback = function(ev)
+      if not M.is_greeter(ev.buf) then
+        return
+      end
+      local win = vim.api.nvim_get_current_win()
+      -- Deferred, as the BufEnter fallback below: splitting inside the command showing it confuses that command.
+      vim.schedule(function()
+        if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == ev.buf then
+          M.arrange(win, require("config.todo").FILE)
+        end
+      end)
+    end,
   })
 
   -- A new workspace's editor window starts on its greeter rather than an empty buffer.
@@ -982,7 +821,7 @@ function M.setup()
       local tab_is_workspace = pcall(vim.api.nvim_tabpage_get_var, 0, "workspace")
       if
         not tab_is_workspace
-        or vim.bo[ev.buf].filetype == "snacks_dashboard" -- already the greeter
+        or vim.bo[ev.buf].filetype == "snacks_dashboard" -- the start screen, handed over on WorkspaceReady
         or not M.is_disposable(ev.buf)
         -- Only ever the main editor window: a panel window that happens to hold
         -- a disposable-looking buffer is not the greeter's to claim.

@@ -78,3 +78,47 @@ describe("main window routing", function()
     assert.same({ 2, 0 }, vim.api.nvim_win_get_cursor(0))
   end)
 end)
+
+describe("a placeholder's held height", function()
+  local main, companion
+
+  before_each(function()
+    vim.cmd("silent! only!")
+    windows.setup()
+    main = vim.api.nvim_get_current_win()
+    local placeholder = vim.api.nvim_create_buf(true, true)
+    windows.mark_placeholder(placeholder)
+    vim.api.nvim_win_set_buf(main, placeholder)
+    companion = vim.api.nvim_open_win(
+      vim.api.nvim_create_buf(false, true),
+      false,
+      { split = "below", win = main }
+    )
+    windows.mark_companion(companion, main)
+  end)
+
+  after_each(function()
+    vim.api.nvim_del_augroup_by_name("main_companions")
+  end)
+
+  it("holds its window at that height beside its companions", function()
+    windows.hold_height(main, 2)
+    assert.equals(2, vim.api.nvim_win_get_height(main))
+    assert.is_true(vim.wo[main].winfixheight)
+  end)
+
+  it("lets go of the window once a file is shown in it", function()
+    windows.hold_height(main, 2)
+    vim.api.nvim_win_set_buf(main, file_buf(vim.fn.tempname()))
+    assert.is_false(vim.api.nvim_win_is_valid(companion))
+    assert.is_false(vim.wo[main].winfixheight)
+  end)
+
+  it("leaves a window with no companion under it at its height", function()
+    vim.api.nvim_win_close(companion, true)
+    local height = vim.api.nvim_win_get_height(main)
+    windows.hold_height(main, 2)
+    assert.equals(height, vim.api.nvim_win_get_height(main))
+    assert.is_false(vim.wo[main].winfixheight)
+  end)
+end)

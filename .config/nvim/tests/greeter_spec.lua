@@ -1,179 +1,122 @@
 -- Layout decisions in config/greeter.lua that would otherwise show up as a
--- crowded or crooked greeter. Snacks is not run here: the sections are
--- inspected as data.
+-- crowded or crooked greeter.
 
 local assert = require("luassert")
 local greeter = require("config.greeter")
+local todo = require("config.todo")
+local rq = require("util.reviewqueue")
 
--- Regression: a snacks dashboard's update() puts the cursor on an action item in
--- the window it opened in, without checking what that window shows now. Our
--- greeters stay alive after a file is opened over them, so refreshing a hidden
--- one used to yank the file's cursor.
-describe("greeter.update_dashboards", function()
-  local dash_buf, dash, updates
+--- The text of a row of chunks.
+---@param chunks greeter.Chunk[]
+---@return string
+local function text(chunks)
+  return table.concat(vim.tbl_map(function(c)
+    return c[1]
+  end, chunks))
+end
 
-  -- A fresh, named-by-content buffer each time: `:enew` on an empty unnamed
-  -- buffer reuses it, which would make the "file" and the dashboard one buffer.
-  local function show_new_buffer(lines)
-    local buf = vim.api.nvim_create_buf(true, false)
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.api.nvim_win_set_buf(0, buf)
-    return buf
-  end
-
-  before_each(function()
-    dash_buf = show_new_buffer({ "greeter" })
-    updates = 0
-    -- Stand-in for the object Snacks.dashboard.open() returns: remembers its
-    -- window and, like snacks, moves that window's cursor when updated.
-    dash = { win = vim.api.nvim_get_current_win() }
-    function dash.update(self)
-      updates = updates + 1
-      vim.api.nvim_win_set_cursor(self.win, { 1, 0 })
-    end
-    greeter._instances[dash_buf] = dash
-  end)
-
-  after_each(function()
-    greeter._instances[dash_buf] = nil
-    vim.cmd("%bwipeout!")
-  end)
-
-  it("updates a dashboard that is shown in its own window", function()
-    greeter.update_dashboards()
-    assert.equals(1, updates)
-  end)
-
-  it("leaves the cursor alone once a file is opened over the dashboard", function()
-    show_new_buffer({ "one", "two", "three" })
-    vim.api.nvim_win_set_cursor(0, { 3, 2 })
-
-    greeter.update_dashboards()
-
-    assert.equals(0, updates)
-    assert.same({ 3, 2 }, vim.api.nvim_win_get_cursor(0))
-  end)
-
-  it("forgets a dashboard whose buffer is gone", function()
-    show_new_buffer({ "other" })
-    vim.api.nvim_buf_delete(dash_buf, { force = true })
-    greeter.update_dashboards()
-    assert.is_nil(greeter._instances[dash_buf])
-  end)
-end)
-
--- Regression: snacks' own WinResized autocmd calls size() and, on a change,
--- update() -- which ends by setting the cursor in `self.win`. A hidden greeter
--- whose old window now shows a file made every split-resize either error
--- ("Invalid cursor line: out of range") or yank the file's cursor.
-describe("greeter.patch_snacks_dashboard", function()
-  local D, dash, dash_buf
-
-  local function show_new_buffer(lines)
-    local buf = vim.api.nvim_create_buf(true, false)
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.api.nvim_win_set_buf(0, buf)
-    return buf
-  end
-
-  before_each(function()
-    vim.cmd("only!")
-    -- A stand-in for snacks.dashboard.Dashboard with the real size()/find()
-    -- bodies: unguarded reads of self.win, and self.lines[row] without a check.
-    D = {}
-    D.__index = D
-    function D:size()
-      return {
-        width = vim.api.nvim_win_get_width(self.win),
-        height = vim.api.nvim_win_get_height(self.win),
-      }
-    end
-    function D:find(pos)
-      return { row = pos[1], text = self.lines[pos[1]]:sub(1, 1) }
-    end
-    greeter.patch_snacks_dashboard(D)
-
-    dash_buf = show_new_buffer({ "greeter" })
-    dash = setmetatable(
-      { buf = dash_buf, win = vim.api.nvim_get_current_win(), lines = { "a", "b" } },
-      D
-    )
-    dash._size = dash:size()
-  end)
-
-  after_each(function()
-    vim.cmd("only!")
-    vim.cmd("%bwipeout!")
-  end)
-
-  it("is idempotent", function()
-    local size = D.size
-    greeter.patch_snacks_dashboard(D)
-    assert.equals(size, D.size)
-  end)
-
-  it("reports the live size while shown in its own window", function()
-    vim.cmd("split")
-    vim.cmd("wincmd j")
-    assert.equals(vim.api.nvim_win_get_height(dash.win), dash:size().height)
-  end)
-
-  it(
-    "reports the last size, unchanged, once a file is shown in its old window and it is resized",
-    function()
-      show_new_buffer({ "one" })
-      vim.cmd("split") -- shrinks the old window: snacks would see a new size and update()
-      assert.same(dash._size, dash:size())
-    end
-  )
-
-  it("reports the last size when its window is gone", function()
-    vim.cmd("split")
-    vim.api.nvim_win_close(dash.win, true)
-    assert.same(dash._size, dash:size())
-  end)
-
-  it("follows the buffer to the window that shows it now", function()
-    show_new_buffer({ "one" })
-    vim.cmd("split")
-    vim.api.nvim_win_set_buf(0, dash_buf)
-    local here = vim.api.nvim_get_current_win()
-    assert.equals(vim.api.nvim_win_get_height(here), dash:size().height)
-    assert.equals(here, dash.win)
-  end)
-
-  it("clamps find() to the rendered lines", function()
-    assert.equals(2, dash:find({ 5, 0 }).row)
-    dash.lines = {}
-    assert.is_nil(dash:find({ 1, 0 }))
-  end)
-end)
-
-describe("greeter.show_todo", function()
+describe("greeter.open", function()
   local todo_file = vim.fs.normalize(vim.fn.tempname() .. "-todo.md")
+  local saved_file, saved_counts, win
+
+  before_each(function()
+    vim.cmd("silent! only!")
+    require("config.windows").setup()
+    saved_file, saved_counts = todo.FILE, rq.counts
+    todo.FILE = todo_file
+    rq.counts = function(_, list)
+      return list == "mine" and { 1, 0, 0, 0, 0 } or { 2, 0, 0 }
+    end
+    win = vim.api.nvim_get_current_win()
+  end)
+
+  after_each(function()
+    todo.FILE, rq.counts = saved_file, saved_counts
+    vim.api.nvim_del_augroup_by_name("main_companions")
+    vim.cmd("silent! only!")
+  end)
 
   local function todo_windows()
-    return #vim.tbl_filter(function(w)
+    return vim.tbl_filter(function(w)
       return vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(w)) == todo_file
     end, vim.api.nvim_tabpage_list_wins(0))
   end
 
+  it("holds the queue to its lines, with the todo list under it taking the rest", function()
+    local area = vim.api.nvim_win_get_height(win)
+    greeter.open(win)
+
+    local buf = vim.api.nvim_win_get_buf(win)
+    assert.is_true(greeter.is_greeter(buf))
+    assert.equals(2, vim.api.nvim_buf_line_count(buf))
+    assert.equals(2, vim.api.nvim_win_get_height(win))
+    local list = assert(todo_windows()[1])
+    assert.equals(
+      vim.fn.win_screenpos(win)[1] + 3,
+      vim.fn.win_screenpos(list)[1],
+      "under the queue and its statusline"
+    )
+    assert.equals(area - 3, vim.api.nvim_win_get_height(list))
+    assert.equals(win, vim.api.nvim_get_current_win())
+  end)
+
+  it("does not stack a second todo list when reopened", function()
+    greeter.open(win)
+    greeter.open(win)
+    assert.equals(1, #todo_windows())
+  end)
+
+  it("keeps the queue's window options to the greeter, not a file shown after it", function()
+    vim.o.number = true
+    greeter.open(win)
+    assert.is_false(vim.wo[win].number)
+
+    local file = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_set_name(file, vim.fn.tempname())
+    vim.api.nvim_win_set_buf(win, file)
+    assert.is_true(vim.wo[win].number)
+    vim.o.number = false
+  end)
+end)
+
+describe("greeter.queue_rows", function()
+  local saved
+
+  before_each(function()
+    saved = rq.counts
+  end)
+
   after_each(function()
-    vim.cmd("only!")
+    rq.counts = saved
   end)
 
-  it("opens the list below the greeter, keeping focus", function()
-    local greeter_win = vim.api.nvim_get_current_win()
-    greeter.show_todo(greeter_win, todo_file)
-    assert.equals(1, todo_windows())
-    assert.equals(greeter_win, vim.api.nvim_get_current_win())
-    assert.is_false(vim.bo[vim.fn.bufnr(todo_file)].buflisted)
+  it("lists what is waiting on me, then on my own PRs", function()
+    rq.counts = function(_, list)
+      return list == "mine" and { 1, 0, 0, 0, 0 } or { 2, 0, 0 }
+    end
+    assert.same(
+      { "\u{f4af} 2 need you   Space rq", "\u{f407} 1 to fix   Space rm" },
+      vim.tbl_map(text, greeter.queue_rows("/repo"))
+    )
   end)
 
-  it("does not stack a second list when the greeter is reopened", function()
-    greeter.show_todo(vim.api.nvim_get_current_win(), todo_file)
-    greeter.show_todo(vim.api.nvim_get_current_win(), todo_file)
-    assert.equals(1, todo_windows())
+  it("says nothing is waiting when no list has anything, or there is no list", function()
+    rq.counts = function() end
+    assert.same({ "\u{f4af} nothing waiting on you" }, vim.tbl_map(text, greeter.queue_rows("/x")))
+  end)
+end)
+
+describe("greeter.draw", function()
+  it("writes each row as a line, its chunks highlighted, and leaves it read-only", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    greeter.draw(buf, { { { "ab", "Comment" }, { "cd" } }, { { "e", "Special" } } })
+
+    assert.same({ "abcd", "e" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+    local marks = vim.tbl_map(function(m)
+      return { m[2], m[3], m[4].end_col, m[4].hl_group }
+    end, vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true }))
+    assert.same({ { 0, 0, 2, "Comment" }, { 1, 0, 1, "Special" } }, marks)
+    assert.is_false(vim.bo[buf].modifiable)
   end)
 end)
 
@@ -217,12 +160,6 @@ describe("greeter.size_line", function()
 end)
 
 describe("greeter.queue_line", function()
-  local function text(item)
-    return table.concat(vim.tbl_map(function(c)
-      return c[1]
-    end, item.text))
-  end
-
   it("is absent when nothing is waiting or there is no list yet", function()
     assert.is_nil(greeter.queue_line(nil))
     assert.is_nil(greeter.queue_line({ 0, 0, 0 }))
@@ -237,12 +174,6 @@ describe("greeter.queue_line", function()
 end)
 
 describe("greeter.mine_line", function()
-  local function text(item)
-    return table.concat(vim.tbl_map(function(c)
-      return c[1]
-    end, item.text))
-  end
-
   it("leaves out PRs that are only waiting on reviewers", function()
     assert.is_nil(greeter.mine_line(nil))
     assert.is_nil(greeter.mine_line({ 0, 0, 0, 0, 5 }))
@@ -452,44 +383,5 @@ describe("greeter.stack_items", function()
     assert.matches("PR 3  on a", t[1])
     assert.is_nil(t[2]:find(" on ", 1, true))
     assert.is_nil(t[3]:find(" on ", 1, true))
-  end)
-end)
-
-describe("greeter.sections' stack", function()
-  local rq = require("util.reviewqueue")
-  local saved_key
-  before_each(function()
-    saved_key = rq.key
-    rq.key = function()
-      return "/repo"
-    end
-  end)
-  after_each(function()
-    rq.cache = {}
-    rq.key = saved_key
-  end)
-
-  local function stack_section(branch)
-    return greeter
-      .sections("/repo", 0, 0, function()
-        return { branch = branch }
-      end)
-      [3]()
-  end
-  local function mine(number, head, base)
-    return { pr = { number = number, title = "", head = head, base = base }, verdict = { tier = 5 } }
-  end
-
-  it("shows the stack the branch's PR is in under a Stack title", function()
-    rq.cache["/repo"] = { mine = { mine(1, "a", "main"), mine(2, "b", "a") } }
-    local section = stack_section("b")
-    assert.equals("Stack", section.title)
-    assert.equals(3, #section)
-  end)
-
-  it("is absent before the queue has listed my PRs, or for a lone PR", function()
-    assert.is_nil(stack_section("b"))
-    rq.cache["/repo"] = { mine = { mine(1, "a", "main") } }
-    assert.is_nil(stack_section("a"))
   end)
 end)

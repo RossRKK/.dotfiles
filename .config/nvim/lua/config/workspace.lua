@@ -607,10 +607,6 @@ function M.open(dir, opts)
       vim.api.nvim_set_current_win(editor)
       vim.cmd("stopinsert")
     end
-    -- The greeter centred itself against a full-width window, and may have
-    -- described a directory that was still empty: re-render it now. (snacks
-    -- re-renders on WinResized, but edgy's sizing doesn't reliably produce one.)
-    Snacks.dashboard.update()
   end
 
   vim.schedule(function()

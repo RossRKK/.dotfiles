@@ -78,8 +78,8 @@ return {
           return vim.b[item.bufnr] and vim.b[item.bufnr].greeter_root and "Overview" or nil
         end,
         get_element_icon = function(item)
-          if item.filetype == "snacks_dashboard" then
-            return "\xef\x80\x95", "SnacksDashboardIcon" -- nf-fa-home
+          if item.filetype == "greeter" then
+            return "\xef\x80\x95", "Special" -- nf-fa-home
           end
         end,
         -- Route clicks to the main window: single-main-buffer layout, so a
@@ -122,7 +122,7 @@ return {
       -- Keep a few around even if idle, so cycling with <S-l>/<S-h> isn't empty.
       minimumBufferNum = 4,
       -- Don't retire special/tool buffers.
-      -- snacks_dashboard is the workspace greeter: it's idle by nature (you're
+      -- The greeter filetype is the workspace greeter: it's idle by nature (you're
       -- not typing in it), so age is no evidence it's unwanted -- and reaping it
       -- would take the bar's first tab away mid-session.
       ignoredFiletypes = {
@@ -131,7 +131,7 @@ return {
         "gitcommit",
         "help",
         "qf",
-        "snacks_dashboard",
+        "greeter",
       },
       -- A brief notice when one is closed, so the behaviour isn't invisible.
       notificationOnAutoClose = true,

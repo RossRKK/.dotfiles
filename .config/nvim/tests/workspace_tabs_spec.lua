@@ -168,7 +168,7 @@ describe("a workspace tab", function()
         return child("return P.tree_with(...) ~= nil", readme)
       end, 50))
       child("P.open_from_tree(...)", readme)
-      local file_only = want.shape:gsub("col%[snacks_dashboard, markdown%]", "markdown")
+      local file_only = want.shape:gsub("col%[greeter, markdown%]", "markdown")
       vim.wait(5000, function()
         return child("return P.shape(0)") == file_only
       end, 50)
