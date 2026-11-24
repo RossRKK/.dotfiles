@@ -29,6 +29,23 @@ local spec = {
       win_options = {
         breakindentopt = { default = vim.o.breakindentopt, rendered = "list:-1,sbr" },
       },
+      -- Bots (and agents writing for people) use HTML where markdown would do: hide the tags, keep what they mean.
+      html = {
+        tag = {
+          -- An icon draws only with a highlight: a list item's marker in markdown's own.
+          li = { icon = "- ", highlight = "@markup.list" },
+          ul = {},
+          ol = {},
+          p = {},
+          details = {},
+          summary = { icon = "\u{25b8} ", highlight = "@markup.list" },
+          b = { scope_highlight = "@markup.strong" },
+          strong = { scope_highlight = "@markup.strong" },
+          i = { scope_highlight = "@markup.italic" },
+          em = { scope_highlight = "@markup.italic" },
+          code = { scope_highlight = "@markup.raw" },
+        },
+      },
     },
     config = function(_, opts)
       require("render-markdown").setup(opts)

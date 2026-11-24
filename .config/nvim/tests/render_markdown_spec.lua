@@ -273,3 +273,61 @@ describe("wrapped quotes and list items, rendered", function()
     assert.are.equal("sbr", vim.wo[win].breakindentopt)
   end)
 end)
+
+describe("HTML in a rendered markdown buffer", function()
+  local buf
+
+  --- Screen row `row` as drawn, trailing blanks trimmed.
+  local function screen_row(row)
+    local cells = {}
+    for col = 1, vim.o.columns do
+      cells[#cells + 1] = vim.fn.screenstring(row, col)
+    end
+    return vim.trim(table.concat(cells))
+  end
+
+  before_each(function()
+    vim.cmd("runtime! plugin/render-markdown.lua")
+    require("render-markdown").setup(require("plugins.render-markdown")[1].opts)
+    buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_win_set_buf(0, buf)
+    vim.wo.number = false
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "<ul>",
+      "<li>First <b>bold</b> point</li>",
+      "<li>Then <code>code</code></li>",
+      "</ul>",
+      "<details><summary>More</summary>",
+      "Hidden until opened.",
+      "</details>",
+      "",
+    })
+    -- Off the cursor's line, which render-markdown leaves raw.
+    vim.api.nvim_win_set_cursor(0, { 8, 0 })
+    vim.bo[buf].filetype = "markdown"
+    vim.treesitter.start(buf, "markdown")
+    require("render-markdown").render({ buf = buf, force = true })
+    vim.wait(1000, function()
+      return #vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, {}) > 0
+    end)
+    vim.cmd("redraw!")
+  end)
+
+  after_each(function()
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  it("draws list items as markdown's, their tags hidden", function()
+    assert.equals("- First bold point", screen_row(2))
+    assert.equals("- Then code", screen_row(3))
+  end)
+
+  it("hides the list's own tags", function()
+    assert.equals("", screen_row(1))
+    assert.equals("", screen_row(4))
+  end)
+
+  it("marks a summary", function()
+    assert.equals("\u{25b8} More", screen_row(5))
+  end)
+end)
