@@ -160,28 +160,28 @@ off the left end. It's also what the main window falls back to when the last
 buffer closes, rather than a blank `[No Name]`. `Space+X` is the quick way back
 to it. It's a stack of windows, top to bottom:
 
-1. **Review queue** — the [review queue](#review-queue-spacerq) and
+1. **Stack** — only when the branch has a PR. When the PR is one of yours, its
+   stack (a PR on its own is a stack of one), then the size of the branch's diff
+   to its review base (`+adds -dels`, a bar and a legend by review tier, as in
+   the review queue; binary files count no lines). Its rows pick a PR: `G` opens
+   it in the browser; `Enter` switches to the workspace tab whose worktree has
+   its branch, else runs `gh pr checkout` in this worktree.
+2. **PR** — only when the branch has a PR: the PR itself as a `gh://` buffer
+   rendered by snacks, taking the room. Snacks' keys work there (`i` edit, `a`
+   comment or reply, `Enter` the action menu), and `R` refreshes it, as in any
+   `gh://` buffer. It refreshes itself when the branch or HEAD moves.
+3. **Review queue** — the [review queue](#review-queue-spacerq) and
    [my PRs](#my-prs-spacerm) counts, held to their height. It doesn't depend on
    the branch.
-2. **Stack** — only when the branch has a PR. The size of the branch's diff to
-   its review base (`+adds -dels`, a bar and a legend by review tier, as in the
-   review queue; binary files count no lines), then, when the PR is one of yours,
-   its stack (a PR on its own is a stack of one). Its rows pick a PR: `G` opens it in the
-   browser; `Enter` switches to the workspace tab whose worktree has its branch,
-   else runs `gh pr checkout` in this worktree.
-3. **PR** — only when the branch has a PR: the PR itself as a `gh://` buffer
-   rendered by snacks. Snacks' keys work there (`i` edit, `a` comment or reply,
-   `Enter` the action menu), and `R` refreshes it, as in any `gh://` buffer. It
-   refreshes itself when the branch or HEAD moves.
 4. **Todo list** — `~/todo.md`, the real file, so edit it there. It keeps a
    third of the room under a PR, and fills everything below the queue without
    one.
 
-Outside a git repo the greeter is just the queue and the todo list. The windows
-under the queue close as soon as anything takes the greeter's place above them:
-a file, a terminal, an agent chat (`Ctrl+B Z`), any buffer. Floats don't count.
-They come back whenever the greeter is shown again, and showing it never adds a
-second set.
+Without a PR, and outside a git repo, the greeter is just the queue and the
+todo list. The windows around the queue close as soon as anything takes the
+greeter's place: a file, a terminal, an agent chat (`Ctrl+B Z`), any buffer.
+Floats don't count. They come back whenever the greeter is shown again, and
+showing it never adds a second set.
 
 ### Todo list (checkmate)
 
@@ -742,7 +742,7 @@ lockfiles only.
 The queue refreshes in the background every 5 minutes for every repo with an
 open tab (and when you leave review mode), so the picker opens instantly from
 that cache — its title says how old it is, and a list over a minute old is
-refreshed behind it. The greeter's top window shows the counts
+refreshed behind it. The greeter's queue window shows the counts
 (`12 need you · 1 back to you · 3 for your team`), and under them the
 [my PRs](#my-prs-spacerm) counts. When the branch's PR is one of yours, the
 greeter's stack window lists its stack (PRs targeting each other's branches;

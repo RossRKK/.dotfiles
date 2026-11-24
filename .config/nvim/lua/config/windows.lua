@@ -5,8 +5,9 @@ local M = {}
 
 -- Buffer role: stands in for the main window wherever it is shown (the greeter).
 local PLACEHOLDER = "main_placeholder"
--- Window role: a split under the main window that anything but the greeter there puts away (the todo list);
--- holds the buffer it was opened for and the window it sits under.
+-- Window role: a split in the main window's column that anything but the greeter there puts away (the
+-- todo list, the greeter's stack and PR); holds the buffer it was opened for and the window it
+-- belongs to ("sits under").
 local COMPANION = "main_companion"
 -- Window mark: held at its placeholder's height beside its companions (see M.hold_height).
 local HELD = "main_held"

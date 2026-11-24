@@ -519,27 +519,27 @@ describe("greeter's PR windows", function()
       wins
   end
 
-  it("stacks the queue, the stack, the PR and the todo list, top to bottom", function()
+  it("stacks the stack, the PR, the queue and the todo list, top to bottom", function()
     greeter.open(win)
     local names, wins = column()
-    assert.same({ "greeter", "greeter_stack", "gh://o/r/pr/2", "todo" }, names)
-    assert.is_not_nil(gh.attached[vim.api.nvim_win_get_buf(wins[3])])
-    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[2]), 0, -1, false)
-    assert.matches("^%+3 %-1", lines[1])
-    assert.matches("^\u{25c9} #2  PR 2", lines[2])
-    assert.matches("^\u{25cb} #1  PR 1", lines[3])
-    assert.equals("\u{2570} main", lines[4])
+    assert.same({ "greeter_stack", "gh://o/r/pr/2", "greeter", "todo" }, names)
+    assert.is_not_nil(gh.attached[vim.api.nvim_win_get_buf(wins[2])])
+    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[1]), 0, -1, false)
+    assert.matches("^\u{25c9} #2  PR 2", lines[1])
+    assert.matches("^\u{25cb} #1  PR 1", lines[2])
+    assert.equals("\u{2570} main", lines[3])
+    assert.matches("^%+3 %-1", lines[4])
   end)
 
   it("centres the stack as one block, its columns kept aligned", function()
     vim.o.columns = 140
     greeter.open(win)
     local _, wins = column()
-    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[2]), 0, -1, false)
+    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[1]), 0, -1, false)
     vim.o.columns = 80
     local pad = (" "):rep(math.floor((140 - 90) / 2))
-    assert.equals(pad, lines[1]:match("^ *"), "the size line, at the table's edge")
-    for i = 2, 3 do
+    assert.equals(pad, lines[4]:match("^ *"), "the size line under the table, at its edge")
+    for i = 1, 2 do
       assert.equals(pad, lines[i]:sub(1, #pad))
       assert.equals(90, vim.fn.strdisplaywidth(lines[i]:sub(#pad + 1)))
     end
@@ -571,16 +571,21 @@ describe("greeter's PR windows", function()
     assert.equals("https://github.com/o/r/pull/2", opened)
   end)
 
-  it("holds the stack to its rows and the todo list to a share, the PR taking the rest", function()
-    greeter.open(win)
-    local _, wins = column()
-    assert.equals(4, vim.api.nvim_win_get_height(wins[2]))
-    assert.same(
-      { true, false, true },
-      { vim.wo[wins[2]].winfixheight, vim.wo[wins[3]].winfixheight, vim.wo[wins[4]].winfixheight }
-    )
-    assert.is_true(vim.api.nvim_win_get_height(wins[3]) > vim.api.nvim_win_get_height(wins[4]))
-  end)
+  it(
+    "holds the stack and the queue to their rows and the todo list to a share, the PR taking the rest",
+    function()
+      greeter.open(win)
+      local _, wins = column()
+      assert.equals(4, vim.api.nvim_win_get_height(wins[1]))
+      assert.equals(1, vim.api.nvim_win_get_height(wins[3]))
+      assert.is_true(vim.wo[wins[3]].winfixheight)
+      assert.same(
+        { true, false, true },
+        { vim.wo[wins[1]].winfixheight, vim.wo[wins[2]].winfixheight, vim.wo[wins[4]].winfixheight }
+      )
+      assert.is_true(vim.api.nvim_win_get_height(wins[2]) > vim.api.nvim_win_get_height(wins[4]))
+    end
+  )
 
   it("has only the todo list under the queue for a branch without a PR", function()
     greeter.prs[root].pr = false
@@ -605,14 +610,14 @@ describe("greeter's PR windows", function()
     greeter.prs[root].pr = pr(3)
     greeter.redraw()
     local names, after = column()
-    assert.equals("gh://o/r/pr/3", names[3])
+    assert.equals("gh://o/r/pr/3", names[2])
     assert.equals(before[3], after[3])
   end)
 
   it("refreshes a PR rendered before when it comes back into the window", function()
     greeter.open(win)
     local _, wins = column()
-    local attached = gh.attached[vim.api.nvim_win_get_buf(wins[3])]
+    local attached = gh.attached[vim.api.nvim_win_get_buf(wins[2])]
     greeter.prs[root].pr = pr(3)
     greeter.redraw()
     greeter.prs[root].pr = pr(2)
@@ -623,7 +628,7 @@ describe("greeter's PR windows", function()
   it("refreshes the PR when the branch's HEAD moves, and only then", function()
     greeter.open(win)
     local _, wins = column()
-    local attached = gh.attached[vim.api.nvim_win_get_buf(wins[3])]
+    local attached = gh.attached[vim.api.nvim_win_get_buf(wins[2])]
     greeter.cache_report(root, report("abc"), {})
     assert.equals(0, attached.updates)
     greeter.cache_report(root, report("def"), {})
@@ -638,8 +643,8 @@ describe("greeter's PR windows", function()
     end
     greeter.open(win)
     local _, wins = column()
-    vim.api.nvim_win_call(wins[2], function()
-      vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    vim.api.nvim_win_call(wins[1], function()
+      vim.api.nvim_win_set_cursor(0, { 2, 0 })
       vim.cmd("normal G")
     end)
     assert.equals("https://github.com/o/r/pull/1", opened)
@@ -656,8 +661,8 @@ describe("greeter's PR windows", function()
     workspace.find = function(dir)
       return dir == repo .. "/wt-a" and other or nil
     end
-    vim.api.nvim_win_call(wins[2], function()
-      vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    vim.api.nvim_win_call(wins[1], function()
+      vim.api.nvim_win_set_cursor(0, { 2, 0 })
       vim.cmd("normal \r")
     end)
     local switched = vim.wait(2000, function()

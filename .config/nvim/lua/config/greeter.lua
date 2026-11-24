@@ -3,13 +3,14 @@
 --
 -- workspace.open() used to leave a plain empty buffer there, which told you
 -- nothing and did nothing. Instead the window shows the review queue's counts,
--- held to their height. Under it, for a branch with a PR, sit the diff size
--- and PR stack (its rows pick a PR) and the PR itself, a gh:// buffer that
--- snacks.nvim renders; then the todo list (config/todo.lua), which takes the
--- area when there is no PR. It comes back whenever the buffer list empties out
--- again (<leader>X, or closing the last buffer), so "no buffers open" is a
--- status screen rather than a dead end. The windows under it are companions
--- (config/windows.lua): a file opened over the greeter puts them away.
+-- held to their height, with the todo list (config/todo.lua) under it. Above
+-- it, for a branch with a PR, sit the PR stack (its rows pick a PR) and diff
+-- size, then the PR itself, a gh:// buffer that snacks.nvim renders and that
+-- takes the room; without a PR the todo list takes it. It comes back whenever
+-- the buffer list empties out again (<leader>X, or closing the last buffer), so
+-- "no buffers open" is a status screen rather than a dead end. The windows
+-- around it are companions (config/windows.lua): a file opened over the
+-- greeter puts them away.
 --
 -- The queue's buffer is a real, listed one, pinned to the front of the
 -- bufferline: one per workspace, kept alive for the life of the tab rather
@@ -89,7 +90,7 @@ local PANE_WO = {
   spell = false,
 }
 
-local new_buffer, lay_out, refresh_pr, part_window, place, pr_buffer, pr_uri, named
+local new_buffer, lay_out, size_column, refresh_pr, part_window, place, pr_buffer, pr_uri, named
 local stack_buffer, new_stack_buffer
 
 --- Show this workspace's greeter in `win` (default: the current window).
@@ -125,10 +126,7 @@ function M.arrange(win, todo_file)
   local tab = vim.api.nvim_win_get_tabpage(win)
   local todo = require("config.todo")
   if not todo.window(tab, todo_file) then
-    local todo_win =
-      todo.open_below(part_window(tab, "pr") or part_window(tab, "stack") or win, todo_file)
-    -- It belongs to the greeter, whichever of its windows it was opened under.
-    require("config.windows").mark_companion(todo_win, win)
+    todo.open_below(win, todo_file)
   end
   lay_out(win, todo_file)
 end
@@ -143,9 +141,10 @@ function M.redraw()
   end
 end
 
---- Fill `win`'s greeter and the windows under it: the queue held to its lines,
---- then, for a branch with a PR, the stack held to its rows and the PR taking
---- the room, the todo list keeping a share. Without a PR the todo list takes it.
+--- Fill `win`'s greeter and the windows around it. For a branch with a PR,
+--- top to bottom: the stack held to its rows, the PR taking the room, the queue
+--- held to its lines, the todo list keeping a share. Without a PR, the queue
+--- and the todo list taking the room.
 ---@param win integer
 ---@param todo_file string
 function lay_out(win, todo_file)
@@ -160,23 +159,14 @@ function lay_out(win, todo_file)
   end
   local stack_buf = pr and stack_buffer(root, vim.api.nvim_win_get_width(win))
   local todo_win = require("config.todo").window(tab, todo_file)
-  if todo_win then
-    vim.wo[todo_win].winfixheight = pr_buf ~= nil
-  end
 
-  local pr_anchor = todo_win and { split = "above", win = todo_win }
-    or { split = "below", win = part_window(tab, "stack") or win }
-  local pr_win, shown = place(tab, "pr", pr_buf, win, pr_anchor)
+  local pr_win, shown = place(tab, "pr", pr_buf, win, { split = "above", win = win })
   if shown and not fresh then
     require("snacks.gh.buf").attached[pr_buf]:update()
   end
-  if shown == "opened" and todo_win then
-    local share = vim.api.nvim_win_get_height(pr_win) + vim.api.nvim_win_get_height(todo_win)
-    vim.api.nvim_win_set_height(todo_win, math.max(6, math.floor(share / 3)))
-  end
-  local stack_anchor = pr_win and { split = "above", win = pr_win }
-    or { split = "below", win = win }
-  local stack_win = place(tab, "stack", stack_buf, win, stack_anchor)
+  -- Only ever with a PR, so it goes above the PR's window.
+  local stack_win =
+    place(tab, "stack", stack_buf, win, pr_win and { split = "above", win = pr_win })
 
   for option, value in pairs(PANE_WO) do
     vim.wo[win][0][option] = value
@@ -184,10 +174,56 @@ function lay_out(win, todo_file)
       vim.wo[stack_win][0][option] = value
     end
   end
-  require("config.windows").hold_height(win, vim.api.nvim_buf_line_count(buf))
+  if pr_win then
+    size_column(stack_win, pr_win, win, todo_win, shown == "opened")
+  end
   if stack_win then
-    vim.api.nvim_win_set_height(stack_win, vim.api.nvim_buf_line_count(stack_buf))
     vim.wo[stack_win].winfixheight = true
+  end
+  if todo_win then
+    vim.wo[todo_win].winfixheight = pr_win ~= nil
+  end
+  require("config.windows").hold_height(win, vim.api.nvim_buf_line_count(buf))
+end
+
+--- Size a PR's column, top to bottom: the stack and the queue to their rows,
+--- the todo list to its height (a third of the room when the PR has just
+--- opened), and the PR to the rest. Set explicitly, top down, the last window
+--- taking what is left: with some windows fixed, nvim hands a resize's spare
+--- rows to whichever neighbour it picks, not to the PR.
+---@param stack_win integer?
+---@param pr_win integer
+---@param queue_win integer
+---@param todo_win integer?
+---@param share boolean
+function size_column(stack_win, pr_win, queue_win, todo_win, share)
+  local function rows(w)
+    return w and vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(w)) or 0
+  end
+  local total = 0
+  for _, w in pairs({ stack_win, pr_win, queue_win, todo_win }) do
+    total = total + vim.api.nvim_win_get_height(w)
+  end
+  local stack, queue = rows(stack_win), rows(queue_win)
+  local todo = todo_win
+      and (share and math.max(6, math.floor((total - stack - queue) / 3)) or vim.api.nvim_win_get_height(
+        todo_win
+      ))
+    or 0
+  local column, heights = {}, {}
+  for _, entry in ipairs({
+    { stack_win, stack },
+    { pr_win, math.max(1, total - stack - queue - todo) },
+    { queue_win, queue },
+    { todo_win, todo },
+  }) do
+    if entry[1] then
+      column[#column + 1], heights[#heights + 1] = entry[1], entry[2]
+      vim.wo[entry[1]].winfixheight = false
+    end
+  end
+  for i = 1, #column - 1 do
+    vim.api.nvim_win_set_height(column[i], heights[i])
   end
 end
 
@@ -212,8 +248,8 @@ function M.branch_pr(root)
   return entry and report and entry.branch == report.branch and entry.pr or nil
 end
 
---- The stack window's rows: the diff size, then the stack the branch's PR is
---- in, from the review queue's list of my open PRs (no fetch of its own).
+--- The stack window's rows: the stack the branch's PR is in, from the review
+--- queue's list of my open PRs (no fetch of its own), then the diff size.
 ---@param root string normalized workspace root
 ---@param width integer
 ---@return greeter.Chunk[][] rows, table<integer, reviewqueue.PR> prs the PR on each row
@@ -223,7 +259,6 @@ function M.stack_rows(root, width)
   if not report then
     return rows, prs
   end
-  rows[#rows + 1] = M.size_line(report, M.attrs[root] or {})
   local rq = require("util.reviewqueue")
   local key = rq.key(root)
   local mine = key and rq.cache[key] and rq.cache[key].mine
@@ -232,6 +267,7 @@ function M.stack_rows(root, width)
     rows[#rows + 1] = row
     prs[#rows] = stack.rows[i] and stack.rows[i].pr
   end
+  rows[#rows + 1] = M.size_line(report, M.attrs[root] or {})
   return rows, prs
 end
 
@@ -281,7 +317,7 @@ function refresh_pr(root)
   end
 end
 
--- The windows under the queue, by the part of the greeter they show.
+-- The windows above the queue, by the part of the greeter they show.
 ---@alias greeter.Part "stack"|"pr"
 
 --- `tab`'s window showing `part`, if it has one.
@@ -302,7 +338,7 @@ end
 ---@param part greeter.Part
 ---@param buf integer?
 ---@param under integer the queue's window
----@param anchor vim.api.keyset.win_config
+---@param anchor? vim.api.keyset.win_config where a new window opens; nil with no `buf`
 ---@return integer? win, ("opened"|"swapped")? shown whether `buf` newly came into view
 function place(tab, part, buf, under, anchor)
   local win = part_window(tab, part)
