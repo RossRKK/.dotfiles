@@ -180,13 +180,21 @@ function host(spec, place)
     end, { buffer = panel, desc = "Agent chat: stop the agent's reply, else its running sub-agents" })
   end
 
-  -- The tab is the session: killing it (<C-b>&, closing the workspace) ends it.
+  -- The tab is the session: killing it (<C-b>&, closing the workspace) ends it. Its events
+  -- stop at once, so what the agent already sent never reaches the wiped buffers; the
+  -- teardown waits a tick, as it shows other buffers in windows, which a wipe in progress refuses.
   vim.api.nvim_create_autocmd("BufWipeout", {
     buffer = buf,
     once = true,
-    callback = vim.schedule_wrap(function()
-      registry.destroy(key)
-    end),
+    callback = function()
+      local live = registry.get(key)
+      if live and live.session_id then
+        live.agent:cancel_session(live.session_id)
+      end
+      vim.schedule(function()
+        registry.destroy(key)
+      end)
+    end,
   })
 
   local hosted = place({

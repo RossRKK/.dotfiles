@@ -8,7 +8,7 @@ local assert = require("luassert")
 require("tests.helpers.plugins").add("tokyonight.nvim")
 
 local agent_chat, fishmonger
-local created, shown, hidden, destroyed, rendered, stopped
+local created, shown, hidden, destroyed, rendered, stopped, cancelled
 
 --- A fake agentic session whose chat buffer has agentic's filetype, its prompt
 --- opened under the chat on show as agentic's is.
@@ -40,7 +40,20 @@ local function fake_session(key)
     end
     return false
   end
-  local session = { session_key = key, session_id = "acp-" .. key, session_state = {}, widget = widget, file_list = file_list }
+  -- As agentic's client: cancelling drops the session's subscriber, so no more of its events arrive.
+  local agent = {
+    cancel_session = function(_, session_id)
+      cancelled[#cancelled + 1] = session_id
+    end,
+  }
+  local session = {
+    session_key = key,
+    session_id = "acp-" .. key,
+    session_state = {},
+    widget = widget,
+    file_list = file_list,
+    agent = agent,
+  }
   session.is_generating = false
   return session
 end
@@ -106,7 +119,7 @@ local function fresh()
   pcall(vim.cmd, "tabonly!")
   pcall(vim.cmd, "only!")
   vim.w.fishmonger_side = nil
-  created, shown, hidden, destroyed, rendered, stopped = {}, {}, {}, {}, {}, {}
+  created, shown, hidden, destroyed, rendered, stopped, cancelled = {}, {}, {}, {}, {}, {}, {}
   -- Keep jobstart's real arity, as fishmonger's own suite does.
   vim.fn.jobstart = function(cmd, opts) ---@diagnostic disable-line: duplicate-set-field, unused-local
     return 1
@@ -174,10 +187,11 @@ describe("agent_chat.new", function()
     assert.same({ 1 }, hidden)
   end)
 
-  it("ends the session when its tab is killed", function()
+  it("ends the session when its tab is killed: its events at once, its windows a tick later", function()
     new()
     fishmonger.kill()
-    -- Scheduled out of BufWipeout; waits on the outcome, not a duration.
+    assert.same({ "acp-1" }, cancelled)
+    -- The teardown is scheduled out of BufWipeout; waits on the outcome, not a duration.
     vim.wait(1000, function()
       return #destroyed > 0
     end)
