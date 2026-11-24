@@ -185,6 +185,11 @@ function lay_out(win, todo_file)
       vim.wo[w][0][option] = value
     end
   end
+  if stack_win then
+    -- A blank row above the stack from its window, not its buffer, whose rows are its PRs.
+    vim.wo[stack_win][0].winbar = " "
+    vim.wo[stack_win][0].winhighlight = "WinBar:Normal,WinBarNC:Normal"
+  end
   if pr_win then
     size_column(fixed, pr_win, win, todo_win, shown == "opened")
   end

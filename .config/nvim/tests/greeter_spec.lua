@@ -575,6 +575,24 @@ describe("greeter's PR windows", function()
     assert.matches("^ *%+3 %-1", lines[4])
   end)
 
+  it("leaves one blank row above the stack, outside its buffer", function()
+    greeter.open(win)
+    local _, wins = column()
+    local stack = wins[1]
+    vim.cmd.redraw()
+    assert.equals(vim.fn.win_screenpos(stack)[1] + 1, vim.fn.screenpos(stack, 1, 1).row)
+    assert.equals("", vim.trim(vim.fn.screenstring(vim.fn.win_screenpos(stack)[1], 1)))
+    assert.equals(
+      vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(stack)),
+      vim.api.nvim_win_get_height(stack)
+    )
+    assert.matches(
+      "^ *\u{25c9} #2",
+      vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(stack), 0, 1, false)[1]
+    )
+    assert.equals("", vim.wo[wins[3]].winbar, "the queue's window has none")
+  end)
+
   --- The stack window's lines, the greeter opened `columns` wide.
   local function stack_lines(columns)
     vim.o.columns = columns
