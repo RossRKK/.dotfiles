@@ -157,24 +157,31 @@ so `Space+a` then `.` walks an argument along the list.
 The **greeter** is the leftmost buffer tab, labelled `Overview` — one per
 workspace, always there, so going back to it is `Space+h` or `<S-h>`
 off the left end. It's also what the main window falls back to when the last
-buffer closes, rather than a blank `[No Name]`. It shows a branch overview:
-`repo - branch` (a worktree reads as its repo, not its checkout directory), how
-far ahead/behind its remote it is, the review base and commits on top of it,
-the size of the branch's diff to that base (`+adds -dels`, a bar and a legend
-by review tier, as in [the review queue](#review-queue-spacerq) below; binary
-files count no lines), and the files this branch changes — the same
-merge-result diff and triage marks (`●` changed, `✓`
-approved, `✗` rejected, `↻` revised) review mode puts in the explorer, listed
-by review tier (spec, proto, code, test, docs, generated). Each file has a key
-next to it; press it to open. `Space+X` is the quick way back to the
-greeter. Outside a git repo there's no overview, so it falls back to the pickers
-(`f` find, `g` grep, `n` new file).
+buffer closes, rather than a blank `[No Name]`. `Space+X` is the quick way back
+to it. It's a stack of windows, top to bottom:
 
-The greeter opens your todo list, `~/todo.md`, in a split below it (worktrees
-too): the real file, so edit it there (`Ctrl+W j`). It closes as soon as
-anything takes the greeter's place above it: a file, a terminal, an agent chat
-(`Ctrl+B Z`), any buffer; or with `:q`. Floats don't count. It comes back the
-next time the greeter opens, and reopening the greeter never adds a second one.
+1. **Review queue** — the [review queue](#review-queue-spacerq) and
+   [my PRs](#my-prs-spacerm) counts, held to their height. It doesn't depend on
+   the branch.
+2. **Stack** — only when the branch has a PR. The size of the branch's diff to
+   its review base (`+adds -dels`, a bar and a legend by review tier, as in the
+   review queue; binary files count no lines), then, when the PR is one of yours
+   stacked with others, the stack. Its rows pick a PR: `G` opens it in the
+   browser; `Enter` switches to the workspace tab whose worktree has its branch,
+   else runs `gh pr checkout` in this worktree.
+3. **PR** — only when the branch has a PR: the PR itself as a `gh://` buffer
+   rendered by snacks. Snacks' keys work there (`i` edit, `a` comment or reply,
+   `Enter` the action menu), and `R` refreshes it, as in any `gh://` buffer. It
+   refreshes itself when the branch or HEAD moves.
+4. **Todo list** — `~/todo.md`, the real file, so edit it there. It keeps a
+   third of the room under a PR, and fills everything below the queue without
+   one.
+
+Outside a git repo the greeter is just the queue and the todo list. The windows
+under the queue close as soon as anything takes the greeter's place above them:
+a file, a terminal, an agent chat (`Ctrl+B Z`), any buffer. Floats don't count.
+They come back whenever the greeter is shown again, and showing it never adds a
+second set.
 
 ### Todo list (checkmate)
 
@@ -260,7 +267,7 @@ Alt instead of Ctrl. It works from the terminal too (there it takes fish's
 
 Tab labels sit at the **right end of the bufferline**, showing the project name —
 prefixed with the agent status icon of each of that project's Claude Code
-terminals (the same coloured icons the agent view and greeter use), so a
+terminals (the same coloured icons the agent view uses), so a
 background workspace waiting on you says so — in that state's colour — without
 switching to it. When the labels would crowd the current buffer off the bar,
 every tab drops its repo name, then its branch, keeping the agent (a checkout
@@ -729,19 +736,17 @@ overrides everything. The preview reads `**+690 -100** · 20 spec · 100 proto �
 out). The greeter draws the same line for the checked-out branch, with
 attributes from the checkout itself and a bar coloured by tier: reviewed tiers
 fill it, generated trails dimmed and capped at half its width. triage leaves
-`linguist-generated` files out of the branch's file list, so there generated is
-the lockfiles only.
+`linguist-generated` files out of the branch's diff, so there generated is the
+lockfiles only.
 
 The queue refreshes in the background every 5 minutes for every repo with an
 open tab (and when you leave review mode), so the picker opens instantly from
 that cache — its title says how old it is, and a list over a minute old is
-refreshed behind it. Outside review mode the greeter shows the counts
+refreshed behind it. The greeter's top window shows the counts
 (`12 need you · 1 back to you · 3 for your team`), and under them the
-[my PRs](#my-prs-spacerm) counts. Whenever the branch has a
-PR — reviewing or your own — the greeter shows it too: number, title, state,
-review decision, checks, and the start of the description (fenced blocks collapsed to a placeholder).
-When that PR is one of yours stacked with others (PRs targeting each other's
-branches), a **Stack** section lists the whole stack top first, down to the
+[my PRs](#my-prs-spacerm) counts. When the branch's PR is one of yours stacked
+with others (PRs targeting each other's branches), the greeter's stack window
+lists the whole stack top first, down to the
 branch the bottom one targets: `◉` marks the checked-out branch's PR, each row
 shows its [my PRs](#my-prs-spacerm) tier (or `draft`) and checks (`✓` `●` `✗`),
 and a PR forked off one lower down says `on <branch>`. It reads the same
