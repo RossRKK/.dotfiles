@@ -48,4 +48,8 @@ describe("the full config's plugins", function()
     assert.is_false(report.agentic_preselect)
     assert.equals("summary", report.agentic_subagent_activity)
   end)
+
+  it("attach render-markdown to snacks' gh buffers, so their comments below the first screen render", function()
+    assert.is_true(report.gh_buffer_attached)
+  end)
 end)

@@ -1,8 +1,8 @@
--- render-markdown.nvim: markdown files and agent chats' replies (AgenticChat, which
+-- render-markdown.nvim: markdown files, snacks' gh:// buffers (markdown.gh) and agent chats' replies (AgenticChat, which
 -- agentic parses as markdown) drawn as rendered markdown, under one config.
 local rerender_on_write, drop_conceal_lines -- defined below the spec
 
-local file_types = { "markdown", "AgenticChat" }
+local file_types = { "markdown", "markdown.gh", "AgenticChat" }
 
 -- The markdown ftplugin's list pattern, each item also matched behind quote markers, and a quote's markers alone.
 local list_or_quote_prefix = [=[^\s*\%(>\s\?\)*\%(\d\+\.\|[-*+]\)\s\+\|^\s*\%(>\s\?\)\+\|^\[^\ze[^\]]\+\]:\&^.\{4\}]=]
