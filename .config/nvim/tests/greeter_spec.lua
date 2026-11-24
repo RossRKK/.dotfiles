@@ -60,6 +60,31 @@ describe("greeter.open", function()
     assert.equals(win, vim.api.nvim_get_current_win())
   end)
 
+  it("centres the queue's lines as one block in its window", function()
+    greeter.open(win)
+    local rows = { "\u{f4af} 2 need you   Space rq", "\u{f407} 1 to fix   Space rm" }
+    local widest = math.max(vim.fn.strdisplaywidth(rows[1]), vim.fn.strdisplaywidth(rows[2]))
+    local pad = (" "):rep(math.floor((vim.api.nvim_win_get_width(win) - widest) / 2))
+    assert.same(
+      { pad .. rows[1], pad .. rows[2] },
+      vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+    )
+  end)
+
+  it("centres the queue again when its window is resized", function()
+    greeter.setup()
+    greeter.open(win)
+    vim.cmd("vsplit")
+    local buf = vim.api.nvim_win_get_buf(win)
+    local before = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]:match("^ *")
+    vim.api.nvim_win_set_width(win, 40)
+    -- Fired by hand: a headless nvim has no UI to redraw for, so never fires it itself.
+    vim.api.nvim_exec_autocmds("WinResized", {})
+    local after = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]:match("^ *")
+    vim.api.nvim_del_augroup_by_name("workspace_greeter")
+    assert.is_true(#after < #before)
+  end)
+
   it("does not stack a second todo list when reopened", function()
     greeter.open(win)
     greeter.open(win)
@@ -109,7 +134,7 @@ end)
 describe("greeter.draw", function()
   it("writes each row as a line, its chunks highlighted, and leaves it read-only", function()
     local buf = vim.api.nvim_create_buf(false, true)
-    greeter.draw(buf, { { { "ab", "Comment" }, { "cd" } }, { { "e", "Special" } } })
+    greeter.draw(buf, { { { "ab", "Comment" }, { "cd" } }, { { "e", "Special" } } }, 4)
 
     assert.same({ "abcd", "e" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
     local marks = vim.tbl_map(function(m)
@@ -117,6 +142,23 @@ describe("greeter.draw", function()
     end, vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true }))
     assert.same({ { 0, 0, 2, "Comment" }, { 1, 0, 1, "Special" } }, marks)
     assert.is_false(vim.bo[buf].modifiable)
+  end)
+
+  it("centres the rows as one block, the widest setting every row's padding", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    greeter.draw(buf, { { { "ab", "Comment" }, { "cd" } }, { { "e", "Special" } } }, 11)
+
+    assert.same({ "   abcd", "   e" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+    local marks = vim.tbl_map(function(m)
+      return { m[2], m[3], m[4].end_col }
+    end, vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true }))
+    assert.same({ { 0, 3, 5 }, { 1, 3, 4 } }, marks)
+  end)
+
+  it("does not pad rows wider than the window", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    greeter.draw(buf, { { { "abcdef" } } }, 4)
+    assert.same({ "abcdef" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
   end)
 end)
 
@@ -487,6 +529,20 @@ describe("greeter's PR windows", function()
     assert.matches("^\u{25c9} #2  PR 2", lines[2])
     assert.matches("^\u{25cb} #1  PR 1", lines[3])
     assert.equals("\u{2570} main", lines[4])
+  end)
+
+  it("centres the stack as one block, its columns kept aligned", function()
+    vim.o.columns = 140
+    greeter.open(win)
+    local _, wins = column()
+    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[2]), 0, -1, false)
+    vim.o.columns = 80
+    local pad = (" "):rep(math.floor((140 - 90) / 2))
+    assert.equals(pad, lines[1]:match("^ *"), "the size line, at the table's edge")
+    for i = 2, 3 do
+      assert.equals(pad, lines[i]:sub(1, #pad))
+      assert.equals(90, vim.fn.strdisplaywidth(lines[i]:sub(#pad + 1)))
+    end
   end)
 
   it("holds the stack to its rows and the todo list to a share, the PR taking the rest", function()

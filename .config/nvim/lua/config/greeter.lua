@@ -152,7 +152,7 @@ function lay_out(win, todo_file)
   local buf = vim.api.nvim_win_get_buf(win)
   local root = vim.b[buf].greeter_root
   local tab = vim.api.nvim_win_get_tabpage(win)
-  M.draw(buf, M.queue_rows(root))
+  M.draw(buf, M.queue_rows(root), vim.api.nvim_win_get_width(win))
   local pr = M.branch_pr(root)
   local pr_buf, fresh = nil, false
   if pr then
@@ -363,16 +363,19 @@ function named(name)
   end
 end
 
+-- The stack table's width at most, as the dashboard pane was: wider, its columns drift apart.
+local STACK_WIDTH = 90
+
 -- The stack buffer per workspace root, and the PR on each of its rows.
 local stack_buffers = {} ---@type table<string, integer>
 local stack_prs = {} ---@type table<integer, table<integer, reviewqueue.PR>>
 
---- `root`'s stack buffer drawn at `width`, or nil when it has no rows.
+--- `root`'s stack buffer centred in `width` columns, or nil when it has no rows.
 ---@param root string
 ---@param width integer
 ---@return integer?
 function stack_buffer(root, width)
-  local rows, prs = M.stack_rows(root, width)
+  local rows, prs = M.stack_rows(root, math.min(STACK_WIDTH, width))
   if #rows == 0 then
     return nil
   end
@@ -380,7 +383,7 @@ function stack_buffer(root, width)
   if not (buf and vim.api.nvim_buf_is_valid(buf)) then
     buf = new_stack_buffer(root)
   end
-  M.draw(buf, rows)
+  M.draw(buf, rows, width)
   stack_prs[buf] = prs
   return buf
 end
@@ -415,13 +418,25 @@ end
 
 local ns = vim.api.nvim_create_namespace("greeter")
 
---- Replace `buf`'s text with `rows`, one line of highlighted chunks each.
+--- Replace `buf`'s text with `rows`, one line of highlighted chunks each, centred
+--- in `width` columns as one block so columns across rows stay aligned.
 ---@param buf integer
 ---@param rows greeter.Chunk[][]
-function M.draw(buf, rows)
+---@param width integer
+function M.draw(buf, rows, width)
+  local widest = 0
+  for _, chunks in ipairs(rows) do
+    widest = math.max(
+      widest,
+      vim.fn.strdisplaywidth(table.concat(vim.tbl_map(function(c)
+        return c[1]
+      end, chunks)))
+    )
+  end
+  local pad = (" "):rep(math.max(0, math.floor((width - widest) / 2)))
   local lines, marks = {}, {}
   for i, chunks in ipairs(rows) do
-    local text = ""
+    local text = pad
     for _, chunk in ipairs(chunks) do
       if chunk[2] then
         marks[#marks + 1] = { i - 1, #text, #text + #chunk[1], chunk[2] }
@@ -1009,6 +1024,12 @@ function M.setup()
   vim.api.nvim_create_autocmd("User", {
     group = group,
     pattern = "ReviewQueueChanged",
+    callback = M.redraw,
+  })
+
+  -- Centred against the window's width, so a resize re-centres.
+  vim.api.nvim_create_autocmd("WinResized", {
+    group = group,
     callback = M.redraw,
   })
 
