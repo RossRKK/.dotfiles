@@ -55,7 +55,7 @@ Specs live in `tests/*_spec.lua` and cover the pure logic worth pinning:
 | `plugin_dirs_spec.lua` | under the nix build, each plugin loads from its dir in the build, or from a checkout `NVIM_DEV_PLUGINS` names (`name` under `~/dev`, or `name=dir`, linked under the plugin's name when its directory has another); a missing checkout, a name the build lacks and a plugin the build lacks are errors, never a fallback |
 | `nix_build_spec.lua` | the nix build is read from the wrapper's info plugin (plugin dirs, config dir, nvim), and is absent in any other nvim |
 | `lua_path_spec.lua` | the nvim under test keeps Lua's default search paths (`./?.lua`, `./?.so`) with `LUA_PATH`/`LUA_CPATH` unset |
-| `plugin_loading_spec.lua` | the full config, in the nvim under test: lazy can tell every plugin by its directory's name, so a `require()`d plugin loads with its spec's opts (agentic's, checked); render-markdown attaches to snacks' `markdown.gh` buffers, so a gh PR's comments below the first screen render, and to octo's PR buffers, which treesitter parses as markdown |
+| `plugin_loading_spec.lua` | the full config, in the nvim under test: lazy can tell every plugin by its directory's name, so a `require()`d plugin loads with its spec's opts (agentic's, checked); render-markdown attaches to snacks' `markdown.gh` buffers, so a gh PR's comments below the first screen render |
 
 The side-terminal and branch-review logic now live in external plugins, each
 with its own test suite and flake (`nix develop -c make test`), developed

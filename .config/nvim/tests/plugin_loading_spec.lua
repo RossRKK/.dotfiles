@@ -52,8 +52,4 @@ describe("the full config's plugins", function()
   it("attach render-markdown to snacks' gh buffers, so their comments below the first screen render", function()
     assert.is_true(report.gh_buffer_attached)
   end)
-
-  it("attach render-markdown to octo's PR buffers, the greeter's PR", function()
-    assert.is_true(report.octo_buffer_attached)
-  end)
 end)

@@ -68,7 +68,6 @@ let
     "nvim-treesitter" = nvim-treesitter;
     "nvim-treesitter-textobjects" = nvim-treesitter-textobjects;
     "nvim-web-devicons" = nvim-web-devicons;
-    "octo.nvim" = octo-nvim;
     "plenary.nvim" = plenary-nvim;
     "rustaceanvim" = rustaceanvim;
     "snacks.nvim" = snacks-nvim;
