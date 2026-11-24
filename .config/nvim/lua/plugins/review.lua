@@ -36,7 +36,13 @@ return {
     "RossRKK/nitpick.nvim",
     dev = true,
     config = function()
-      require("nitpick").setup({ verdict = require("triage").verdict })
+      require("nitpick").setup({
+        verdict = require("triage").verdict,
+        -- <CR> on another PR in a PR buffer's stack: its workspace tab, else a checkout of it here.
+        on_stack_select = function(_, row)
+          require("config.greeter").go_to_pr(vim.fs.normalize(require("config.workspace").cwd()), row)
+        end,
+      })
     end,
   },
 }

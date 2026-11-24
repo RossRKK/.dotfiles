@@ -160,29 +160,30 @@ off the left end. It's also what the main window falls back to when the last
 buffer closes, rather than a blank `[No Name]`. `Space+X` is the quick way back
 to it. It's a stack of windows, top to bottom:
 
-1. **Stack** — only when the branch has a PR. When the PR is one of yours, its
-   stack (a PR on its own is a stack of one), then the size of the branch's diff
-   to its review base (`+adds -dels`, a bar and a legend by review tier, as in
-   the review queue; binary files count no lines). Its rows pick a PR: `G` opens
-   it in the browser; `Enter` switches to the workspace tab whose worktree has
-   its branch, else runs `gh pr checkout` in this worktree.
-2. **Reviewers** — only when the branch has a PR, as GitHub's Reviewers panel:
-   the requested teams and people (a shield `` marks a CODEOWNERS request),
-   then anyone who reviewed unasked, each with their latest state: `●` pending,
-   `` commented, `✓` approved, `✗` changes requested. A review made for a
-   team names it (`for org/team`). A member that team auto-assign picked is a
-   row of its own: GitHub's API doesn't say which team picked them.
-3. **PR** — only when the branch has a PR: the PR itself as nitpick's PR
-   buffer, taking the room. Edit the title (first line) or the description
+1. **Size** — only when the branch has a PR and changes something: the size of
+   the branch's diff to its review base (`+adds -dels`, a bar and a legend by
+   review tier, as in the review queue; binary files count no lines).
+2. **PR** — only when the branch has a PR: the PR itself as nitpick's PR
+   buffer, taking the room. It opens on the PR's stack (a PR on its own is a
+   stack of one): each open PR chained to it through its base branch, top
+   first, its number, title, review decision and checks, the current one
+   marked `◉`, over the branch the bottom one merges into. `Enter` on another
+   row switches to the workspace tab whose worktree has its branch, else runs
+   `gh pr checkout` in this worktree; `gx` opens it in the browser. The stack
+   fills in a few seconds after the PR, once GitHub has been walked. Under it:
+   state, author, reviewers as GitHub's Reviewers panel lists them (a shield
+   `` marks a CODEOWNERS request; `●` pending, `` commented, `✓`
+   approved, `✗` changes requested; `for org/team` names the team a review was
+   for), merge state and checks, each failed or running check its own row
+   that `gd` opens. Edit the title (the current stack row) or the description
    (below the rule) in place and `:w` or `Ctrl+S` saves them to GitHub; it
-   refuses if GitHub's copy changed since it loaded. Each failed or running
-   check has its own row: `gd` on it opens the check. It refreshes itself when
+   refuses if GitHub's copy changed since it loaded. It refreshes itself when
    the branch or HEAD moves, unless it holds unsaved edits. `:NitpickPr [n]`
    opens any PR the same way.
-4. **Review queue** — the [review queue](#review-queue-spacerq) and
+3. **Review queue** — the [review queue](#review-queue-spacerq) and
    [my PRs](#my-prs-spacerm) counts, held to their height. It doesn't depend on
    the branch.
-5. **Todo list** — `~/todo.md`, the real file, so edit it there. It keeps a
+4. **Todo list** — `~/todo.md`, the real file, so edit it there. It keeps a
    third of the room under a PR, and fills everything below the queue without
    one.
 

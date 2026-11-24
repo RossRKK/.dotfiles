@@ -361,107 +361,6 @@ describe("greeter.fetch", function()
   end
 end)
 
-describe("greeter.reviewer_rows", function()
-  --- A reviewer with the fields a row reads.
-  local function reviewer(name, state, extra)
-    return vim.tbl_extend(
-      "force",
-      { name = name, kind = "user", code_owner = false, state = state, on_behalf_of = {} },
-      extra or {}
-    )
-  end
-
-  it("aligns each reviewer's state after the names, code owners shielded", function()
-    assert.same(
-      {
-        "\u{25cf} acme/physics \u{f132}  pending",
-        "\u{25cf} bob" .. (" "):rep(13) .. "pending",
-        "\u{2713} dave" .. (" "):rep(12) .. "approved  for acme/devs, acme/orchestrator",
-        "\u{2717} eve" .. (" "):rep(13) .. "changes requested",
-        "\u{f075} claude" .. (" "):rep(10) .. "commented",
-      },
-      vim.tbl_map(
-        text,
-        greeter.reviewer_rows({
-          reviewer("acme/physics", "pending", { kind = "team", code_owner = true }),
-          reviewer("bob", "pending"),
-          reviewer("dave", "approved", { on_behalf_of = { "acme/devs", "acme/orchestrator" } }),
-          reviewer("eve", "changes_requested"),
-          reviewer("claude", "commented"),
-        })
-      )
-    )
-  end)
-
-  it("says so when nobody is requested or has reviewed", function()
-    assert.same({ "no reviewers" }, vim.tbl_map(text, greeter.reviewer_rows({})))
-  end)
-end)
-
-describe("greeter.stack_items", function()
-  local function texts(rows)
-    return vim.tbl_map(text, rows)
-  end
-
-  --- A stack row: `pr` over a plain waiting PR, `extra` over the row.
-  local function row(pr, extra)
-    return vim.tbl_extend("force", {
-      pr = vim.tbl_extend("force", { title = "PR " .. pr.number, draft = false }, pr),
-      verdict = { tier = 5 },
-      current = false,
-    }, extra or {})
-  end
-
-  local stack = {
-    rows = {
-      row({ number = 30, title = "Top", head = "c", base = "b", draft = true }),
-      row({ number = 20, head = "b", base = "a" }, { current = true, verdict = { tier = 1 } }),
-      row({ number = 10, title = "Bottom", head = "a", base = "main", checks = "SUCCESS" }),
-    },
-    trunk = "main",
-  }
-
-  it("lists the stack top first, fills the checked-out PR's marker, ends at the trunk", function()
-    local t = texts(greeter.stack_items(stack, 50))
-    assert.matches("^\u{25cb} #30  Top +draft", t[1])
-    assert.matches("^\u{25c9} #20  PR 20 +to fix", t[2])
-    assert.matches("^\u{25cb} #10  Bottom +waiting +\u{2713}$", t[3])
-    assert.equals("\u{2570} main", t[4])
-  end)
-
-  it("pads every row to the width, cutting a long title", function()
-    local long = vim.deepcopy(stack)
-    long.rows[1].pr.title = ("word "):rep(30)
-    local t = texts(greeter.stack_items(long, 50))
-    for i = 1, 3 do
-      assert.equals(50, vim.fn.strdisplaywidth(t[i]))
-    end
-    assert.matches("\u{2026}", t[1])
-  end)
-
-  it("takes only the width its longest title needs when given more", function()
-    for _, row in ipairs(vim.list_slice(texts(greeter.stack_items(stack, 200)), 1, 3)) do
-      -- "◉ #30  " + "Bottom" + "  " + "waiting" + "  " + the glyph.
-      assert.equals(2 + 1 + 2 + 2 + 6 + 2 + 7 + 2 + 1, vim.fn.strdisplaywidth(row))
-    end
-  end)
-
-  it("names the base of a PR not stacked on the row below it", function()
-    local fork = {
-      rows = {
-        row({ number = 3, head = "c", base = "a" }),
-        row({ number = 2, head = "b", base = "a" }),
-        row({ number = 1, head = "a", base = "main" }),
-      },
-      trunk = "main",
-    }
-    local t = texts(greeter.stack_items(fork, 50))
-    assert.matches("PR 3  on a", t[1])
-    assert.is_nil(t[2]:find(" on ", 1, true))
-    assert.is_nil(t[3]:find(" on ", 1, true))
-  end)
-end)
-
 -- The windows under the queue for a branch with a PR. The PR buffer comes from
 -- a stand-in for nitpick's: the real one renders from the GitHub API.
 describe("greeter's PR windows", function()
@@ -477,31 +376,17 @@ describe("greeter's PR windows", function()
   vim.fn.mkdir(repo, "p")
   git("init", "-q")
   git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init")
-  git("worktree", "add", "-q", "-b", "a", repo .. "/wt-a")
-
-  local function mine(number, head, base)
-    return {
-      pr = {
-        number = number,
-        title = "PR " .. number,
-        head = head,
-        base = base,
-        url = "https://github.com/o/r/pull/" .. number,
-      },
-      verdict = { tier = 5 },
-    }
-  end
 
   --- The branch's PR as the greeter fetched it.
   local function pr(number)
     return { number = number, state = "OPEN", url = "https://github.com/o/r/pull/" .. number }
   end
 
-  local function report(head)
+  local function report(head, files)
     return {
       branch = "b",
       head = head,
-      files = { { path = repo .. "/x.rs", rel = "x.rs", lines = { additions = 3, deletions = 1 } } },
+      files = files or { { path = repo .. "/x.rs", rel = "x.rs", lines = { additions = 3, deletions = 1 } } },
     }
   end
 
@@ -516,14 +401,12 @@ describe("greeter's PR windows", function()
       counts = rq.counts,
       key = rq.key,
       pr_buffer = package.loaded["nitpick.pr_buffer"],
-      open = vim.ui.open,
     }
     todo.FILE = todo_file
     rq.counts = function() end
     rq.key = function()
       return "/repo"
     end
-    rq.cache["/repo"] = { mine = { mine(1, "a", "main"), mine(2, "b", "a") } }
     refreshes = {}
     local stand_in = {}
     function stand_in.uri(ref)
@@ -551,14 +434,14 @@ describe("greeter's PR windows", function()
   end)
 
   after_each(function()
-    todo.FILE, rq.counts, rq.key, vim.ui.open = saved.file, saved.counts, saved.key, saved.open
+    todo.FILE, rq.counts, rq.key = saved.file, saved.counts, saved.key
     package.loaded["nitpick.pr_buffer"] = saved.pr_buffer
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
       if vim.startswith(vim.api.nvim_buf_get_name(buf), "nitpick://pr/") then
         vim.api.nvim_buf_delete(buf, { force = true })
       end
     end
-    rq.cache, reports[root], greeter.attrs[root], greeter.prs[root] = {}, nil, nil, nil
+    reports[root], greeter.attrs[root], greeter.prs[root] = nil, nil, nil
     vim.api.nvim_del_augroup_by_name("main_companions")
     vim.cmd("silent! tabonly!")
     vim.cmd("silent! only!")
@@ -578,98 +461,45 @@ describe("greeter's PR windows", function()
       wins
   end
 
-  it("stacks the stack, the PR, the queue and the todo list, top to bottom", function()
+  it("stacks the size, the PR, the queue and the todo list, top to bottom", function()
     greeter.open(win)
     local names, wins = column()
-    assert.same({ "greeter_stack", "nitpick://pr/o/r/2", "greeter", "todo" }, names)
+    assert.same({ "greeter_size", "nitpick://pr/o/r/2", "greeter", "todo" }, names)
     assert.equals(0, refreshes[vim.api.nvim_win_get_buf(wins[2])], "made, so loading already")
     local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[1]), 0, -1, false)
-    assert.matches("^ *\u{25c9} #2  PR 2", lines[1])
-    assert.matches("^ *\u{25cb} #1  PR 1", lines[2])
-    assert.equals("\u{2570} main", vim.trim(lines[3]))
-    assert.matches("^ *%+3 %-1", lines[4])
+    assert.equals(1, #lines)
+    assert.matches("^ *%+3 %-1", lines[1])
   end)
 
-  it("leaves one blank row above the stack, outside its buffer", function()
+  it("leaves one blank row above the size, outside its buffer", function()
     greeter.open(win)
     local _, wins = column()
-    local stack = wins[1]
+    local size = wins[1]
     vim.cmd.redraw()
-    assert.equals(vim.fn.win_screenpos(stack)[1] + 1, vim.fn.screenpos(stack, 1, 1).row)
-    assert.equals("", vim.trim(vim.fn.screenstring(vim.fn.win_screenpos(stack)[1], 1)))
-    assert.equals(
-      vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(stack)),
-      vim.api.nvim_win_get_height(stack)
-    )
-    assert.matches(
-      "^ *\u{25c9} #2",
-      vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(stack), 0, 1, false)[1]
-    )
+    assert.equals(vim.fn.win_screenpos(size)[1] + 1, vim.fn.screenpos(size, 1, 1).row)
+    local top = vim.fn.win_screenpos(size)[1]
+    assert.equals("", vim.trim(vim.fn.screenstring(top, 1)))
+    local shown = table.concat(vim.tbl_map(function(c)
+      return vim.fn.screenstring(top + 1, c)
+    end, vim.fn.range(1, vim.api.nvim_win_get_width(size))))
+    assert.matches("%+3 %-1", shown, "the size is on screen under its blank row")
+    assert.equals(2, vim.api.nvim_win_get_height(size))
     assert.equals("", vim.wo[wins[3]].winbar, "the queue's window has none")
   end)
 
-  --- The stack window's lines, the greeter opened `columns` wide.
-  local function stack_lines(columns)
-    vim.o.columns = columns
+  it("has the PR alone above the queue for a branch that changes nothing", function()
+    reports[root] = report("abc", {})
     greeter.open(win)
-    local _, wins = column()
-    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[1]), 0, -1, false)
-    vim.o.columns = 80
-    return lines
-  end
-
-  it("centres the stack as one block, its columns kept aligned", function()
-    local lines = stack_lines(140)
-    local widest = 0
-    for _, l in ipairs(lines) do
-      widest = math.max(widest, vim.fn.strdisplaywidth(vim.trim(l)))
-    end
-    local pad = (" "):rep(math.floor((140 - widest) / 2))
-    for _, l in ipairs(lines) do
-      assert.equals(pad, l:match("^ *"))
-    end
-    assert.equals(vim.fn.strdisplaywidth(lines[1]), vim.fn.strdisplaywidth(lines[2]))
-  end)
-
-  it("keeps a margin either side of a stack too wide for its window", function()
-    rq.cache["/repo"].mine[2].pr.title = ("word "):rep(30)
-    local lines = stack_lines(60)
-    assert.equals("  ", lines[1]:match("^ *"))
-    assert.equals(60 - 2, vim.fn.strdisplaywidth(lines[1]), "the row, then a margin as wide")
-  end)
-
-  it("shows a PR stacked with nothing as a one-row stack that G opens", function()
-    local opened
-    vim.ui.open = function(path, _)
-      opened = path
-      return nil, nil
-    end
-    rq.cache["/repo"] = { mine = { mine(2, "b", "main") } }
-    greeter.open(win)
-    local names, wins = column()
-    local stack_win = wins[assert(vim.iter(ipairs(names)):find(function(_, n)
-      return n == "greeter_stack"
-    end))]
-    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(stack_win), 0, -1, false)
-    local row = assert(vim.iter(ipairs(lines)):find(function(_, l)
-      return l:find("\u{25c9} #2  PR 2", 1, true) ~= nil
-    end))
-    assert.is_truthy(vim.iter(lines):find(function(l)
-      return vim.trim(l) == "\u{2570} main"
-    end))
-    vim.api.nvim_win_call(stack_win, function()
-      vim.api.nvim_win_set_cursor(0, { row, 0 })
-      vim.cmd("normal G")
-    end)
-    assert.equals("https://github.com/o/r/pull/2", opened)
+    local names = column()
+    assert.same({ "nitpick://pr/o/r/2", "greeter", "todo" }, names)
   end)
 
   it(
-    "holds the stack and the queue to their rows and the todo list to a share, the PR taking the rest",
+    "holds the size and the queue to their rows and the todo list to a share, the PR taking the rest",
     function()
       greeter.open(win)
       local _, wins = column()
-      assert.equals(4, vim.api.nvim_win_get_height(wins[1]))
+      assert.equals(2, vim.api.nvim_win_get_height(wins[1]), "its row and the winbar's blank one")
       assert.equals(1, vim.api.nvim_win_get_height(wins[3]))
       assert.is_true(vim.wo[wins[3]].winfixheight)
       assert.same(
@@ -680,39 +510,6 @@ describe("greeter's PR windows", function()
     end
   )
 
-  it("puts the PR's reviewers between the stack and the PR, held to their rows", function()
-    greeter.reviewers[root] = {
-      number = 2,
-      reviewers = {
-        {
-          name = "acme/devs",
-          kind = "team",
-          code_owner = true,
-          state = "pending",
-          on_behalf_of = {},
-        },
-        { name = "bob", kind = "user", code_owner = false, state = "approved", on_behalf_of = {} },
-      },
-    }
-    greeter.open(win)
-    local names, wins = column()
-    greeter.reviewers[root] = nil
-    assert.same({ "greeter_stack", "greeter_reviewers", "nitpick://pr/o/r/2", "greeter", "todo" }, names)
-    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[2]), 0, -1, false)
-    assert.matches("acme/devs", lines[1])
-    assert.matches("bob", lines[2])
-    assert.equals(2, vim.api.nvim_win_get_height(wins[2]))
-    assert.is_true(vim.wo[wins[2]].winfixheight)
-  end)
-
-  it("has no reviewers window for reviewers fetched for another PR", function()
-    greeter.reviewers[root] = { number = 9, reviewers = {} }
-    greeter.open(win)
-    local names = column()
-    greeter.reviewers[root] = nil
-    assert.same({ "greeter_stack", "nitpick://pr/o/r/2", "greeter", "todo" }, names)
-  end)
-
   it("has only the todo list under the queue for a branch without a PR", function()
     greeter.prs[root].pr = false
     greeter.open(win)
@@ -721,7 +518,7 @@ describe("greeter's PR windows", function()
     assert.is_false(vim.wo[wins[2]].winfixheight)
   end)
 
-  it("puts the stack and the PR away when the branch's PR goes", function()
+  it("puts the size and the PR away when the branch's PR goes", function()
     greeter.open(win)
     greeter.prs[root].pr = false
     greeter.redraw()
@@ -759,42 +556,5 @@ describe("greeter's PR windows", function()
     assert.equals(0, refreshes[buf])
     greeter.cache_report(root, report("def"), {})
     assert.equals(1, refreshes[buf])
-  end)
-
-  it("opens a stack row's PR in the browser with G", function()
-    local opened
-    vim.ui.open = function(path, _)
-      opened = path
-      return nil, nil
-    end
-    greeter.open(win)
-    local _, wins = column()
-    vim.api.nvim_win_call(wins[1], function()
-      vim.api.nvim_win_set_cursor(0, { 2, 0 })
-      vim.cmd("normal G")
-    end)
-    assert.equals("https://github.com/o/r/pull/1", opened)
-  end)
-
-  it("switches to the tab whose worktree has a stack row's branch with <cr>", function()
-    local workspace = require("config.workspace")
-    local find = workspace.find
-    greeter.open(win)
-    local _, wins = column()
-    vim.cmd("tabnew")
-    local other = vim.api.nvim_get_current_tabpage()
-    vim.cmd("tabprevious")
-    workspace.find = function(dir)
-      return dir == repo .. "/wt-a" and other or nil
-    end
-    vim.api.nvim_win_call(wins[1], function()
-      vim.api.nvim_win_set_cursor(0, { 2, 0 })
-      vim.cmd("normal \r")
-    end)
-    local switched = vim.wait(2000, function()
-      return vim.api.nvim_get_current_tabpage() == other
-    end)
-    workspace.find = find
-    assert.is_true(switched)
   end)
 end)

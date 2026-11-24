@@ -4,8 +4,8 @@
 -- workspace.open() used to leave a plain empty buffer there, which told you
 -- nothing and did nothing. Instead the window shows the review queue's counts,
 -- held to their height, with the todo list (config/todo.lua) under it. Above
--- it, for a branch with a PR, sit the PR stack (its rows pick a PR) and diff
--- size, then the PR itself, nitpick's PR buffer, editable in place, which
+-- it, for a branch with a PR, sit the diff size, then the PR itself,
+-- nitpick's PR buffer, editable in place with its stack and reviewers, which
 -- takes the room; without a PR the todo list takes it. It comes back whenever
 -- the buffer list empties out again (<leader>X, or closing the last buffer), so
 -- "no buffers open" is a status screen rather than a dead end. The windows
@@ -75,7 +75,7 @@ function M.is_disposable(buf)
 end
 
 -- The greeter's text highlights.
-local DIM, KEY, TITLE = "Comment", "Special", "Title"
+local DIM, KEY = "Comment", "Special"
 
 -- Window options of the greeter's own windows, local to its buffers so a file shown there gets its own.
 local PANE_WO = {
@@ -91,7 +91,7 @@ local PANE_WO = {
 }
 
 local new_buffer, lay_out, size_column, refresh_pr, part_window, place, pr_buffer, pr_ref, named
-local stack_buffer, reviewers_buffer, part_buffer, pick_prs
+local size_buffer, part_buffer
 
 --- Show this workspace's greeter in `win` (default: the current window).
 ---
@@ -142,7 +142,7 @@ function M.redraw()
 end
 
 --- Fill `win`'s greeter and the windows around it. For a branch with a PR,
---- top to bottom: the stack and the reviewers held to their rows, the PR taking
+--- top to bottom: the size held to its row, the PR taking
 --- the room, the queue held to its lines, the todo list keeping a share.
 --- Without a PR, the queue and the todo list taking the room.
 ---@param win integer
@@ -158,37 +158,28 @@ function lay_out(win, todo_file)
   if pr then
     pr_buf, fresh = pr_buffer(pr)
   end
-  local stack_buf = pr and stack_buffer(root, width)
-  local reviewers_buf = pr and reviewers_buffer(root, width)
+  local size_buf = pr and size_buffer(root, width)
   local todo_win = require("config.todo").window(tab, todo_file)
 
   local pr_win, shown = place(tab, "pr", pr_buf, win, { split = "above", win = win })
   if shown and not fresh then
     require("nitpick.pr_buffer").refresh(pr_buf)
   end
-  -- Only ever with a PR, so each goes above the PR's window, the stack on top.
-  local reviewers_win =
-    place(tab, "reviewers", reviewers_buf, win, pr_win and { split = "above", win = pr_win })
-  local stack_win = place(
-    tab,
-    "stack",
-    stack_buf,
-    win,
-    pr_win and { split = "above", win = reviewers_win or pr_win }
-  )
+  -- Only ever with a PR, so it goes above the PR's window.
+  local size_win = place(tab, "size", size_buf, win, pr_win and { split = "above", win = pr_win })
 
   local fixed = vim.tbl_filter(function(w)
     return w ~= false
-  end, { stack_win or false, reviewers_win or false })
+  end, { size_win or false })
   for _, w in ipairs({ win, unpack(fixed) }) do
     for option, value in pairs(PANE_WO) do
       vim.wo[w][0][option] = value
     end
   end
-  if stack_win then
-    -- A blank row above the stack from its window, not its buffer, whose rows are its PRs.
-    vim.wo[stack_win][0].winbar = " "
-    vim.wo[stack_win][0].winhighlight = "WinBar:Normal,WinBarNC:Normal"
+  if size_win then
+    -- A blank row above the size from its window, not its buffer, whose one row is the size.
+    vim.wo[size_win][0].winbar = " "
+    vim.wo[size_win][0].winhighlight = "WinBar:Normal,WinBarNC:Normal"
   end
   if pr_win then
     size_column(fixed, pr_win, win, todo_win, shown == "opened")
@@ -265,74 +256,10 @@ function M.branch_pr(root)
   return entry and report and entry.branch == report.branch and entry.pr or nil
 end
 
---- The reviewers of the branch's PR, once fetched for that PR.
----@param root string normalized workspace root
----@return pr_reviewers.Reviewer[]?
-function M.branch_reviewers(root)
-  local pr, entry = M.branch_pr(root), M.reviewers[root]
-  return pr and entry and entry.number == pr.number and entry.reviewers or nil
-end
-
--- A review state's glyph, highlight and word, as GitHub's Reviewers panel shows it.
-local REVIEW_STATES = {
-  pending = { "\u{25cf}", "DiagnosticWarn", "pending" },
-  commented = { "\u{f075}", DIM, "commented" },
-  approved = { "\u{2713}", "Added", "approved" },
-  changes_requested = { "\u{2717}", "Removed", "changes requested" },
-}
-
---- The reviewers window's rows: one per reviewer, its state after the names,
---- a CODEOWNERS request shielded and a review's teams after its state.
----@param reviewers pr_reviewers.Reviewer[]
----@return greeter.Chunk[][]
-function M.reviewer_rows(reviewers)
-  if #reviewers == 0 then
-    return { { { "no reviewers", DIM } } }
-  end
-  local name_w = 0
-  for _, r in ipairs(reviewers) do
-    name_w = math.max(name_w, vim.fn.strdisplaywidth(r.name))
-  end
-  return vim.tbl_map(function(r)
-    local state = REVIEW_STATES[r.state]
-    return {
-      { state[1] .. " ", state[2] },
-      { r.name .. (" "):rep(name_w - vim.fn.strdisplaywidth(r.name)) },
-      -- Shield (nf-fa-shield), as GitHub marks a code owner.
-      { r.code_owner and " \u{f132}" or "  ", KEY },
-      { "  " .. state[3], state[2] },
-      { #r.on_behalf_of > 0 and "  for " .. table.concat(r.on_behalf_of, ", ") or "", DIM },
-    }
-  end, reviewers)
-end
-
---- The stack window's rows: the stack the branch's PR is in, from the review
---- queue's list of my open PRs (no fetch of its own), then the diff size.
----@param root string normalized workspace root
----@param width integer
----@return greeter.Chunk[][] rows, table<integer, reviewqueue.PR> prs the PR on each row
-function M.stack_rows(root, width)
-  local report = reports[root] or nil
-  local rows, prs = {}, {}
-  if not report then
-    return rows, prs
-  end
-  local rq = require("util.reviewqueue")
-  local key = rq.key(root)
-  local mine = key and rq.cache[key] and rq.cache[key].mine
-  local stack = mine and require("util.pr_stack").of(mine, report.branch)
-  for i, row in ipairs(stack and M.stack_items(stack, width) or {}) do
-    rows[#rows + 1] = row
-    prs[#rows] = stack.rows[i] and stack.rows[i].pr
-  end
-  rows[#rows + 1] = M.size_line(report, M.attrs[root] or {})
-  return rows, prs
-end
-
 --- Switch to the workspace tab whose worktree has `pr`'s branch, else check the
 --- PR out in `root`.
 ---@param root string normalized workspace root
----@param pr reviewqueue.PR
+---@param pr { head: string, number: integer }
 function M.go_to_pr(root, pr)
   vim.system(
     { "git", "worktree", "list", "--porcelain" },
@@ -376,7 +303,7 @@ function refresh_pr(root)
 end
 
 -- The windows above the queue, by the part of the greeter they show.
----@alias greeter.Part "stack"|"reviewers"|"pr"
+---@alias greeter.Part "size"|"pr"
 
 --- `tab`'s window showing `part`, if it has one.
 ---@param tab integer
@@ -445,83 +372,38 @@ function named(name)
   end
 end
 
--- The stack table's width at most, as the dashboard pane was: wider, its columns drift apart.
-local STACK_WIDTH = 90
--- Columns kept clear either side of a stack as wide as its window, so it still sits centred.
-local STACK_MARGIN = 2
+-- Each part's buffer per workspace root.
+local part_buffers = { size = {} } ---@type table<greeter.Part, table<string, integer>>
 
--- Each part's buffer per workspace root, and the PR on each of the stack's rows.
-local part_buffers = { stack = {}, reviewers = {} } ---@type table<greeter.Part, table<string, integer>>
-local stack_prs = {} ---@type table<integer, table<integer, reviewqueue.PR>>
-
---- `root`'s stack buffer centred in `width` columns, or nil when it has no rows.
+--- `root`'s size buffer centred in `width` columns, or nil when nothing changed.
 ---@param root string
 ---@param width integer
 ---@return integer?
-function stack_buffer(root, width)
-  local rows, prs = M.stack_rows(root, math.min(STACK_WIDTH, width - 2 * STACK_MARGIN))
-  if #rows == 0 then
+function size_buffer(root, width)
+  local report = reports[root]
+  local line = report and M.size_line(report, M.attrs[root] or {})
+  if not line then
     return nil
   end
-  local buf, new = part_buffer("stack", root)
-  if new then
-    pick_prs(buf, root)
-  end
-  M.draw(buf, rows, width)
-  stack_prs[buf] = prs
-  return buf
-end
-
---- `root`'s reviewers buffer centred in `width` columns, or nil before the
---- reviewers of the branch's PR are fetched.
----@param root string
----@param width integer
----@return integer?
-function reviewers_buffer(root, width)
-  local reviewers = M.branch_reviewers(root)
-  if not reviewers then
-    return nil
-  end
-  local buf = part_buffer("reviewers", root)
-  M.draw(buf, M.reviewer_rows(reviewers), width)
+  local buf = part_buffer("size", root)
+  M.draw(buf, { line }, width)
   return buf
 end
 
 --- `root`'s buffer for `part`, made on first use.
 ---@param part greeter.Part
 ---@param root string
----@return integer buf, boolean new
+---@return integer
 function part_buffer(part, root)
   local buf = part_buffers[part][root]
   if buf and vim.api.nvim_buf_is_valid(buf) then
-    return buf, false
+    return buf
   end
   buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].filetype = "greeter_" .. part
   vim.bo[buf].modifiable = false
   part_buffers[part][root] = buf
-  return buf, true
-end
-
---- Make the rows of `root`'s stack buffer `buf` a picker of their PRs.
----@param buf integer
----@param root string
-function pick_prs(buf, root)
-  local function row_pr()
-    return stack_prs[buf][vim.api.nvim_win_get_cursor(0)[1]]
-  end
-  vim.keymap.set("n", "G", function()
-    local pr = row_pr()
-    if pr then
-      vim.ui.open(pr.url)
-    end
-  end, { buffer = buf, desc = "Open the PR in the browser" })
-  vim.keymap.set("n", "<cr>", function()
-    local pr = row_pr()
-    if pr then
-      M.go_to_pr(root, pr)
-    end
-  end, { buffer = buf, desc = "Go to the PR's workspace, else check it out here" })
+  return buf
 end
 
 ---@alias greeter.Chunk { [1]: string, [2]: string? } text and its highlight group
@@ -682,10 +564,6 @@ function M.read_attrs(root, files, cb)
   )
 end
 
--- The reviewers of the branch's PR, per workspace root: { number, reviewers }.
----@type table<string, { number: integer, reviewers: pr_reviewers.Reviewer[] }>
-M.reviewers = {}
-
 -- The PR for the workspace's branch, per workspace root: { branch, at, pr }
 -- with pr = the decoded `gh pr view` JSON, or false for "no PR". The TTL below
 -- is what keeps a gh round trip off every git event.
@@ -726,9 +604,6 @@ function M.fetch_pr(root, branch, force)
         if changed then
           M.redraw()
         end
-        if pr then
-          M.fetch_reviewers(root, pr)
-        end
         -- triage reviews against the PR's base (pr_base): a review started
         -- before this answer, or a parent merging and GitHub retargeting the
         -- PR, has to move to the new base.
@@ -739,44 +614,6 @@ function M.fetch_pr(root, branch, force)
       end)
     end
   )
-end
-
---- Fetch `pr`'s reviewers into M.reviewers[root] and redraw on a change. Asked
---- with each PR fetch, so on its cadence and TTL; a failure keeps the last answer.
----@param root string workspace root
----@param pr table `gh pr view` JSON
-function M.fetch_reviewers(root, pr)
-  local owner, name = pr.url:match("^https?://[^/]+/([^/]+)/([^/]+)/pull/")
-  local pr_reviewers = require("util.pr_reviewers")
-  vim.system({
-    "gh",
-    "api",
-    "graphql",
-    "-f",
-    "query=" .. pr_reviewers.QUERY,
-    "-F",
-    "owner=" .. owner,
-    "-F",
-    "name=" .. name,
-    "-F",
-    "number=" .. pr.number,
-  }, { cwd = root, text = true }, function(res)
-    vim.schedule(function()
-      if res.code ~= 0 then
-        return
-      end
-      local ok, reviewers = pcall(function()
-        local reply =
-          vim.json.decode(res.stdout or "", { luanil = { object = true, array = true } })
-        return pr_reviewers.parse(reply)
-      end)
-      local entry = { number = pr.number, reviewers = reviewers }
-      if ok and not vim.deep_equal(M.reviewers[root], entry) then
-        M.reviewers[root] = entry
-        M.redraw()
-      end
-    end)
-  end)
 end
 
 --- triage's resolve_base (plugins/review.lua): the base of `branch`'s open PR,
@@ -1061,81 +898,6 @@ function M.mine_line(counts)
   }, "Space rm")
 end
 
--- A PR's checks as one glyph, by statusCheckRollup state.
-local CHECK_GLYPHS = {
-  SUCCESS = { "\u{2713}", "Added" },
-  FAILURE = { "\u{2717}", "Removed" },
-  ERROR = { "\u{2717}", "Removed" },
-  PENDING = { "\u{25cf}", "DiagnosticWarn" },
-  EXPECTED = { "\u{25cf}", "DiagnosticWarn" },
-}
-
---- `text` cut to `width` display columns, an ellipsis marking the cut.
----@param text string
----@param width integer
----@return string
-local function fit(text, width)
-  if vim.fn.strdisplaywidth(text) <= width then
-    return text
-  end
-  return vim.fn.strcharpart(text, 0, math.max(0, width - 1)) .. "\u{2026}"
-end
-
---- The stack's rows, top of the stack first: the checked-out PR's
---- marker filled, each with its <leader>rm tier (or "draft") and a checks
---- glyph, then the trunk the bottom PR targets. A PR not stacked on the row
---- under it (a fork) names what it is on.
----@param stack pr_stack.Stack
----@param width integer columns the rows may take
----@return greeter.Chunk[][]
-function M.stack_items(stack, width)
-  local tiers = require("util.reviewqueue").MINE_TIERS
-  local function status(row)
-    if row.pr.draft then
-      return "draft", DIM
-    end
-    local tier = tiers[row.verdict.tier] or { label = "?", hl = DIM }
-    return tier.label, tier.hl
-  end
-  local function on_base(i)
-    local row, below = stack.rows[i], stack.rows[i + 1]
-    return (below and below.pr.head or stack.trunk) ~= row.pr.base and ("  on " .. row.pr.base)
-      or ""
-  end
-  local num_w, status_w, natural_w = 0, 0, 0
-  for i, row in ipairs(stack.rows) do
-    num_w = math.max(num_w, #tostring(row.pr.number))
-    status_w = math.max(status_w, vim.fn.strdisplaywidth((status(row))))
-    natural_w = math.max(
-      natural_w,
-      vim.fn.strdisplaywidth(row.pr.title or "") + vim.fn.strdisplaywidth(on_base(i))
-    )
-  end
-  -- Everything but the title: "◉ ", "#N  ", "  ", the status and its "  ", the glyph.
-  -- No wider than the longest title needs, so a short stack is a block to centre.
-  local title_w = math.min(natural_w, width - (2 + 1 + num_w + 2 + 2 + status_w + 2 + 1))
-
-  local rows = {}
-  for i, row in ipairs(stack.rows) do
-    local on = on_base(i)
-    local title = fit(row.pr.title or "", title_w - vim.fn.strdisplaywidth(on))
-    local pad = (" "):rep(title_w - vim.fn.strdisplaywidth(title) - vim.fn.strdisplaywidth(on))
-    local label, label_hl = status(row)
-    local check = CHECK_GLYPHS[row.pr.checks or ""] or { " " }
-    rows[#rows + 1] = {
-      { row.current and "\u{25c9} " or "\u{25cb} ", row.current and KEY or DIM },
-      { ("#%-" .. num_w .. "d  "):format(row.pr.number), KEY },
-      { title, row.current and TITLE or "Normal" },
-      { on, DIM },
-      { pad .. "  " },
-      { label .. (" "):rep(status_w - vim.fn.strdisplaywidth(label)) .. "  ", label_hl },
-      { check[1], check[2] },
-    }
-  end
-  rows[#rows + 1] = { { "\u{2570} " .. stack.trunk, DIM } }
-  return rows
-end
-
 --- Put the cursor on this workspace's greeter, building it if the workspace
 --- hasn't got one yet. The <leader>h target: the bufferline tab is clickable and
 --- <S-h> reaches it by cycling, but neither is a straight "take me home".
@@ -1229,12 +991,12 @@ function M.setup()
   -- invisible rather than wrong -- but a long session would accumulate one per
   -- project ever opened, and <leader>h would reuse a buffer belonging to a tab
   -- that no longer exists. Reap the ones whose root no tab is rooted at, their
-  -- stack buffers and the git-directory watchers with them (see unwatch_closed).
+  -- size buffers and the git-directory watchers with them (see unwatch_closed).
   vim.api.nvim_create_autocmd("TabClosed", {
     group = group,
     callback = function()
       local live = M.live_roots()
-      for _, buffers in ipairs({ M.buffers, part_buffers.stack, part_buffers.reviewers }) do
+      for _, buffers in ipairs({ M.buffers, part_buffers.size }) do
         for root, buf in pairs(buffers) do
           if not live[root] then
             buffers[root] = nil
