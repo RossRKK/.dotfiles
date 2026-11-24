@@ -454,6 +454,8 @@ end
 
 -- The stack table's width at most, as the dashboard pane was: wider, its columns drift apart.
 local STACK_WIDTH = 90
+-- Columns kept clear either side of a stack as wide as its window, so it still sits centred.
+local STACK_MARGIN = 2
 
 -- Each part's buffer per workspace root, and the PR on each of the stack's rows.
 local part_buffers = { stack = {}, reviewers = {} } ---@type table<greeter.Part, table<string, integer>>
@@ -464,7 +466,7 @@ local stack_prs = {} ---@type table<integer, table<integer, reviewqueue.PR>>
 ---@param width integer
 ---@return integer?
 function stack_buffer(root, width)
-  local rows, prs = M.stack_rows(root, math.min(STACK_WIDTH, width))
+  local rows, prs = M.stack_rows(root, math.min(STACK_WIDTH, width - 2 * STACK_MARGIN))
   if #rows == 0 then
     return nil
   end
@@ -1102,19 +1104,27 @@ function M.stack_items(stack, width)
     local tier = tiers[row.verdict.tier] or { label = "?", hl = DIM }
     return tier.label, tier.hl
   end
-  local num_w, status_w = 0, 0
-  for _, row in ipairs(stack.rows) do
+  local function on_base(i)
+    local row, below = stack.rows[i], stack.rows[i + 1]
+    return (below and below.pr.head or stack.trunk) ~= row.pr.base and ("  on " .. row.pr.base)
+      or ""
+  end
+  local num_w, status_w, natural_w = 0, 0, 0
+  for i, row in ipairs(stack.rows) do
     num_w = math.max(num_w, #tostring(row.pr.number))
     status_w = math.max(status_w, vim.fn.strdisplaywidth((status(row))))
+    natural_w = math.max(
+      natural_w,
+      vim.fn.strdisplaywidth(row.pr.title or "") + vim.fn.strdisplaywidth(on_base(i))
+    )
   end
+  -- Everything but the title: "◉ ", "#N  ", "  ", the status and its "  ", the glyph.
+  -- No wider than the longest title needs, so a short stack is a block to centre.
+  local title_w = math.min(natural_w, width - (2 + 1 + num_w + 2 + 2 + status_w + 2 + 1))
 
   local rows = {}
   for i, row in ipairs(stack.rows) do
-    local below = stack.rows[i + 1]
-    local on = (below and below.pr.head or stack.trunk) ~= row.pr.base and ("  on " .. row.pr.base)
-      or ""
-    -- Everything but the title: "◉ ", "#N  ", "  ", the status and its "  ", the glyph.
-    local title_w = width - (2 + 1 + num_w + 2 + 2 + status_w + 2 + 1)
+    local on = on_base(i)
     local title = fit(row.pr.title or "", title_w - vim.fn.strdisplaywidth(on))
     local pad = (" "):rep(title_w - vim.fn.strdisplaywidth(title) - vim.fn.strdisplaywidth(on))
     local label, label_hl = status(row)

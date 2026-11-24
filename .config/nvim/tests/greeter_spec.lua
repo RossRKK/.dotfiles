@@ -439,6 +439,13 @@ describe("greeter.stack_items", function()
     assert.matches("\u{2026}", t[1])
   end)
 
+  it("takes only the width its longest title needs when given more", function()
+    for _, row in ipairs(vim.list_slice(texts(greeter.stack_items(stack, 200)), 1, 3)) do
+      -- "◉ #30  " + "Bottom" + "  " + "waiting" + "  " + the glyph.
+      assert.equals(2 + 1 + 2 + 2 + 6 + 2 + 7 + 2 + 1, vim.fn.strdisplaywidth(row))
+    end
+  end)
+
   it("names the base of a PR not stacked on the row below it", function()
     local fork = {
       rows = {
@@ -562,24 +569,40 @@ describe("greeter's PR windows", function()
     assert.same({ "greeter_stack", "gh://o/r/pr/2", "greeter", "todo" }, names)
     assert.is_not_nil(gh.attached[vim.api.nvim_win_get_buf(wins[2])])
     local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[1]), 0, -1, false)
-    assert.matches("^\u{25c9} #2  PR 2", lines[1])
-    assert.matches("^\u{25cb} #1  PR 1", lines[2])
-    assert.equals("\u{2570} main", lines[3])
-    assert.matches("^%+3 %-1", lines[4])
+    assert.matches("^ *\u{25c9} #2  PR 2", lines[1])
+    assert.matches("^ *\u{25cb} #1  PR 1", lines[2])
+    assert.equals("\u{2570} main", vim.trim(lines[3]))
+    assert.matches("^ *%+3 %-1", lines[4])
   end)
 
-  it("centres the stack as one block, its columns kept aligned", function()
-    vim.o.columns = 140
+  --- The stack window's lines, the greeter opened `columns` wide.
+  local function stack_lines(columns)
+    vim.o.columns = columns
     greeter.open(win)
     local _, wins = column()
     local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[1]), 0, -1, false)
     vim.o.columns = 80
-    local pad = (" "):rep(math.floor((140 - 90) / 2))
-    assert.equals(pad, lines[4]:match("^ *"), "the size line under the table, at its edge")
-    for i = 1, 2 do
-      assert.equals(pad, lines[i]:sub(1, #pad))
-      assert.equals(90, vim.fn.strdisplaywidth(lines[i]:sub(#pad + 1)))
+    return lines
+  end
+
+  it("centres the stack as one block, its columns kept aligned", function()
+    local lines = stack_lines(140)
+    local widest = 0
+    for _, l in ipairs(lines) do
+      widest = math.max(widest, vim.fn.strdisplaywidth(vim.trim(l)))
     end
+    local pad = (" "):rep(math.floor((140 - widest) / 2))
+    for _, l in ipairs(lines) do
+      assert.equals(pad, l:match("^ *"))
+    end
+    assert.equals(vim.fn.strdisplaywidth(lines[1]), vim.fn.strdisplaywidth(lines[2]))
+  end)
+
+  it("keeps a margin either side of a stack too wide for its window", function()
+    rq.cache["/repo"].mine[2].pr.title = ("word "):rep(30)
+    local lines = stack_lines(60)
+    assert.equals("  ", lines[1]:match("^ *"))
+    assert.equals(60 - 2, vim.fn.strdisplaywidth(lines[1]), "the row, then a margin as wide")
   end)
 
   it("shows a PR stacked with nothing as a one-row stack that G opens", function()
