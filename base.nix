@@ -168,6 +168,7 @@ in
             lib.concatMapStringsSep ":" (name: "${dotfilesDir}/claude-plugins/${name}") [
               "agent-status"
               "line-end-marks"
+              "nvim-quickfix"
               "session-identity"
               "subagent-progress"
             ]

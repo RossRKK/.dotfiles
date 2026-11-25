@@ -1,0 +1,6 @@
+{
+  "name": "nvim-quickfix",
+  "version": "0.1.0",
+  "description": "Tells Claude, with each prompt, the surrounding nvim's quickfix list and where I am in it",
+  "types": "./types/index.d.ts"
+}
