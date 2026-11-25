@@ -1049,15 +1049,23 @@ and stays five minutes.
 agent's session has read, edited or pointed at (`path:line` in its replies),
 newest first and each once, at the line it last named. It follows the terminal's
 tab and catches up when the agent writes more. Agents open a file themselves
-with `nvim-open <path>[:line[:col]]`, and lead me through several with
-`nvim-qf set "<title>"` (`path:line: note` lines on stdin): the list docks under
-the main window, `]q`/`[q` step through it from any window, and each of my
-prompts tells the agent which entry I'm on and which I've visited.
+with `nvim-open <path>[:line[:col]]`.
 
 | Key (in the list) | Action                                                    |
 | ----------------- | --------------------------------------------------------- |
 | `Enter`           | Open the file in the main window, at its line             |
 | `q`               | Close the list (as does `Ctrl+B f` again)                 |
+
+**Tours.** An agent leads me through several places with its tour tool (the
+`tour` mod): the steps dock as a list under that agent's own terminal, and the
+first step opens as soon as the terminal is in view. Each of my prompts tells
+the agent which step I'm on and which I've visited; no agent sees another's
+tour. In plain Claude Code the tour is a pane with a Dismiss button.
+
+| Key (in the tour) | Action                                                    |
+| ----------------- | --------------------------------------------------------- |
+| `Enter`           | Open the step under the cursor in the main window         |
+| `q`               | Dismiss the tour (the agent is told on my next prompt)    |
 
 ---
 

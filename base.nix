@@ -168,7 +168,6 @@ in
             lib.concatMapStringsSep ":" (name: "${dotfilesDir}/claude-plugins/${name}") [
               "agent-status"
               "line-end-marks"
-              "nvim-quickfix"
               "session-identity"
               "subagent-progress"
               "tour"
@@ -226,8 +225,6 @@ in
         ".local/bin/worktree-tab"
         # Agents open files in the editor with it (.claude/CLAUDE.md).
         ".local/bin/nvim-open"
-        # Agents set and read my quickfix list with it (.claude/CLAUDE.md).
-        ".local/bin/nvim-qf"
         # Agents keep their PRs' size section current with it (.claude/CLAUDE.md).
         ".local/bin/diff-size"
         # Out-of-store so Claude can still append to it in place.

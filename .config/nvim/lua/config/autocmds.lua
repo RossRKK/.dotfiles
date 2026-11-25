@@ -93,7 +93,7 @@ vim.api.nvim_create_autocmd("FileChangedShellPost", {
 require("config.greeter").setup()
 -- Companion splits (the greeter's todo list) go when a file opens over the main window.
 require("config.windows").setup()
--- Visited quickfix entries, for agents to read (`nvim-qf state`); ]q and friends land in the main window.
+-- ]q and friends, and Enter in the quickfix list, land in the main window.
 require("config.quickfix").setup()
 -- The review queue refreshes in the background, so <leader>rq opens at once
 -- and the greeter can show what's waiting (util/reviewqueue.lua).

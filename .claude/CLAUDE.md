@@ -60,9 +60,7 @@ work and priorities.
 Inside nvim (`$NVIM` set), open files for me rather than only naming them. When
 your answer points at one place (a bug's cause, a line you changed, what to read
 next), run `nvim-open <path>[:line[:col]]`, at most once per turn. For several
-places (a tour of a change, "everywhere we do X"), pipe `path:line[:col]: note`
-lines into `nvim-qf set "<title>"` in the order to read them; each prompt then
-tells you where I am in that list.
+places (a tour of a change, "everywhere we do X"), use the tour tool.
 
 # Worktrees
 
