@@ -117,6 +117,8 @@ draws its tab strip as a window-local winbar on its own side window.
   `lua-language-server`) and not just via the in-editor `lsp.lua` settings.
 - Comments explain *why*, and state constraints the code can't. Don't add
   comments describing code that used to be there.
+- Every file open goes through `config.windows` (`open`, `goto_main_window`):
+  Vim's own openers (quickfix's `switchbuf=uselast`) land over the agent chat.
 
 ## Keymaps
 
