@@ -1013,6 +1013,7 @@ tab with `Space+tx` shuts its shells down.
 | `Ctrl+B a`    | New agent chat (agentic.nvim) as a tab in the next free slot, started in the workspace's directory, its prompt under the chat; `Ctrl+T` hides it as a terminal (`q` is unbound); killing the tab (`Ctrl+B &`) ends the session; `Ctrl+C` in any of its windows stops the agent's reply while it is generating, else the sub-agents it left running in the background (Claude Code stops those with `Ctrl+X Ctrl+K` twice), keeping what you typed |
 | `Ctrl+B A`    | Agent view: every agent across all workspaces, blocked first; the row's key jumps to it |
 | `Ctrl+B f`    | Referenced files: toggle a list under the terminal of the files its agent read, edited or named, newest first (see below) |
+| `Ctrl+B n`    | Hide or show the tour's note above its list (see Tours below) |
 | `Ctrl+B r`    | Mark this terminal's agent read: an empty circle, whatever its state, until it next reports one |
 | `Ctrl+B u`    | Mark it unread: a question mark until it next reports a status (or `Ctrl+B r`) |
 | `Ctrl+T`      | Toggle the side terminal (`Ctrl+N` first from a terminal) |
@@ -1058,14 +1059,18 @@ with `nvim-open <path>[:line[:col]]`.
 
 **Tours.** An agent leads me through several places with its tour tool (the
 `tour` mod): the steps dock as a list under that agent's own terminal, and the
-first step opens as soon as the terminal is in view. Each of my prompts tells
-the agent which step I'm on and which I've visited; no agent sees another's
-tour. In plain Claude Code the tour is a pane with a Dismiss button.
+first step opens as soon as the terminal is in view. Above the list, the note
+of the step under the list's cursor renders as markdown; the cursor moves to
+each step as it opens, and moving it along the list reads ahead. Each of my
+prompts tells the agent which step I'm on and which I've visited; no agent
+sees another's tour. In plain Claude Code the tour is a pane with a Dismiss
+button.
 
 | Key (in the tour) | Action                                                    |
 | ----------------- | --------------------------------------------------------- |
 | `Enter`           | Open the step under the cursor in the main window         |
-| `q`               | Dismiss the tour (the agent is told on my next prompt)    |
+| `q`               | Dismiss the tour, from the list or the note (the agent is told on my next prompt) |
+| `Ctrl+B n`        | Hide or show the note                                     |
 
 ---
 

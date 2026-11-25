@@ -331,3 +331,48 @@ describe("HTML in a rendered markdown buffer", function()
     assert.equals("\u{25b8} More", screen_row(5))
   end)
 end)
+
+describe("a tour's note", function()
+  it(
+    "renders as markdown with no render asked for: fishmonger's note is a plain markdown buffer",
+    function()
+      vim.cmd("runtime! plugin/render-markdown.lua")
+      require("render-markdown").setup(require("plugins.render-markdown")[1].opts)
+      pcall(vim.cmd, "only")
+      local term_win = vim.api.nvim_get_current_win()
+      local term_buf = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_win_set_buf(term_win, term_buf)
+      local tour = require("fishmonger.tour")
+      tour.setup({
+        terminal_windows = function()
+          return { term_win }
+        end,
+        session_of = function(b)
+          return b == term_buf and "s1" or nil
+        end,
+        is_session = function()
+          return true
+        end,
+        open_file = function() end,
+      })
+
+      tour.show({
+        id = "t1",
+        session = "s1",
+        title = "Walk",
+        steps = { { path = "/tmp/a.lua", line = 1, description = "**Why.** It holds `the lock`." } },
+        report = vim.fn.tempname() .. "/s1.json",
+      })
+      local note = vim.iter(vim.api.nvim_tabpage_list_wins(0)):find(function(win)
+        return vim.w[win].fishmonger_tour_note_of == term_win
+      end)
+      local note_buf = vim.api.nvim_win_get_buf(note)
+      local rendered = vim.wait(1000, function()
+        return #vim.api.nvim_buf_get_extmarks(note_buf, -1, 0, -1, {}) > 0
+      end)
+      tour.finish({ session = "s1" })
+
+      assert.is_true(rendered)
+    end
+  )
+end)
