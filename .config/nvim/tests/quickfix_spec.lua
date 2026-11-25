@@ -31,7 +31,7 @@ describe("config.quickfix", function()
   end)
 
   after_each(function()
-    vim.api.nvim_del_augroup_by_name("quickfix_visited")
+    vim.api.nvim_del_augroup_by_name("quickfix")
   end)
 
   ---@return integer the list's id
@@ -136,6 +136,30 @@ describe("config.quickfix", function()
     assert.equals(main, vim.api.nvim_get_current_win())
     assert.equals(2, vim.fn.getqflist({ idx = 0 }).idx)
   end)
+
+  it(
+    "opens the entry under the cursor in the greeter's window, not the window used last",
+    function()
+      local greeter = vim.api.nvim_create_buf(true, true)
+      require("config.windows").mark_placeholder(greeter)
+      vim.api.nvim_win_set_buf(main, greeter)
+      two_stops()
+      local chat = vim.api.nvim_create_buf(false, true)
+      vim.cmd("vsplit")
+      vim.api.nvim_win_set_buf(0, chat)
+      local chat_win = vim.api.nvim_get_current_win()
+      local docked = quickfix_windows()[1]
+      vim.api.nvim_set_current_win(docked)
+      vim.api.nvim_win_set_cursor(docked, { 2, 0 })
+
+      vim.cmd("normal \r")
+
+      assert.equals(chat, vim.api.nvim_win_get_buf(chat_win))
+      assert.equals(main, vim.api.nvim_get_current_win())
+      assert.equals(2, vim.fn.getqflist({ idx = 0 }).idx)
+      assert.equals(4, vim.api.nvim_win_get_cursor(main)[1])
+    end
+  )
 
   it("goes to the last entry on ]Q without a count", function()
     quickfix.set("Three", {

@@ -500,6 +500,7 @@ groups supported).
 | `Space+lq` | Quickfix list                       |
 | `Space+lt` | TODO comments                       |
 | `]q` / `[q`, `]Q` / `[Q` | Next / previous, last / first quickfix entry, opened in the main window from any window (the agent chat included) |
+| `Enter` (in the quickfix list) | Open the entry under the cursor in the main window, never over the agent chat |
 
 ---
 

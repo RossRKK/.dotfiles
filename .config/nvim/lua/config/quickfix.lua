@@ -10,7 +10,7 @@ local MAX_HEIGHT = 5
 -- Entry indices the cursor has been on, by quickfix list id.
 local visited = {} ---@type table<integer, table<integer, true>>
 
-local mark_visited, step, view_window
+local mark_visited, step, from_main, view_window
 
 ---@class quickfix.Entry
 ---@field path string
@@ -26,12 +26,26 @@ local mark_visited, step, view_window
 ---@field changedtick integer
 ---@field entries quickfix.Entry[]
 
---- Remember visited entries, and step through the list in the main window from any window.
+--- Remember visited entries, and open entries in the main window from any window.
 function M.setup()
+  local group = vim.api.nvim_create_augroup("quickfix", { clear = true })
   vim.api.nvim_create_autocmd({ "CursorMoved", "BufEnter" }, {
-    group = vim.api.nvim_create_augroup("quickfix_visited", { clear = true }),
+    group = group,
     callback = function(ev)
       mark_visited(ev.buf, vim.api.nvim_win_get_cursor(0)[1])
+    end,
+  })
+  -- switchbuf=uselast skips the greeter (nofile) and opens the entry over the window used last: often the agent chat.
+  vim.api.nvim_create_autocmd("FileType", {
+    group = group,
+    pattern = "qf",
+    callback = function(ev)
+      if vim.fn.getwininfo(vim.api.nvim_get_current_win())[1].loclist == 1 then
+        return
+      end
+      vim.keymap.set("n", "<CR>", function()
+        from_main(vim.fn.line(".") .. "cc")
+      end, { buffer = ev.buf, desc = ":cc in the main window" })
     end,
   })
   -- The builtins, but landing in the main window: from the agent chat they would open the file over it.
@@ -145,11 +159,17 @@ end
 --- Run quickfix motion `cmd` with the typed count from the main window.
 ---@param cmd "cnext"|"cprevious"|"clast"|"cfirst"
 function step(cmd)
-  windows.goto_main_window()
   -- A count to cfirst/clast is an entry number, so none means the first or last, not entry 1.
   local count = (cmd == "cnext" or cmd == "cprevious") and vim.v.count1
     or (vim.v.count > 0 and vim.v.count or "")
-  local ok, err = pcall(vim.cmd, count .. cmd)
+  from_main(count .. cmd)
+end
+
+--- Run quickfix command `cmd` from the main window, so the entry opens there.
+---@param cmd string
+function from_main(cmd)
+  windows.goto_main_window()
+  local ok, err = pcall(vim.cmd, cmd)
   if not ok then
     vim.notify((tostring(err):gsub("^Vim:", "")), vim.log.levels.ERROR)
   end
