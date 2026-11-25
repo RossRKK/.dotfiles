@@ -380,11 +380,11 @@
     "triage": {
       "flake": false,
       "locked": {
-        "lastModified": 1795445893,
-        "narHash": "sha256-IFxOGkYkqo8lK5HxOH2ha34quWNtrVVzSXR+Qa3r/aw=",
+        "lastModified": 1795626803,
+        "narHash": "sha256-d3Y83cf2fLgNlVLi7/8C07TjPQKMxXSgPtMEhqUYQko=",
         "owner": "RossRKK",
         "repo": "triage.nvim",
-        "rev": "ba9839e3ce20ae6c73ee2f46a6c85ffa18d01d7a",
+        "rev": "ddf810253f95fd62ec420eb712010b9594588b45",
         "type": "github"
       },
       "original": {
