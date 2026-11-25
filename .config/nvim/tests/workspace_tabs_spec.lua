@@ -355,6 +355,17 @@ describe("an agent chat in the side panel", function()
     assert.same(want, settled(want))
   end)
 
+  it("gives the chat and prompt back their heights when the Ctrl+B f list closes", function()
+    chat_in_panel()
+    child("P.focus_chat(); require('fishmonger').files()")
+    settled(vim.tbl_extend("force", docked, {
+      right = "col[AgenticChat, AgenticInput, fishmonger-files]",
+      chat = { 64, 33 },
+    }))
+    child("P.focus_chat(); require('fishmonger').files()")
+    assert.same(docked, settled(docked))
+  end)
+
   it("keeps a pane Ctrl+B \" splits from the chat in the panel's column", function()
     chat_in_panel()
     child("P.focus_chat(); require('fishmonger').split('below')")

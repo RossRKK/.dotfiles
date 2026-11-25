@@ -39,11 +39,11 @@
     "fishmonger": {
       "flake": false,
       "locked": {
-        "lastModified": 1795603328,
-        "narHash": "sha256-XptyUuH3xHVADEdh6jMaZ5ojQSpDpTc3pMeGbn1K+tY=",
+        "lastModified": 1795609108,
+        "narHash": "sha256-1cVdSfxq0JZPr/GvCnaKmnHyQcACEbPqzUdGi6QwKtc=",
         "owner": "RossRKK",
         "repo": "fishmonger.nvim",
-        "rev": "8cd0b28346638cfb643b7f68122a384a4c0f61b2",
+        "rev": "3708f23e598721ce1689924923fce1857f5ebe20",
         "type": "github"
       },
       "original": {
