@@ -13,8 +13,6 @@ let
   link = path: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/${path}";
 in
 {
-  imports = [ ./kache.nix ];
-
   # Home for repo-tracked scripts (clipboard-copy, git-worktree-clean — see home.file).
   home.sessionPath = [ "$HOME/.local/bin" ];
 

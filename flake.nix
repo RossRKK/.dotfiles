@@ -106,7 +106,6 @@
         config.allowUnfree = true;
         overlays = [ (final: prev: {
           claude-code = claude-code.packages.${system}.default;
-          kache = kache.packages.${system}.default;
         })
         (import ./neovim.nix {
           src = neovim;
