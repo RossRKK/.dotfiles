@@ -265,6 +265,34 @@ describe("workspace.prefix", function()
     end
     assert.same({ "w", "b" }, ran)
   end)
+
+  it("drops itself for a follow-up key that has its own mapping", function()
+    local other_prefix = 0
+    vim.keymap.set("n", "<C-b>", function()
+      other_prefix = other_prefix + 1
+    end)
+    keys = { vim.api.nvim_replace_termcodes("<C-b>", true, false, true) }
+
+    require("config.workspace").prefix({})
+    vim.api.nvim_feedkeys("", "x", false)
+    vim.keymap.del("n", "<C-b>")
+
+    assert.equals(1, other_prefix)
+  end)
+
+  it("ignores a follow-up key with no mapping", function()
+    keys = { "q" }
+    local fed = 0
+    local real_feedkeys = vim.api.nvim_feedkeys
+    vim.api.nvim_feedkeys = function(_, _, _)
+      fed = fed + 1
+    end
+
+    require("config.workspace").prefix({})
+    vim.api.nvim_feedkeys = real_feedkeys
+
+    assert.equals(0, fed)
+  end)
 end)
 
 -- <M-b>e: a browser for a project that is NOT open yet, so it must start at

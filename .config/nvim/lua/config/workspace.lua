@@ -314,6 +314,9 @@ function M.prefix(others)
     end
   elseif others[key] then
     others[key]()
+  elseif vim.fn.maparg(vim.fn.keytrans(key), vim.api.nvim_get_mode().mode:sub(1, 1)) ~= "" then
+    -- A key with its own mapping (fishmonger's <C-b>, say) means the <M-b> was a slip: run that instead.
+    vim.api.nvim_feedkeys(key, "m", false)
   end
 end
 

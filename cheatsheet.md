@@ -270,7 +270,9 @@ renumbering the rest.
 
 `Alt+B` is the workspace prefix: the same keys as the terminal's `Ctrl+B`, with
 Alt instead of Ctrl. It works from the terminal too (there it takes fish's
-`Alt+B` back-a-word; `Ctrl+Left` still does that).
+`Alt+B` back-a-word; `Ctrl+Left` still does that). Pressing one prefix then the
+other (`Ctrl+B Alt+B`, or the reverse) cancels the first, and the second waits
+for its key.
 
 | Key           | Action                                                      |
 | ------------- | ----------------------------------------------------------- |
