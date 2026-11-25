@@ -1,0 +1,6 @@
+{
+  "name": "triage-state",
+  "version": "0.1.0",
+  "description": "Tells Claude, on the prompt after it changes, where my triage.nvim review of this repo stands",
+  "types": "./types/index.d.ts"
+}

@@ -1072,6 +1072,12 @@ button.
 | `q`               | Dismiss the tour, from the list or the note (the agent is told on my next prompt) |
 | `Ctrl+B n`        | Hide or show the note                                     |
 
+**Triage state.** While branch review mode is on in an agent's repo, the
+`triage-state` mod tells the agent on my next prompt where the review stands:
+the base, and each file approved, rejected, edited since my decision or not
+reviewed yet. It speaks only when that changed since it last did, and once
+more when review mode goes off.
+
 ---
 
 ## Fish

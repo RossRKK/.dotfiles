@@ -169,6 +169,7 @@ in
               "session-identity"
               "subagent-progress"
               "tour"
+              "triage-state"
             ]
           )
         }
