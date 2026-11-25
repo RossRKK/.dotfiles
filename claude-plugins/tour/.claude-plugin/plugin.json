@@ -1,0 +1,6 @@
+{
+  "name": "tour",
+  "version": "0.1.0",
+  "description": "Lets Claude lead me through several places in order, drawn by nvim or a pane, and tells it where I am",
+  "types": "./types/index.d.ts"
+}

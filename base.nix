@@ -171,6 +171,7 @@ in
               "nvim-quickfix"
               "session-identity"
               "subagent-progress"
+              "tour"
             ]
           )
         }
