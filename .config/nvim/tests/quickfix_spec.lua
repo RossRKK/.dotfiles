@@ -63,6 +63,21 @@ describe("config.quickfix", function()
     end
   )
 
+  it("sizes the window to the list, up to five rows, again for each new list", function()
+    two_stops()
+    local docked = quickfix_windows()[1]
+    assert.equals(2, vim.api.nvim_win_get_height(docked))
+
+    local many = {}
+    for line = 1, 4 do
+      table.insert(many, { path = path, line = line, text = "a" })
+      table.insert(many, { path = path, line = line, text = "b" })
+    end
+    quickfix.set("Many", many)
+
+    assert.equals(5, vim.api.nvim_win_get_height(docked))
+  end)
+
   it("reuses an open quickfix window for the next list", function()
     two_stops()
     two_stops()

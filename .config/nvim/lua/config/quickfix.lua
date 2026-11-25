@@ -4,7 +4,8 @@ local M = {}
 
 local windows = require("config.windows")
 
-local HEIGHT = 10
+-- A list shorter than this gets a row per entry; a longer one scrolls.
+local MAX_HEIGHT = 5
 
 -- Entry indices the cursor has been on, by quickfix list id.
 local visited = {} ---@type table<integer, table<integer, true>>
@@ -61,16 +62,20 @@ function M.set(title, entries)
   return vim.fn.getqflist({ id = 0 }).id
 end
 
---- Dock the quickfix window under `tab`'s main window, keeping focus where it is; nothing if it is already open.
+--- Dock the quickfix window under `tab`'s main window, sized to the list, keeping focus where it is.
 ---@param tab integer tabpage handle (0: current)
 function M.show(tab)
-  if view_window(tab) then
+  local height = math.max(1, math.min(vim.fn.getqflist({ size = 0 }).size, MAX_HEIGHT))
+  local open = view_window(tab)
+  if open then
+    vim.api.nvim_win_set_height(open, height)
     return
   end
   local main = windows.main_window(tab)
   vim.api.nvim_win_call(main or vim.api.nvim_tabpage_get_win(tab), function()
-    vim.cmd((main and "belowright" or "botright") .. " copen " .. HEIGHT)
+    vim.cmd((main and "belowright" or "botright") .. " copen " .. height)
   end)
+  vim.wo[view_window(tab)].winfixheight = true
 end
 
 --- The current quickfix list and where I am in it, or nil when it is empty.
