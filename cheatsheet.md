@@ -968,6 +968,7 @@ scrollback, and Claude Code renders cleanly (nvim 0.12+ fixed the TUI munging).
 | `Ctrl+N` (in an agent chat's prompt) | Leave insert mode, as from a terminal |
 | Other `Ctrl` keys (in an agent chat's prompt) | Run their normal-mode mapping (`Ctrl+B`, `Ctrl+T`, `Ctrl+H/J/K/L`, ...) as from a terminal; with none, the editing keys (`Ctrl+W`, `Ctrl+U`, `Ctrl+R`, `Ctrl+O`, `Ctrl+G`) stay and the rest type nothing |
 | `Ctrl+V`, `p`, `P` (in an agent chat's prompt) | Paste the clipboard; an image or files copied (on Windows under WSL, macOS or Wayland), or a copied path to a file, is attached to the next message instead. `"ap` still puts register a |
+| `/resume [id]` (in an agent chat's prompt) | Restore a saved session of this provider: a picker, or the given session id; asks whether to keep the current chat in the background |
 | `<leader>y` (visual, side terminal) | Yank the selection joined into one line — for wrapped commands in Claude Code output (pty soft-wraps in shell output join automatically on any yank) |
 
 **lazygit copy-to-clipboard:** `Ctrl+O` copies the selected item — branch name in
