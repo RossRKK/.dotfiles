@@ -165,11 +165,11 @@
     "nitpick": {
       "flake": false,
       "locked": {
-        "lastModified": 1795530449,
-        "narHash": "sha256-1fBHqi2+g/rheMRmkCid40rp5tHqCs3Cw08IgpAMCKI=",
+        "lastModified": 1795613492,
+        "narHash": "sha256-wu4zttnCii8g9BhIGwrpGBSueCD1TI6fkR/rFDA7eng=",
         "owner": "RossRKK",
         "repo": "nitpick.nvim",
-        "rev": "d9d300c0e2d02e9d4329487081afe574615e1c61",
+        "rev": "fb96a113c29e569262ff96b692127b3c06d4ba4c",
         "type": "github"
       },
       "original": {
