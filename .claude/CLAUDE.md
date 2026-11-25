@@ -35,6 +35,11 @@ that are no longer needed should be renamed to have the prefix
 You should always enumerate and read all files you plan on changing before
 making any edits.
 
+INTENT files are intended to capture my (or the author's when reviewing)
+intention for a feature. It is a non-exhaustive spec for a feature and a
+definition of what is out of scope or deferred. Flag when an INTENT is out of
+date with the live design or implementation. Never modify an INTENT yourself.
+
 # Environment
 
 This is nixos (at work on WSL). That means you can install new tools using
