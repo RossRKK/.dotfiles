@@ -107,31 +107,35 @@ in
   specs.loader = vimPlugins.lazy-nvim;
 
   # Parsers and their queries, collated into pack/*/start: on the runtimepath from the start.
-  specs.parsers = with vimPlugins.nvim-treesitter.grammarPlugins; [
-    lua
-    vim
-    vimdoc
-    query
-    python
-    javascript
-    typescript
-    tsx
-    rust
-    svelte
-    markdown
-    markdown_inline
-    yaml
-    json
-    toml
-    hcl
-    nix
-    helm
-    bash
-    html
-    css
-    gdscript
-    gdshader
-    godot_resource
+  # nixpkgs packages a parser without its queries, which highlighting and indents need.
+  specs.parsers = lib.concatMap (language: [
+    vimPlugins.nvim-treesitter.grammarPlugins.${language}
+    vimPlugins.nvim-treesitter.queries.${language}
+  ]) [
+    "lua"
+    "vim"
+    "vimdoc"
+    "query"
+    "python"
+    "javascript"
+    "typescript"
+    "tsx"
+    "rust"
+    "svelte"
+    "markdown"
+    "markdown_inline"
+    "yaml"
+    "json"
+    "toml"
+    "hcl"
+    "nix"
+    "helm"
+    "bash"
+    "html"
+    "css"
+    "gdscript"
+    "gdshader"
+    "godot_resource"
   ];
 
   # Every other plugin, for lazy.nvim to load (config/lazy.lua), each in a
