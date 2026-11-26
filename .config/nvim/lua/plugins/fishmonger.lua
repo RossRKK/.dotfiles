@@ -29,9 +29,9 @@ return {
         workspace = function(n)
           return require("config.workspace").tab(n)
         end,
-        -- <C-b>f's files land where every other opener puts them (config/windows.lua).
-        open_file = function(path, line)
-          require("config.windows").open(path, line)
+        -- <C-b>f's files and tours land where every other opener puts them (config/windows.lua).
+        open_file = function(path, line, col)
+          require("config.windows").open(path, line, col)
         end,
         -- <C-b>a makes an agent chat tab (config/agent_chat.lua).
         new_agent = function(tab)

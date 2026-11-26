@@ -353,7 +353,11 @@ describe("a tour's note", function()
         is_session = function()
           return true
         end,
+        is_editing = function()
+          return false
+        end,
         open_file = function() end,
+        show_file = function() end,
       })
 
       tour.show({
