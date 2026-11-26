@@ -467,24 +467,29 @@ describe("greeter's PR windows", function()
     assert.same({ "greeter_size", "nitpick://pr/o/r/2", "greeter", "todo" }, names)
     assert.equals(0, refreshes[vim.api.nvim_win_get_buf(wins[2])], "made, so loading already")
     local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[1]), 0, -1, false)
-    assert.equals(1, #lines)
-    assert.matches("^ *%+3 %-1", lines[1])
+    assert.equals(2, #lines)
+    assert.equals("", vim.trim(lines[1]))
+    assert.matches("^ *%+3 %-1", lines[2])
   end)
 
-  it("leaves one blank row above the size, outside its buffer", function()
+  -- edgy sets winminheight=0 on every resize of its edge bar, which let a winbar take a one-row window's only row.
+  it("shows the size under a blank row, laid out again with winminheight=0", function()
+    local wmh = vim.o.winminheight
+    vim.o.winminheight = 0
     greeter.open(win)
+    greeter.redraw()
     local _, wins = column()
     local size = wins[1]
     vim.cmd.redraw()
-    assert.equals(vim.fn.win_screenpos(size)[1] + 1, vim.fn.screenpos(size, 1, 1).row)
     local top = vim.fn.win_screenpos(size)[1]
-    assert.equals("", vim.trim(vim.fn.screenstring(top, 1)))
-    local shown = table.concat(vim.tbl_map(function(c)
-      return vim.fn.screenstring(top + 1, c)
-    end, vim.fn.range(1, vim.api.nvim_win_get_width(size))))
-    assert.matches("%+3 %-1", shown, "the size is on screen under its blank row")
-    assert.equals(2, vim.api.nvim_win_get_height(size))
-    assert.equals("", vim.wo[wins[3]].winbar, "the queue's window has none")
+    local function screen_row(row)
+      return table.concat(vim.tbl_map(function(c)
+        return vim.fn.screenstring(row, c)
+      end, vim.fn.range(1, vim.api.nvim_win_get_width(size))))
+    end
+    vim.o.winminheight = wmh
+    assert.equals("", vim.trim(screen_row(top)))
+    assert.matches("%+3 %-1", screen_row(top + 1))
   end)
 
   it("has the PR alone above the queue for a branch that changes nothing", function()
@@ -499,7 +504,7 @@ describe("greeter's PR windows", function()
     function()
       greeter.open(win)
       local _, wins = column()
-      assert.equals(2, vim.api.nvim_win_get_height(wins[1]), "its row and the winbar's blank one")
+      assert.equals(2, vim.api.nvim_win_get_height(wins[1]), "its blank row and its size")
       assert.equals(1, vim.api.nvim_win_get_height(wins[3]))
       assert.is_true(vim.wo[wins[3]].winfixheight)
       assert.same(

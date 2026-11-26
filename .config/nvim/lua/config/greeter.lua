@@ -176,11 +176,6 @@ function lay_out(win, todo_file)
       vim.wo[w][0][option] = value
     end
   end
-  if size_win then
-    -- A blank row above the size from its window, not its buffer, whose one row is the size.
-    vim.wo[size_win][0].winbar = " "
-    vim.wo[size_win][0].winhighlight = "WinBar:Normal,WinBarNC:Normal"
-  end
   if pr_win then
     size_column(fixed, pr_win, win, todo_win, shown == "opened")
   end
@@ -375,7 +370,7 @@ end
 -- Each part's buffer per workspace root.
 local part_buffers = { size = {} } ---@type table<greeter.Part, table<string, integer>>
 
---- `root`'s size buffer centred in `width` columns, or nil when nothing changed.
+--- `root`'s size buffer centred in `width` columns under a blank row, or nil when nothing changed.
 ---@param root string
 ---@param width integer
 ---@return integer?
@@ -386,7 +381,8 @@ function size_buffer(root, width)
     return nil
   end
   local buf = part_buffer("size", root)
-  M.draw(buf, { line }, width)
+  -- The blank row is the buffer's, not a winbar's: edgy sets winminheight=0, and a winbar then takes the only row.
+  M.draw(buf, { {}, line }, width)
   return buf
 end
 
