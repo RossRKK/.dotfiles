@@ -1050,7 +1050,9 @@ and stays five minutes.
 agent's session has read, edited or pointed at (`path:line` in its replies),
 newest first and each once, at the line it last named. It follows the terminal's
 tab and catches up when the agent writes more. Agents open a file themselves
-with `nvim-open <path>[:line[:col]]`.
+with `nvim-open <path>[:line[:col]]`: at once, focus staying put, when I can see
+that agent and I'm not editing a file; otherwise it waits as a `↪` row in its
+tour list (see Tours below) for `Enter`.
 
 | Key (in the list) | Action                                                    |
 | ----------------- | --------------------------------------------------------- |
@@ -1059,7 +1061,8 @@ with `nvim-open <path>[:line[:col]]`.
 
 **Tours.** An agent leads me through several places with its tour tool (the
 `tour` mod): the steps dock as a list under that agent's own terminal, and the
-first step opens as soon as the terminal is in view. Above the list, the note
+first step opens as soon as the terminal is in view, unless I'm editing a file
+then, when it waits for `Enter`. Above the list, the note
 of the step under the list's cursor renders as markdown; the cursor moves to
 each step as it opens, and moving it along the list reads ahead. Each of my
 prompts tells the agent which step I'm on and which I've visited; no agent
@@ -1068,8 +1071,8 @@ button.
 
 | Key (in the tour) | Action                                                    |
 | ----------------- | --------------------------------------------------------- |
-| `Enter`           | Open the step under the cursor in the main window         |
-| `q`               | Dismiss the tour, from the list or the note (the agent is told on my next prompt) |
+| `Enter`           | Open the step or waiting `↪` jump under the cursor in the main window |
+| `q`               | Dismiss the tour and its waiting jumps, from the list or the note (the agent is told on my next prompt) |
 | `Ctrl+B n`        | Hide or show the note                                     |
 
 **Triage state.** While branch review mode is on in an agent's repo, the

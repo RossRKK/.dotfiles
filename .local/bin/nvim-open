@@ -4,6 +4,10 @@
 #
 #   nvim-open <path>[:line[:col]]
 #
+# Run by a Claude session (CLAUDE_CODE_SESSION_ID set) it is that agent's jump:
+# fishmonger opens it at once unless I'm editing, else it waits in the agent's
+# tour list. Prints "opened" or "waiting".
+#
 # A relative path is taken from the caller's directory, not nvim's. The opening
 # itself is config/windows.lua's open(), shared with the editor's own openers.
 set -euo pipefail
@@ -11,18 +15,29 @@ set -euo pipefail
 main() {
   [ $# -eq 1 ] && [ -n "$1" ] || fail "usage: nvim-open <path>[:line[:col]]"
   [ -n "${NVIM-}" ] || fail "not inside nvim (\$NVIM is unset)"
-  local args
-  args=$(open_args "$1" "$PWD")
-  local path
-  path=$(jq -r '.[0]' <<<"$args")
-  [ -f "$path" ] || fail "no such file: $path"
-  nvim --server "$NVIM" --remote-expr \
-    "luaeval(\"require('config.windows').open(_A[1], _A[2], _A[3]) or ''\", $args)" >/dev/null
+  local place
+  place=$(parse_place "$1" "$PWD" "${CLAUDE_CODE_SESSION_ID-}")
+  [ -f "$(jq -r .path <<<"$place")" ] || fail "no such file: $(jq -r .path <<<"$place")"
+  local outcome
+  outcome=$(nvim --server "$NVIM" --remote-expr "luaeval(\"$(opener "$place")\", $place)")
+  case $outcome in
+    opened | waiting) echo "$outcome" ;;
+    *) fail "$outcome" ;;
+  esac
 }
 
-# <ref> as the JSON array [absolute path, line?, col?] (also a vimscript list),
-# relative paths resolved against <dir>.
-open_args() {
+# The Lua that opens `place`: an agent's jump when it names a session, else a plain open.
+opener() {
+  if jq -e 'has("session")' <<<"$1" >/dev/null; then
+    echo "require('fishmonger.tour').jump(_A)"
+  else
+    echo "require('config.windows').open(_A.path, _A.line, _A.col) or 'opened'"
+  fi
+}
+
+# <ref> as the JSON object {path, line?, col?, session?} (also a vimscript dict),
+# relative paths resolved against <dir>, the session given when not empty.
+parse_place() {
   local ref=$1 line=null col=null
   if [[ $ref =~ ^(.+):([0-9]+):([0-9]+)$ ]]; then
     ref=${BASH_REMATCH[1]} line=${BASH_REMATCH[2]} col=${BASH_REMATCH[3]}
@@ -30,9 +45,10 @@ open_args() {
     ref=${BASH_REMATCH[1]} line=${BASH_REMATCH[2]}
   fi
   [[ $ref = /* ]] || ref=$2/$ref
-  # A missing line or column is left off rather than sent as null, which vimscript lacks.
-  jq -nc --arg path "$ref" --argjson line "$line" --argjson col "$col" \
-    '[$path, $line, $col] | until(length == 1 or last != null; .[:-1])'
+  # Absent keys are left off rather than sent as null, which vimscript lacks.
+  jq -nc --arg path "$ref" --argjson line "$line" --argjson col "$col" --arg session "$3" \
+    '{path: $path, line: $line, col: $col, session: (if $session == "" then null else $session end)}
+      | with_entries(select(.value != null))'
 }
 
 fail() {
