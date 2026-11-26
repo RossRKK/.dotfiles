@@ -11,18 +11,19 @@ export const register: Register = (on) => {
     return started
   })
 
-  // /clear starts a new session in the same process, which takes a new identity over the title Claude carries across.
+  // /clear starts a new session in the same process; it keeps the name, which other sessions address its worktree by.
   on('command.run', { command: 'clear' }, async ($, e, next) => {
+    const previous = await $.session.id()
     const cleared = await next(e)
-    show($, await fresh($, await $.session.id()))
+    show($, await successor($, previous))
     return cleared
   })
 }
 
-// A new session <id>'s name, and a colour other than the one its process held.
-async function fresh($: EngineInterface, id: string): Promise<Identity> {
+// The name session <previous> went by, recorded again on its successor, and a colour other than the one its process held.
+async function successor($: EngineInterface, previous: string): Promise<Identity> {
   return {
-    name: await output($, ['session-name', id]),
+    name: (await output($, ['recorded', 'title', previous])) ?? (await output($, ['session-name', previous])),
     colour: await output($, ['claim-colour', '--fresh']),
   }
 }

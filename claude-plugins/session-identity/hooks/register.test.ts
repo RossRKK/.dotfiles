@@ -56,28 +56,29 @@ test("a session whose transcript has a title keeps it and asks back the colour i
   expect(ran).toEqual(['/color blue'])
 })
 
-// What the scripts print for the session /clear moves to.
+// What the scripts print for the session /clear moves to, were it named from its own id.
 const CLEARED = { 'session-name def': 'brave-owl\n', 'claim-colour --fresh': 'green\n' }
 
-test('a /clear gives the new session its own name and a fresh colour', async ($, on) => {
+test("a /clear records the cleared session's title on the new one, with a fresh colour", async ($, on) => {
+  const { ran, scripts, clock } = engine(on, { ...NAMED, ...CLEARED })
+
+  await $.command.run(typed('clear'))
+  await clock.settle()
+  expect(scripts).toContainEqual(['recorded', 'title', 'abc'])
+  expect(scripts).not.toContainEqual(['session-name', 'def'])
+  expect(ran).toEqual(['/clear', '/rename calm-otter', '/color green'])
+})
+
+test('a /clear of a session with no title yet gives the new one the name the old was given', async ($, on) => {
   const { ran, scripts, clock } = engine(on, { ...PET, ...CLEARED })
 
   await $.session.start(START)
   await clock.settle()
   await $.command.run(typed('clear'))
   await clock.settle()
-  expect(scripts).toContainEqual(['session-name', 'def'])
+  expect(scripts).toContainEqual(['session-name', 'abc'])
   expect(scripts).toContainEqual(['claim-colour', '--fresh'])
-  expect(ran).toEqual(['/rename loyal-fly', '/color blue', '/clear', '/rename brave-owl', '/color green'])
-})
-
-test('a /clear renames over the title Claude carries across, reading nothing back', async ($, on) => {
-  const { ran, scripts, clock } = engine(on, { ...NAMED, ...CLEARED })
-
-  await $.command.run(typed('clear'))
-  await clock.settle()
-  expect(scripts.map(([script]) => script)).not.toContain('recorded')
-  expect(ran).toEqual(['/clear', '/rename brave-owl', '/color green'])
+  expect(ran).toEqual(['/rename loyal-fly', '/color blue', '/clear', '/rename loyal-fly', '/color green'])
 })
 
 test('other commands leave the name and colour alone', async ($, on) => {

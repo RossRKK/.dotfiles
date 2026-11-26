@@ -302,9 +302,9 @@ there is none. Once a session starts, the `claude-plugins/session-identity`
 mod gives it a **name** derived from its id (`/rename`, e.g. `calm-otter`) and
 the `/color` fewest live sessions are using. A resumed session keeps its name
 and gets back the colour it last had, unless another live session holds it; a
-fork gets a fresh name of its own. `/clear` starts a new session, so it gets a
-new name and a colour other than the one it had (a standing role or launch
-name stays). The name is what
+fork gets a fresh name of its own. `/clear` starts a new session that keeps the
+name, so a worktree's session is always addressed the same way, and gets a
+colour other than the one it had. The name is what
 other sessions address it by (`ListAgents` / `SendMessage`), and fishmonger draws
 that terminal's tab and agent-view row in the same colour as its prompt bar.
 
