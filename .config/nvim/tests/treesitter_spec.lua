@@ -41,4 +41,18 @@ describe("treesitter in the nvim under test", function()
     assert.is_true(vim.tbl_contains(result.languages, "nix"), vim.inspect(result.languages))
     assert.same({}, result.missing)
   end)
+
+  it("highlights a .graphql file with the graphql parser", function()
+    local file = vim.fn.tempname() .. ".graphql"
+    vim.fn.writefile({ "query Repo($name: String!) {", "  repository(name: $name) { id }", "}" }, file)
+    local result = in_fresh_nvim([[
+      return {
+        filetype = vim.bo.filetype,
+        highlighting = vim.treesitter.highlighter.active[vim.api.nvim_get_current_buf()] ~= nil,
+        error = vim.treesitter.get_parser():parse()[1]:root():has_error(),
+      }
+    ]], file)
+    vim.fn.delete(file)
+    assert.same({ filetype = "graphql", highlighting = true, error = false }, result)
+  end)
 end)

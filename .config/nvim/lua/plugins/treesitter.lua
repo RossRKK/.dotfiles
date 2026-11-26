@@ -13,6 +13,7 @@ return {
         "svelte",
         "markdown", "markdown_inline",
         "yaml", "json", "toml",
+        "graphql",
         "hcl",
         "nix",
         "helm", -- Go-template YAML; injects yaml + gotmpl highlighting

@@ -126,6 +126,7 @@ in
     "markdown_inline"
     "yaml"
     "json"
+    "graphql"
     "toml"
     "hcl"
     "nix"
