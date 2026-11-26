@@ -40,6 +40,12 @@ intention for a feature. It is a non-exhaustive spec for a feature and a
 definition of what is out of scope or deferred. Flag when an INTENT is out of
 date with the live design or implementation. Never modify an INTENT yourself.
 
+If I write an intro message describing my intention for a change you write it
+verbatim into a new intent file with the name `INTENT-description-of-change.md`.
+If you ask clarifying questions during the conversation write the questions and
+my verbatim answers into a matching `QUESTIONS` file. Don't commit the questions
+file and flag it for me to incorporate into the intent.
+
 # Environment
 
 This is nixos (at work on WSL). That means you can install new tools using
@@ -61,6 +67,8 @@ Inside nvim (`$NVIM` set), open files for me rather than only naming them. When
 your answer points at one place (a bug's cause, a line you changed, what to read
 next), run `nvim-open <path>[:line[:col]]`, at most once per turn. For several
 places (a tour of a change, "everywhere we do X"), use the tour tool.
+
+When you make a change create a tour to explain it.
 
 # Worktrees
 
