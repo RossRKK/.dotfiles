@@ -10,9 +10,9 @@ export const END = 'mcp__tour__end'
 
 const SHOW_DESCRIPTION = [
   'Lead the user through several places in the code, in order: a walkthrough of a change, or everywhere something happens.',
-  'Each step is a file, an optional 1-based line and a markdown note on what to see there. The first step opens at once and the',
-  'user steps through the rest; each prompt then says which step they are on. A new tour replaces the current one. For a single',
-  'place, open it with nvim-open instead.',
+  'Each step is a file, an optional 1-based line and a markdown note on what to see there. The first step opens at once, or',
+  'waits for the user if they are editing, and the user steps through the rest; each prompt then says which step they are on.',
+  'A new tour replaces the current one. For a single place, open it with nvim-open instead.',
 ].join(' ')
 
 const END_DESCRIPTION = 'End the current tour once its walkthrough is done, closing its list.'
