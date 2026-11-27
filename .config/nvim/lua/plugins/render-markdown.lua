@@ -24,6 +24,8 @@ local spec = {
       -- Headings and bullets keep their markdown markers, which read as plainly as any icon.
       heading = { icons = {}, sign = false },
       bullet = { enabled = false },
+      -- A rule between body rows, as GitHub draws, so a wrapped row reads as one row.
+      pipe_table = { grid = true },
       -- The bar overlays the indent that breakindentopt's list:-1 hangs a wrapped quote or item by.
       quote = { repeat_linebreak = true },
       win_options = {

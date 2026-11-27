@@ -380,3 +380,72 @@ describe("a tour's note", function()
     end
   )
 end)
+
+describe("a table with several body rows, rendered", function()
+  local buf, win
+
+  --- `win`'s screen rows as drawn, trailing blanks trimmed.
+  local function screen_rows()
+    local pos = vim.api.nvim_win_get_position(win)
+    local rows = {}
+    for row = 1, vim.api.nvim_win_get_height(win) do
+      local cells = {}
+      for col = 1, vim.api.nvim_win_get_width(win) do
+        table.insert(cells, vim.fn.screenstring(pos[1] + row, pos[2] + col))
+      end
+      table.insert(rows, (table.concat(cells):gsub("%s+$", "")))
+    end
+    return rows
+  end
+
+  before_each(function()
+    vim.cmd("runtime! plugin/render-markdown.lua")
+    local spec = require("plugins.render-markdown")[1]
+    spec.config(nil, spec.opts)
+    pcall(vim.cmd, "only!")
+    win = vim.api.nvim_open_win(0, true, { split = "right", width = 40 })
+    vim.wo[win].number = false
+    vim.wo[win].relativenumber = false
+    vim.wo[win].signcolumn = "no"
+    buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_win_set_buf(win, buf)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "",
+      "| Name | Kind |",
+      "| ---- | ---- |",
+      "| foo  | bar  |",
+      "| baz  | qux  |",
+      "| one  | two  |",
+      "",
+      "after",
+    })
+    -- Off the table and the blank line its bottom border is drawn over, both left raw under the cursor.
+    vim.api.nvim_win_set_cursor(win, { 8, 0 })
+    vim.bo[buf].filetype = "markdown"
+    vim.treesitter.start(buf, "markdown")
+    require("render-markdown").render({ buf = buf, force = true })
+    vim.wait(1000, function()
+      return #vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, {}) > 0
+    end)
+    vim.cmd.redraw()
+  end)
+
+  after_each(function()
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  -- As GitHub draws them: a rule between body rows reads a wrapped row as one row.
+  it("draws a rule between each pair of body rows", function()
+    assert.are.same({
+      "┌──────┬──────┐",
+      "│ Name │ Kind │",
+      "├──────┼──────┤",
+      "│ foo  │ bar  │",
+      "├──────┼──────┤",
+      "│ baz  │ qux  │",
+      "├──────┼──────┤",
+      "│ one  │ two  │",
+      "└──────┴──────┘",
+    }, vim.list_slice(screen_rows(), 1, 9))
+  end)
+end)
